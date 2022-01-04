@@ -1,6 +1,7 @@
 # ildkule-backend
 <<<<<<< HEAD
 # Line tester IGJEN! 
+# og igjen
 =======
 
 # test
