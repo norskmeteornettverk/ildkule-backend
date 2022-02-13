@@ -23,6 +23,7 @@ class Meteor implements JsonSerializable {
     protected $radiant_shower;
     protected $radiant_zenith_attractor;
     protected $timestamp;
+    protected $observation_cam_data;
 
     public function __get($property) {
         if (property_exists($this, $property)) {

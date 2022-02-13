@@ -5,6 +5,8 @@ class Cam implements JsonSerializable
   protected $id;
   protected $cam_name;
   protected $created;
+  protected $station;
+  protected $observation_cam_data;
 
   public function __get($property)
   {
