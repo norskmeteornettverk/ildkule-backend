@@ -4,7 +4,7 @@ class Controller
 {
     public function loadMeteorsFromFiles()
     {
-        $mapper = new FileToObjectMapper('./data/');
+        $mapper = new FileToObjectMapper('../data/');
         $meteors = $mapper->map();
         $meteorDao = new MeteorDao();
         foreach ($meteors as $meteor) {
