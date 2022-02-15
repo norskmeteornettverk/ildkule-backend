@@ -34,7 +34,7 @@ class MeteorDao implements DaoInterface
             $meteor->datetimetag,
             $meteor->location, 
             $meteor->cameraconfirmed,
-            $date = ($meteor->date instanceof DateTime) ? $meteor->date->format('Y-m-d H:i:s') : null,
+            ($meteor->date instanceof DateTime) ? $meteor->date->format('Y-m-d H:i:s') : null,
             $meteor->track_startheight,
             $meteor->track_endheight,
             $meteor->track_groundtrack,
@@ -50,7 +50,7 @@ class MeteorDao implements DaoInterface
             $meteor->radiant_ecl_lat,
             $meteor->radiant_shower,
             $meteor->radiant_zenith_attractor,
-            $timestamp = ($meteor->timestamp instanceof DateTime) ? $meteor->timestamp->format('Y-m-d H:i:s') : null
+            $meteor->timestamp 
         );
         $this->dbh->prepare($query)->execute($values);
     }

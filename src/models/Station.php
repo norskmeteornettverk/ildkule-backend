@@ -5,7 +5,7 @@ class Station implements JsonSerializable
   protected $id;
   protected $station_name;
   protected $created;
-  protected $cams;
+  public $cams = array();
 
   public function __get($property)
   {
