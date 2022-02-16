@@ -7,7 +7,7 @@ class Station implements JsonSerializable
   protected $created;
   public $cams = array();
 
-  public function __get($property)
+  public function &__get($property)
   {
     if (property_exists($this, $property)) {
       return $this->$property;

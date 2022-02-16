@@ -77,7 +77,7 @@ class ObservationCamData implements JsonSerializable
     protected $summary_recalibrated;
     protected $summary_meteor_probability;
 
-    public function __get($property)
+    public function &__get($property)
     {
         if (property_exists($this, $property)) {
             return $this->$property;

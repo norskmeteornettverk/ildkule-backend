@@ -8,7 +8,7 @@ class Cam implements JsonSerializable
   protected Station $station;
   protected array $observation_cam_data;
 
-  public function __get($property)
+  public function &__get($property)
   {
     if (property_exists($this, $property)) {
       return $this->$property;

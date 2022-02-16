@@ -51,7 +51,7 @@ DROP TABLE IF EXISTS station ;
 
 CREATE TABLE IF NOT EXISTS station (
   id INT(9) UNSIGNED NOT NULL AUTO_INCREMENT,
-  station_name VARCHAR(100) NOT NULL,
+  station_name VARCHAR(100) NOT NULL UNIQUE,
   created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
   PRIMARY KEY (id));
 
@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS cam (
   created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
   PRIMARY KEY (id),
   INDEX station_id (station_id ASC),
+  CONSTRAINT unique_cam_cam_name_station_id UNIQUE(cam_name, station_id)  ,
   CONSTRAINT cam_ibfk_1
     FOREIGN KEY (station_id)
     REFERENCES station (id));

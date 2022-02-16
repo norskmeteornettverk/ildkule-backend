@@ -16,10 +16,14 @@ class FileToObjectMapper
 
     protected function getFolderContent($folderpath)
     {
-        return array_diff(scandir($folderpath), array('.', '..'));    //ikke ta med root folder når man henter innhold i mappe.. kun undermappene og filene
+        return array_diff(scandir($folderpath), array('.', '..'));    // get only content in folder
     }
 
-    // Reads files from folder structure and loads the data into objects
+    /**
+     * Reads files from folder structure and loads the data into objects
+     * 
+     * @return array Array with meteors and their data
+     */
     public function map(): array
     {
 

@@ -7,8 +7,23 @@ class Controller
         $mapper = new FileToObjectMapper('../data/');
         $meteors = $mapper->map();
         $meteorDao = new MeteorDao();
+        $stationDao = new StationDao();
+        $camDao = new CamDao();
         foreach ($meteors as $meteor) {
-            $meteorDao->insert($meteor);
+            $meteorDao->insert($meteor); 
+            print "meteor found  </br>";            
+            if ($meteor->observation_cam_data) {
+                print "cam data not empty </br>";
+                foreach ($meteor->observation_cam_data as $cam_data) {
+                    print "cam data as data  </br>";
+                    if ($cam_data->cam) {
+                        if ($cam_data->cam->station) {                           
+                            $stationDao->insert($cam_data->cam->station);
+                        }
+                        $camDao->insert($cam_data->cam);
+                    }
+                }
+            }
         }
     }
 
