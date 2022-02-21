@@ -6,7 +6,7 @@ DROP TABLE IF EXISTS user ;
 
 CREATE TABLE IF NOT EXISTS user (
   id INT(11) NOT NULL AUTO_INCREMENT,
-  username VARCHAR(255) NULL DEFAULT NULL,
+  username VARCHAR(255) NULL DEFAULT NULL UNIQUE,
   password VARCHAR(255) NULL DEFAULT NULL,
   role VARCHAR(255) NULL,
   user_level SMALLINT NULL,
@@ -45,7 +45,9 @@ CREATE TABLE IF NOT EXISTS manual_input_observation (
     ON UPDATE NO ACTION);
     
     
-    
+-- -----------------------------------------------------
+-- Station
+-- -----------------------------------------------------     
 SET FOREIGN_KEY_CHECKS=0;
 DROP TABLE IF EXISTS station ;
 
