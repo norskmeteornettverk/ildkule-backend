@@ -1,17 +1,20 @@
 <?php
-
-require_once("{$_SERVER['DOCUMENT_ROOT']}/router.php");
-
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+require_once realpath($_SERVER["DOCUMENT_ROOT"]).'/api/router.php';
 
 // ##################################################
 // ##################################################
 // ##################################################
-
 // Static GET
 // In the URL -> http://localhost
 // The output -> Index
-get('/', 'index.php');
+get('/api/meteor', '/api/meteors.php');
 
+get('/api/meteor/load', '/api/load.php');
+
+/*
 // Dynamic GET. Example with 1 variable
 // The $id will be available in user.php
 get('/user/$id', 'user.php');
@@ -42,3 +45,4 @@ get('/item/$name', 'views/items.php');
 // The 404.php which is inside the views folder will be called
 // The 404.php has access to $_GET and $_POST
 any('/404','views/404.php');
+*/
