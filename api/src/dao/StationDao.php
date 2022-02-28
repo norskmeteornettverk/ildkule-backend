@@ -1,6 +1,6 @@
 <?php
 
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . '\src\dao\DaoInterface.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) .DIRECTORY_SEPARATOR. 'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'dao'.DIRECTORY_SEPARATOR.'DaoInterface.php';
 
 class StationDao implements DaoInterface
 {

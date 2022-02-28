@@ -26,7 +26,6 @@ class Meteor implements JsonSerializable
   protected $timestamp;
   protected array $observation_cam_data = array();
 
-// ?
   public function __contruct()
   {
     

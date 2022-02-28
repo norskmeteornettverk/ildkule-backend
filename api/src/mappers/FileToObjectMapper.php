@@ -45,12 +45,12 @@ class FileToObjectMapper
 
                 array_push($this->meteors, $meteor);
 
-                $meteorfoldercontent =  $this->getFolderContent($this->datadir . $datefolder . '/' . $meteorfolder);  // foldername of each meteor is in the time format of [hhmmss]
+                $meteorfoldercontent =  $this->getFolderContent($this->datadir . $datefolder . DIRECTORY_SEPARATOR . $meteorfolder);  // foldername of each meteor is in the time format of [hhmmss]
 
                 //Loading of pre-calculated meteor location, if the file exists (array_search will return True if file exists) 
                 if (array_search('location.txt', $meteorfoldercontent)) {
                     $meteor->cameraconfirmed = 1; // Confirm meteor when location file is created. Location file is created by the meteor servers when meteor is detected on two or several stations.
-                    $filepath =  $this->datadir . $datefolder . '/' . $meteorfolder . '/location.txt'; //the location file contains the location of the meteor if it has been confirmed by several stations
+                    $filepath =  $this->datadir . $datefolder . DIRECTORY_SEPARATOR . $meteorfolder . '/location.txt'; //the location file contains the location of the meteor if it has been confirmed by several stations
                     $line = fgets(fopen($filepath, 'r'));
                     if ($line) {
                         $meteor->location = trim($line); // set meteor location from content in location.txt (location.txt has only one line of text and can be blank)
@@ -62,7 +62,7 @@ class FileToObjectMapper
                 // Reads .stat file data if it exists. The .stat file contains properties of the meteor. The data is pre-calculated by the meteor server based on data from more than one station
                 if ($matches  = preg_grep("/\b(\.stat|\.STAT)\b/", $meteorfoldercontent)) {
                     $matches  = preg_grep("/\b(\.stat|\.STAT)\b/", $meteorfoldercontent);
-                    $statfilepath = $this->datadir . $datefolder . '/' . $meteorfolder . '/' . array_values($matches)[0];
+                    $statfilepath = $this->datadir . $datefolder . DIRECTORY_SEPARATOR . $meteorfolder . DIRECTORY_SEPARATOR . array_values($matches)[0];
                     $myFile = new SplFileObject($statfilepath);
                     while (!$myFile->eof()) {
                         $line =  $myFile->fgets() . PHP_EOL;
@@ -125,22 +125,22 @@ class FileToObjectMapper
 
                 foreach ($meteorfoldercontent as $stationfolder) {
                     // Find folders. Folders in this path is stations that have collected data on the meteor. Station name = folder name
-                    if (is_dir($this->datadir . $datefolder . '/' . $meteorfolder . '/' . $stationfolder)) {
+                    if (is_dir($this->datadir . $datefolder . DIRECTORY_SEPARATOR . $meteorfolder . DIRECTORY_SEPARATOR . $stationfolder)) {
                         $station = new Station();
                         $station->station_name = $stationfolder;
                         array_push($this->stations, $station);
-                        $cams = $this->getFolderContent($this->datadir . $datefolder . '/' . $meteorfolder . '/' . $stationfolder);
+                        $cams = $this->getFolderContent($this->datadir . $datefolder . DIRECTORY_SEPARATOR . $meteorfolder . DIRECTORY_SEPARATOR . $stationfolder);
 
                         foreach ($cams as $camfolder) {
 
-                            if (is_dir($this->datadir . $datefolder . '/' . $meteorfolder . '/' . $stationfolder . '/' . $camfolder)) {
+                            if (is_dir($this->datadir . $datefolder . DIRECTORY_SEPARATOR . $meteorfolder . DIRECTORY_SEPARATOR . $stationfolder . DIRECTORY_SEPARATOR . $camfolder)) {
 
                                 $cam = new Cam();
                                 $cam->cam_name = $camfolder;
 
                                 $cam->station = $station;                
 
-                                $eventfilepath = $this->datadir . $datefolder . '/' . $meteorfolder . '/' . $stationfolder . '/' . $camfolder . '/event.txt';
+                                $eventfilepath = $this->datadir . $datefolder . DIRECTORY_SEPARATOR . $meteorfolder . DIRECTORY_SEPARATOR . $stationfolder . DIRECTORY_SEPARATOR . $camfolder . '/event.txt';
 
                                 if (is_file($eventfilepath)) {
                                     $data = new ObservationCamData();
