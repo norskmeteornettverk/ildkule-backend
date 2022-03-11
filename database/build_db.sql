@@ -194,7 +194,7 @@ CREATE TABLE IF NOT EXISTS observation_cam_data (
   summary_recalibrated INT(11) NULL DEFAULT NULL,
   summary_meteor_probability FLOAT NULL DEFAULT NULL,
   PRIMARY KEY (id),
-  INDEX meteor_id (meteor_id DESC) ,
+  INDEX meteor_id (meteor_id ASC) ,
   INDEX cam_id (cam_id ASC) ,
   CONSTRAINT observation_cam_data_ibfk_1
     FOREIGN KEY (meteor_id)
