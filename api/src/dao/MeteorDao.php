@@ -1,6 +1,6 @@
 <?php
 
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) .DIRECTORY_SEPARATOR. 'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'dao'.DIRECTORY_SEPARATOR.'DaoInterface.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'dao' . DIRECTORY_SEPARATOR . 'DaoInterface.php';
 
 class MeteorDao implements DaoInterface
 {
@@ -32,7 +32,7 @@ class MeteorDao implements DaoInterface
                                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         $values = array(
             $meteor->datetimetag,
-            $meteor->location, 
+            $meteor->location,
             $meteor->cameraconfirmed,
             ($meteor->date instanceof DateTime) ? $meteor->date->format('Y-m-d H:i:s') : null,
             $meteor->track_startheight,
@@ -50,46 +50,53 @@ class MeteorDao implements DaoInterface
             $meteor->radiant_ecl_lat,
             $meteor->radiant_shower,
             $meteor->radiant_zenith_attractor,
-            $meteor->timestamp 
+            $meteor->timestamp
         );
         $this->dbh->prepare($query)->execute($values);
     }
 
 
-    public function findByID($id){
+    public function findByID($id)
+    {
         $query = "SELECT * FROM meteor WHERE id = :id;";
-		$stmt = $this->dbh->prepare($query);
-		$stmt->bindParam(':id', $id);
+        $stmt = $this->dbh->prepare($query);
+        $stmt->bindParam(':id', $id);
         $stmt->setFetchMode(PDO::FETCH_INTO, new Meteor());
-		if ($stmt->execute()) {
-			return $stmt->fetch();
-		}
-		return null;
+        if ($stmt->execute()) {
+            return $stmt->fetch();
+        }
+        return null;
     }
-    
-    public function delete($id){
+
+    public function search($search)
+    {
+        $stmt  = $this->dbh->prepare("SELECT * FROM meteor WHERE location = ?");
+        $stmt->execute(array($search));
+        $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
+        print_r($result);
+        return $result;
+    }
+
+    public function delete($id)
+    {
         //TODO - kladd, må nok skrives om.
         $query = "DELETE FROM meteor WHERE id = :id;";
         $stmt = $this->dbh->execute($query);
-        if($stmt->execute()) {
+        if ($stmt->execute()) {
             print 'You deleted ' . $id . ' successfully';
-        } else { 
+        } else {
             print 'Failed to delete ' . $id . ' from database';
         }
-
     }
-    public function update($id, $confirmed){
+    public function update($id, $confirmed)
+    {
         //TODO - kladd - men hvilke attributter trenger vi egentlig å oppdatere fra frontend? blir det på en 'confirmed' så må vi nok få det inn som egen kolonne i meteor. 
         $query = "UPDATE meteor SET confirmed = :confirmed; WHERE id = :id;";
         $stmt = $this->dbh->execute($query);
-        if($stmt->execute()) {
+        if ($stmt->execute()) {
             print 'You updated ' . $id . '. Confirmed is now set to ' . $confirmed;
-        } else { 
+        } else {
             print 'Failed to update ' . $id;
         }
     }
-
-
-
-   
 }

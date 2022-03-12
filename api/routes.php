@@ -1,4 +1,16 @@
 <?php
+
+
+
+ // Allow from any origin
+ if (isset($_SERVER['HTTP_ORIGIN'])) {
+    header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
+    header('Access-Control-Allow-Credentials: true');
+    header('Access-Control-Max-Age: 86400');    // cache for 1 day
+    header( 'Access-Control-Allow-Methods: POST, GET, OPTIONS, DELETE'); 
+    header( 'Access-Control-Allow-Headers: Content-Type, x-requested-with'); 
+}
+
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -11,8 +23,11 @@ require_once realpath($_SERVER["DOCUMENT_ROOT"]).'/api/router.php';
 // In the URL -> http://localhost
 // The output -> Index
 get('/api/meteor', '/api/meteors.php');
-
 get('/api/meteor/load', '/api/load.php');
+post('/api/login', '/api/login.php');
+get('/api/users', '/api/users.php');
+get('/api/search/$query', '/api/search.php');
+
 
 /*
 // Dynamic GET. Example with 1 variable
