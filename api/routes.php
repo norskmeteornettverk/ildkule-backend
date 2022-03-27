@@ -22,11 +22,14 @@ require_once realpath($_SERVER["DOCUMENT_ROOT"]).'/api/router.php';
 // Static GET
 // In the URL -> http://localhost
 // The output -> Index
-get('/api/meteor', '/api/meteors.php');
-get('/api/meteor/load', '/api/load.php');
+get('/api/search/$query', '/api/search.php');
+get('/api/meteors', '/api/meteors.php');
+get('/api/meteors/load', '/api/load.php');
+get('/api/meteor/$id', '/api/meteor.php');
 post('/api/login', '/api/login.php');
 get('/api/users', '/api/users.php');
-get('/api/search/$query', '/api/search.php');
+get('/api/filter', '/api/filter.php');
+post('/api/classify', '/api/classify.php');
 
 
 /*

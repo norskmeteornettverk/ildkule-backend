@@ -23,15 +23,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		$row = dbFetchAssoc($result);
 		
 		$username = $row['username'];
+		$id = $row['id'];
 		
 		$headers = array('alg'=>'HS256','typ'=>'JWT');
 		$payload = array('username'=>$username, 'exp'=>(time() + 60));
 
 		$jwt = generate_jwt($headers, $payload);
 		
-		echo json_encode(array('token' => $jwt));
+		echo json_encode(array('token' => $jwt, 'accessToken' => $jwt , 'id'=>$id, 'email' => 'test@test.com', 'username'=>$username,  "roles"=> ['ROLE_ADMIN','ROLE_MODERATOR','ROLE_USER']  ));
 	} 
 	
 }
 
 //End of file
+
+/*
+
+  id: user.id,
+          username: user.username,
+          email: user.email,
+          roles: authorities,
+          accessToken: token
+
+*/

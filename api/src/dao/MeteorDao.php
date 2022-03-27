@@ -53,6 +53,7 @@ class MeteorDao implements DaoInterface
             $meteor->timestamp
         );
         $this->dbh->prepare($query)->execute($values);
+        $meteor->id = $this->dbh->lastInsertId();
     }
 
 
@@ -70,11 +71,31 @@ class MeteorDao implements DaoInterface
 
     public function search($search)
     {
-        $stmt  = $this->dbh->prepare("SELECT * FROM meteor WHERE location = ?");
-        $stmt->execute(array($search));
+        $stmt  = $this->dbh->prepare("SELECT * FROM meteor WHERE location like ?");
+        $stmt->execute(array('%' . $search . '%'));
         $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
-        print_r($result);
         return $result;
+    }
+
+    public function filter($stationName,$year,$meteorClass)  {
+
+
+        $param = [];
+        $param['station_name'] = $param['station_name1'] = !empty($stationName) ? "%" . $stationName . "%" : null;
+        $param['year'] = $param['year1']  = !empty($year)  ? $year : null;
+        $param['class'] = $param['class1']  = !empty($meteorClass)  ? $meteorClass  : null;
+
+        $sql = "SELECT * FROM meteor 
+                WHERE (meteor.id in (  SELECT d.meteor_id from  observation_cam_data d inner join cam c on d.cam_id = c.id inner join station s on c.station_id = s.id where s.station_name LIKE :station_name   )  or :station_name1 is null)
+                AND   (year(date)  = :year  or :year1  is null)
+                AND   (case when track_endheight < 40 then 'Under 40km' when track_endheight is not null then 'Krysspeilet' else 'Ikke peilet' end      = :class  or :class1  is null)
+                ";
+
+        $stmt = $this->dbh->prepare($sql);
+        $stmt->execute($param);        
+     
+        $data  = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
+        return $data ;
     }
 
     public function delete($id)

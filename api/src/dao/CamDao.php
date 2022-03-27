@@ -39,6 +39,7 @@ class CamDao implements DaoInterface
                 $q->execute($values);
                 $id = $q->fetchColumn();
                 $cam->id = $id;
+                print "new cam id" .$cam->id;
             }
         }
      }

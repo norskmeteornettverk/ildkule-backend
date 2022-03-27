@@ -211,14 +211,14 @@ CREATE TABLE IF NOT EXISTS observation_cam_data (
 DROP TABLE IF EXISTS user_review ;
 
 CREATE TABLE IF NOT EXISTS user_review (
-  users_id INT(11) NOT NULL,
+  user_id INT(11) NOT NULL,
   confirmed TINYINT NULL,
   meteor_id INT(9) UNSIGNED NOT NULL,
-  PRIMARY KEY (users_id, meteor_id),
-  INDEX fk_users_has_observation_cam_data_users1_idx (users_id ASC),
+  PRIMARY KEY (user_id, meteor_id),
+  INDEX fk_users_has_observation_cam_data_users1_idx (user_id ASC),
   INDEX fk_user_review_meteor1_idx (meteor_id ASC),
   CONSTRAINT fk_users_has_observation_cam_data_users1
-    FOREIGN KEY (users_id)
+    FOREIGN KEY (user_id)
     REFERENCES user (id)
     ON DELETE NO ACTION
     ON UPDATE NO ACTION,
