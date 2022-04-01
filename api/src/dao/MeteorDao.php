@@ -88,7 +88,7 @@ class MeteorDao implements DaoInterface
         $sql = "SELECT * FROM meteor 
                 WHERE (meteor.id in (  SELECT d.meteor_id from  observation_cam_data d inner join cam c on d.cam_id = c.id inner join station s on c.station_id = s.id where s.station_name LIKE :station_name   )  or :station_name1 is null)
                 AND   (year(date)  = :year  or :year1  is null)
-                AND   (case when track_endheight < 40 then 'Under 40km' when track_endheight is not null then 'Krysspeilet' else 'Ikke peilet' end      = :class  or :class1  is null)
+                AND   (case when track_endheight < 40 then 'Meteorittkandidat' when track_endheight is not null then 'Krysspeilet' else 'Upeilet' end      = :class  or :class1  is null)
                 ";
 
         $stmt = $this->dbh->prepare($sql);
