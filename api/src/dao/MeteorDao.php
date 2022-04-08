@@ -77,25 +77,73 @@ class MeteorDao implements DaoInterface
         return $result;
     }
 
-    public function filter($stationName,$year,$meteorClass)  {
+    public function filter($stationName, $year, $meteorClass)
+    {      
+        $stationNameFilterList = [];
+        $yearFilterList = [];
+        $meteorClassFilterList = [];
+
+        $query = "select meteor.* from meteor where 1=1";
+
+        $where = [];       
+
+        if (!empty($stationName)) {
+            $stationNameFilterList = explode(",", $stationName, 10);
+            $query = $query . " and meteor.id in (  SELECT d.meteor_id from  observation_cam_data d inner join cam c on d.cam_id = c.id inner join station s on c.station_id = s.id where s.station_name in (";
+            foreach ($stationNameFilterList as $index => $stationName) {
+                $query = $query . "?";
+                array_push($where, array($stationName, "string"));
+                if ($index !== array_key_last($stationNameFilterList))
+                    $query = $query . ",";
+            }
+            $query = $query .  ") )";
+        }
+
+        if (!empty($year)) {
+            $yearFilterList = explode(",", $year, 10);
+            $query = $query . " AND   year(date) in (";
+            foreach ($yearFilterList as $index => $year) {  
+                $query = $query .  "?";
+                array_push($where, array( $year, "int"));              
+                if ($index !== array_key_last($yearFilterList))
+                    $query = $query . ",";
+            }
+            $query = $query .  ")";
+        }
+
+        if (!empty($meteorClass)) {
+            $meteorClassFilterList = explode(",", $meteorClass, 10);
+            $query = $query . " AND   (case when track_endheight < 40 and track_endheight is not null then 'Meteorittkandidat' when track_endheight is not null then 'Krysspeilet' else 'Upeilet' end   in (  ";
+            foreach ($meteorClassFilterList as $index => $meteorClass) {  
+                $query = $query . "?";
+                array_push($where, array($meteorClass, "string"));             
+                if ($index !== array_key_last($meteorClassFilterList))
+                    $query = $query . ",";
+            }
+            $query = $query .  "))";        
+        }
+
+        $query = $query . " order by meteor.datetimetag desc limit 1000"; 
+
+        $sth = $this->dbh->prepare($query);
+
+        for ($i = 0; $i < count($where); $i++)  {
+            if ($where[$i][1] == "string" ){               
+                $sth->bindParam($i+1,$where[$i][0], PDO::PARAM_STR);                
+            }
+
+            if ($where[$i][1] == "int" ){               
+                $sth->bindParam($i+1,$where[$i][0], PDO::PARAM_INT);                
+            }                     
 
 
-        $param = [];
-        $param['station_name'] = $param['station_name1'] = !empty($stationName) ? "%" . $stationName . "%" : null;
-        $param['year'] = $param['year1']  = !empty($year)  ? $year : null;
-        $param['class'] = $param['class1']  = !empty($meteorClass)  ? $meteorClass  : null;
+        }  
 
-        $sql = "SELECT * FROM meteor 
-                WHERE (meteor.id in (  SELECT d.meteor_id from  observation_cam_data d inner join cam c on d.cam_id = c.id inner join station s on c.station_id = s.id where s.station_name LIKE :station_name   )  or :station_name1 is null)
-                AND   (year(date)  = :year  or :year1  is null)
-                AND   (case when track_endheight < 40 then 'Meteorittkandidat' when track_endheight is not null then 'Krysspeilet' else 'Upeilet' end      = :class  or :class1  is null)
-                ";
+        $sth->execute();
 
-        $stmt = $this->dbh->prepare($sql);
-        $stmt->execute($param);        
-     
-        $data  = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
-        return $data ;
+        $data  = $sth->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
+
+        return $data;
     }
 
     public function delete($id)
