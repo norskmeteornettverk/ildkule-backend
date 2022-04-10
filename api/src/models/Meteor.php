@@ -15,6 +15,10 @@ class Meteor implements JsonSerializable
   protected $track_incidence;
   protected $track_speed;
   protected $track_speed_source;
+  protected $track_startlat;
+  protected $track_startlong;
+  protected $track_endlat;
+  protected $track_endlong;  
   protected $fit_error;
   protected $fit_quality;
   protected $radiant_ra;

@@ -57,6 +57,18 @@ class StationDao implements DaoInterface
         return null;
     }
 
+    public function findByCamID($id)
+    {
+        $query = "SELECT * FROM station inner join cam on station.id = cam.station_id WHERE cam.id = :id;";
+        $stmt = $this->dbh->prepare($query);
+        $stmt->bindParam(':id', $id);
+        $stmt->setFetchMode(PDO::FETCH_INTO, new Station());
+        if ($stmt->execute()) {
+            return $stmt->fetch();
+        }
+        return null;
+    }
+
     public function delete($id)
     {
         //TODO - kladd, må nok skrives om.

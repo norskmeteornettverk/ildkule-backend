@@ -27,9 +27,9 @@ class MeteorDao implements DaoInterface
     {
         $query = "INSERT INTO meteor (datetimetag,location,camera_confirmed,date,track_startheight,
                                       track_endheight, track_groundtrack, track_course, track_incidence, track_speed,
-                                       track_speed_source, fit_error, fit_quality, radiant_ra, radiant_dec,
+                                       track_speed_source, track_startlat, track_startlong, track_endlat, track_endlong, fit_error, fit_quality, radiant_ra, radiant_dec,
                                        radiant_ecl_long, radiant_ecl_lat,  radiant_shower, radiant_zenith_attractor, timestamp) 
-                                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         $values = array(
             $meteor->datetimetag,
             $meteor->location,
@@ -42,6 +42,10 @@ class MeteorDao implements DaoInterface
             $meteor->track_incidence,
             $meteor->track_speed,
             $meteor->track_speed_source,
+            $meteor->track_startlat,
+            $meteor->track_startlong,
+            $meteor->track_endlat,
+            $meteor->track_endlong,
             $meteor->fit_error,
             $meteor->fit_quality,
             $meteor->radiant_ra,

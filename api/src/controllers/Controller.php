@@ -56,6 +56,25 @@ class Controller
     {
         $meteorDao = new MeteorDao();
         $meteor = $meteorDao->findByID($id);
+        $camDataDao = new ObservationCamDataDao();
+        $meteorId = $meteor->id;        
+        $camDataFound = $camDataDao->findByMeteorID($meteorId);       
+        $meteor->observation_cam_data = $camDataFound;
+        $camDao = new CamDao();
+        $stationDao = new StationDao();
+        $cams  = [];
+        $stations = [];
+        foreach ($meteor->observation_cam_data as $camData) {
+            $id = $camData->id;           
+            $result = $camDao->findByCamDataID($id );
+            if ($result){
+                array_push($cams, $result);
+                $camData->cam = $result; 
+                $camData->cam->station =  $stationDao->findByCamID($camData->cam->id);               
+            }            
+        }
+        
+
         $result = $meteor;
         return json_encode($result);
     }

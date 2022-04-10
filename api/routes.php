@@ -30,6 +30,7 @@ post('/api/login', '/api/login.php');
 get('/api/users', '/api/users.php');
 get('/api/filter', '/api/filter.php');
 post('/api/classify', '/api/classify.php');
+get('/api/report/$report', '/api/report.php');
 
 
 /*

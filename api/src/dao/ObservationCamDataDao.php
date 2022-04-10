@@ -273,6 +273,16 @@ class ObservationCamDataDao implements DaoInterface
         return null;
     }
 
+    public function findByMeteorID($meteorId)
+    {
+        $query = "SELECT * FROM observation_cam_data WHERE meteor_id = :id;";
+        $stmt = $this->dbh->prepare($query);
+        $stmt->bindParam(':id', $meteorId);
+        $stmt->execute();
+        $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'ObservationCamData');
+        return $result;        
+    }
+
 
     public function delete($id)
     {

@@ -1,10 +1,10 @@
 <?php
 
 
-require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'models'.DIRECTORY_SEPARATOR.'ObservationCamData.php'; 
-require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'models'.DIRECTORY_SEPARATOR.'Meteor.php'; 
-require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'models'.DIRECTORY_SEPARATOR.'Station.php'; 
-require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'models'.DIRECTORY_SEPARATOR.'Cam.php'; 
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'ObservationCamData.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'Meteor.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'Station.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'Cam.php';
 
 
 
@@ -46,7 +46,7 @@ class FileToObjectMapper
             // Loop through date folder (get files and folder related to several meteors)
             foreach ($meteorfolders as $meteorfolder) {
                 $meteor = new Meteor();
-              
+
 
                 $meteor->datetimetag = $datefolder . $meteorfolder; // set "tag" on meteor based on date and time - date and time from folder names                
                 $meteor->date = date_create($datefolder . $meteorfolder); // bases on the date and time from the name of the foldes -> create a php date
@@ -131,6 +131,34 @@ class FileToObjectMapper
                     };
                 };
 
+                // Reads .res file data if it exists. The .stat file contains positions of the meteor. The data is pre-calculated by the meteor server based on data from more than one station.
+                if ($matches  = preg_grep("/\b(\.res|\.RES)\b/", $meteorfoldercontent)) {
+                    $matches  = preg_grep("/\b(\.res|\.RES)\b/", $meteorfoldercontent);
+                    $statfilepath = $this->datadir . $datefolder . DIRECTORY_SEPARATOR . $meteorfolder . DIRECTORY_SEPARATOR . array_values($matches)[0];
+                    $myFile = new SplFileObject($statfilepath);
+                    $lineno = 1;
+                    while (!$myFile->eof() and $lineno <= 2) {
+                        $line =  $myFile->fgets() . PHP_EOL;
+                        $trimmedline = trim($line);
+                        $words = explode('  ',  $trimmedline, 10);
+                        print "Første".$words[0];
+                        print "Andre".$words[1];
+                        print "Tredje".$words[2];
+                        print "Fjerde".$words[3];
+                        if ($lineno == 1) {
+                            $meteor->track_startlong =  str_replace("\n\r\n", "", $words[0]);
+                            $meteor->track_startlat =  str_replace("\n\r\n", "", $words[1]);
+                        }
+
+                        if ($lineno == 2) {
+                            $meteor->track_endlong =  str_replace("\n\r\n", "", $words[0]);
+                            $meteor->track_endlat =  str_replace("\n\r\n", "", $words[1]);
+                        }
+
+                        $lineno++;
+                    };
+                };
+
                 foreach ($meteorfoldercontent as $stationfolder) {
                     // Find folders. Folders in this path is stations that have collected data on the meteor. Station name = folder name
                     if (is_dir($this->datadir . $datefolder . DIRECTORY_SEPARATOR . $meteorfolder . DIRECTORY_SEPARATOR . $stationfolder)) {
@@ -146,14 +174,14 @@ class FileToObjectMapper
                                 $cam = new Cam();
                                 $cam->cam_name = $camfolder;
 
-                                $cam->station = $station;                
+                                $cam->station = $station;
 
                                 $eventfilepath = $this->datadir . $datefolder . DIRECTORY_SEPARATOR . $meteorfolder . DIRECTORY_SEPARATOR . $stationfolder . DIRECTORY_SEPARATOR . $camfolder . '/event.txt';
 
                                 if (is_file($eventfilepath)) {
                                     $data = new ObservationCamData();
 
-                                    $data->meteor = $meteor;                                   
+                                    $data->meteor = $meteor;
 
                                     array_push($meteor->observation_cam_data, $data);
                                     $data->cam = $cam;
@@ -383,8 +411,7 @@ class FileToObjectMapper
                                                 $data->summary_meteor_probability = trim(str_replace('\n\r\n', '', $words[1]));
                                                 break;
                                         };
-                                    };                                 
-                                                  
+                                    };
                                 }
                             }
                         }

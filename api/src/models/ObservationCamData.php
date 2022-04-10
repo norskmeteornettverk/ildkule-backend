@@ -5,6 +5,7 @@ class ObservationCamData implements JsonSerializable
 //properties
     protected Meteor $meteor;
     protected Cam $cam;
+    protected $id;
     protected $created;
     protected $trail_frames;
     protected $trail_duration;

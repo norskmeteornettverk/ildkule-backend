@@ -57,6 +57,18 @@ class CamDao implements DaoInterface
         return null;
     }
 
+    public function findByCamDataID($id)
+    {
+        $query = "SELECT cam.* FROM cam inner join observation_cam_data on cam.id = observation_cam_data.cam_id  WHERE observation_cam_data.id = :id limit 1;";
+        $stmt = $this->dbh->prepare($query);
+        $stmt->bindParam(':id', $id);
+        $stmt->setFetchMode(PDO::FETCH_INTO, new Cam());
+        if ($stmt->execute()) {
+            return $stmt->fetch();
+        }
+        return null;
+    }
+
     public function delete($id)
     {
         //TODO - kladd, må nok skrives om.
