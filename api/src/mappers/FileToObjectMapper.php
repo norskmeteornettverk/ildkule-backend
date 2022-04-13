@@ -57,14 +57,14 @@ class FileToObjectMapper
 
                 //Loading of pre-calculated meteor location, if the file exists (array_search will return True if file exists) 
                 if (array_search('location.txt', $meteorfoldercontent)) {
-                    $meteor->cameraconfirmed = 1; // Confirm meteor when location file is created. Location file is created by the meteor servers when meteor is detected on two or several stations.
+                    $meteor->camera_confirmed = 1; // Confirm meteor when location file is created. Location file is created by the meteor servers when meteor is detected on two or several stations.
                     $filepath =  $this->datadir . $datefolder . DIRECTORY_SEPARATOR . $meteorfolder . '/location.txt'; //the location file contains the location of the meteor if it has been confirmed by several stations
                     $line = fgets(fopen($filepath, 'r'));
                     if ($line) {
                         $meteor->location = trim($line); // set meteor location from content in location.txt (location.txt has only one line of text and can be blank)
                     };
                 } else {
-                    $meteor->cameraconfirmed = 0; // we can assume that the meteor is not confirmed by other stations if the location file is missing
+                    $meteor->camera_confirmed = 0; // we can assume that the meteor is not confirmed by other stations if the location file is missing
                 }
 
                 // Reads .stat file data if it exists. The .stat file contains properties of the meteor. The data is pre-calculated by the meteor server based on data from more than one station

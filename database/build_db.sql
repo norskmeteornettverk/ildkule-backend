@@ -109,7 +109,8 @@ CREATE TABLE IF NOT EXISTS meteor (
   radiant_zenith_attractor VARCHAR(100) NULL DEFAULT NULL,
   timestamp VARCHAR(100) NULL DEFAULT NULL,
   date DATETIME NULL DEFAULT NULL,
-  camera_confirmed bit default null,
+  camera_confirmed tinyint(1) default null,
+  user_confirmed tinyint(1) default null,
   PRIMARY KEY (id));
 
 

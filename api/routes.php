@@ -7,7 +7,7 @@
     header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
     header('Access-Control-Allow-Credentials: true');
     header('Access-Control-Max-Age: 86400');    // cache for 1 day
-    header( 'Access-Control-Allow-Methods: POST, GET, OPTIONS, DELETE'); 
+    header( 'Access-Control-Allow-Methods: POST, GET, OPTIONS, DELETE, PUT'); 
     header( 'Access-Control-Allow-Headers: Content-Type, x-requested-with'); 
 }
 
@@ -26,6 +26,7 @@ get('/api/search/$query', '/api/search.php');
 get('/api/meteors', '/api/meteors.php');
 get('/api/meteors/load', '/api/load.php');
 get('/api/meteor/$id', '/api/meteor.php');
+put('/api/meteor/$id', '/api/meteor.php');
 post('/api/login', '/api/login.php');
 get('/api/users', '/api/users.php');
 get('/api/filter', '/api/filter.php');

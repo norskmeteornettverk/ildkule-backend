@@ -33,7 +33,7 @@ class MeteorDao implements DaoInterface
         $values = array(
             $meteor->datetimetag,
             $meteor->location,
-            $meteor->cameraconfirmed,
+            $meteor->camera_confirmed,
             ($meteor->date instanceof DateTime) ? $meteor->date->format('Y-m-d H:i:s') : null,
             $meteor->track_startheight,
             $meteor->track_endheight,
@@ -75,8 +75,8 @@ class MeteorDao implements DaoInterface
 
     public function search($search)
     {
-        $stmt  = $this->dbh->prepare("SELECT * FROM meteor WHERE location like ?");
-        $stmt->execute(array('%' . $search . '%'));
+        $stmt  = $this->dbh->prepare("SELECT * FROM meteor WHERE location like ? or datetimetag like ?");
+        $stmt->execute(array('%' . $search . '%','%' . $search . '%'));
         $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
         return $result;
     }

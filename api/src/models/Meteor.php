@@ -6,7 +6,8 @@ class Meteor implements JsonSerializable
   protected $id;
   protected $datetimetag;
   protected $location;
-  protected $cameraconfirmed;
+  protected $camera_confirmed;
+  protected $user_confirmed;
   protected $date;
   protected $track_startheight;
   protected $track_endheight;
