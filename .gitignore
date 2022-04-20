@@ -2,3 +2,4 @@ db_connection.php
 config.php
 data/
 .vscode/settings.json
+phpmailer/mailer.php
