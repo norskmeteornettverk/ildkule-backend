@@ -19,6 +19,6 @@ header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET");
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {  
-  $controller = new Controller();  
+  $controller = new MeteorController();  
   print ($controller->loadMeteorsFromFiles());  
 };

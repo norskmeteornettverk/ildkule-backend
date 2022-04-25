@@ -284,8 +284,9 @@ class ObservationCamDataDao implements DaoInterface
     }
 
 
-    public function delete($id)
+    public function delete($id)    
     {
+        throw new Exception('Not implemented');
        
     }
 

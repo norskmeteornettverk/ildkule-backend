@@ -1,17 +1,20 @@
 <?php
 
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . '\src\controllers\Controller.php';
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . '\config.php';
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . '\src\models\Meteor.php';
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . '\src\models\Station.php';
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . '\src\models\Cam.php';
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . '\src\models\ObservationCamData.php';
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . '\src\dao\MeteorDao.php';
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . '\src\dao\CamDao.php';
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . '\src\dao\StationDao.php';
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . '\src\dao\DatabaseConnection.php';
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . '\src\mappers\FileToObjectMapper.php';
 
-$controller = new Controller();
-$controller->loadMeteorsFromFiles();
+ini_set('display_errors', 1);
+
+require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'config.php'; 
+require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'models'.DIRECTORY_SEPARATOR.'Meteor.php'; 
+require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'mappers'.DIRECTORY_SEPARATOR.'FileToObjectMapper.php'; 
+require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'dao'.DIRECTORY_SEPARATOR.'DatabaseConnection.php'; 
+require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'dao'.DIRECTORY_SEPARATOR.'MeteorDao.php'; 
+require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'controllers'.DIRECTORY_SEPARATOR.'MeteorController.php'; 
+
+$controller = new MeteorController();
+
+//$controller->loadMeteorsFromFiles();
+//print_r ($controller->filter('Larvik', '2021', 'Krysspeilet'));
+//print_r ($controller->getMeteorByID(11));
+print_r ($controller->search("Viken"));
+
 

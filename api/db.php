@@ -1,10 +1,13 @@
 <?php
 
-require_once 'db_connection.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'db_connection.php'; 
 
 function dbQuery($sql) {
-	global $dbConn;
+	//global $dbConn;
+	//$result = mysqli_query($dbConn, $sql) or die(mysqli_error($dbConn));
+	$dbConn=mysqli_connect('sql31.mcb.webhuset.no', '153413_ildkule_dev', 'griHUPU388', '153413_ildkule_dev');
 	$result = mysqli_query($dbConn, $sql) or die(mysqli_error($dbConn));
+	mysqli_close($dbConn);
 	return $result;
 }
 
