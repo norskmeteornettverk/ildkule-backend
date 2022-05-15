@@ -4,11 +4,11 @@
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "",
     "name": "Login",
-    "url": "https://ildkule.net/api/login",
+    "url": "http://127.0.0.1:8081/api/login",
     "method": "POST",
     "sortNum": 10000,
     "created": "2022-05-02T16:40:35.012Z",
-    "modified": "2022-05-15T11:04:27.884Z",
+    "modified": "2022-05-15T11:54:31.444Z",
     "headers": [],
     "params": [],
     "body": {
@@ -108,16 +108,16 @@
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "",
     "name": "Filter meteors",
-    "url": "http://127.0.0.1:8081/api/meteor/1?stationName=Larvik&year=2021&meteorClass=Krysspeilet",
+    "url": "http://127.0.0.1:8081/api/filter?stationName=larvik&year=2021&meteorClass=krysspeilet",
     "method": "GET",
     "sortNum": 80000,
     "created": "2022-05-15T10:02:54.932Z",
-    "modified": "2022-05-15T10:09:53.600Z",
+    "modified": "2022-05-15T11:43:39.301Z",
     "headers": [],
     "params": [
       {
         "name": "stationName",
-        "value": "Larvik",
+        "value": "larvik",
         "isPath": false
       },
       {
@@ -127,7 +127,7 @@
       },
       {
         "name": "meteorClass",
-        "value": "Krysspeilet",
+        "value": "krysspeilet",
         "isPath": false
       }
     ],
