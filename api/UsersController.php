@@ -8,12 +8,9 @@ header("Access-Control-Allow-Methods: GET");
 
 $bearer_token = get_bearer_token();
 
-#echo $bearer_token;
+if(is_jwt_valid($bearer_token)) {
 
-$is_jwt_valid = is_jwt_valid($bearer_token);
-
-if($is_jwt_valid) {
-	$sql = "SELECT * FROM user";
+	$sql = "SELECT id, username, role, user_level, create_time, update_time  FROM user";
 	$results = dbQuery($sql);
 
 	$rows = array();
@@ -26,5 +23,6 @@ if($is_jwt_valid) {
 } else {
 	echo json_encode(array('error' => 'Access denied'));
 }
+
 
 //End of file

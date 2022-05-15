@@ -15,10 +15,10 @@ require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIREC
 
 class MeteorController
 {
-    public function loadMeteorsFromFiles()
+    public function loadMeteorsFromFiles($root_folder,$date_from, $date_to)
     {
         $meteorService = new MeteorService();
-        $meteorService->loadMeteorsFromFiles();
+        $meteorService->loadMeteorsFromFiles($root_folder,$date_from, $date_to);
     }
 
     public function getAllMeteors()

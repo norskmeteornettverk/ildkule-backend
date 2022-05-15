@@ -38,8 +38,7 @@ class CamDao implements DaoInterface
                 $q = $this->dbh->prepare("SELECT id FROM cam WHERE cam_name=? and station_id = ?");
                 $q->execute($values);
                 $id = $q->fetchColumn();
-                $cam->id = $id;
-                print "new cam id" .$cam->id;
+                $cam->id = $id;                
             }
         }
      }

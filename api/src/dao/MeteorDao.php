@@ -25,11 +25,63 @@ class MeteorDao implements DaoInterface
 
     public function insert($meteor)
     {
-        $query = "INSERT INTO meteor (datetimetag,location,camera_confirmed,date,track_startheight,
-                                      track_endheight, track_groundtrack, track_course, track_incidence, track_speed,
-                                       track_speed_source, track_startlat, track_startlong, track_endlat, track_endlong, fit_error, fit_quality, radiant_ra, radiant_dec,
-                                       radiant_ecl_long, radiant_ecl_lat,  radiant_shower, radiant_zenith_attractor, timestamp) 
-                                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        $query = "INSERT INTO meteor (
+            datetimetag,
+            location,
+            camera_confirmed,
+            date,
+            track_startheight,
+            track_endheight, 
+            track_groundtrack, 
+            track_course, 
+            track_incidence, 
+            track_speed,
+            track_speed_source, 
+            track_startlat, 
+            track_startlong, 
+            track_endlat, 
+            track_endlong, 
+            fit_error, 
+            fit_quality, 
+            radiant_ra, 
+            radiant_dec,
+            radiant_ecl_long, 
+            radiant_ecl_lat,  
+            radiant_shower, 
+            radiant_zenith_attractor, 
+            timestamp)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON DUPLICATE 
+            KEY UPDATE 
+            
+            datetimetag                     = VALUES(datetimetag                )
+            ,location                       = VALUES(location                   )           
+            ,camera_confirmed               = VALUES(camera_confirmed           )        
+            ,date                           = VALUES(date                       )      
+            ,track_startheight              = VALUES(track_startheight          )    
+            ,track_endheight                = VALUES(track_endheight            )  
+            ,track_groundtrack              = VALUES(track_groundtrack          )
+            ,track_course                   = VALUES(track_course               )
+            ,track_incidence                = VALUES(track_incidence            )
+            ,track_speed                    = VALUES(track_speed                )
+            ,track_speed_source             = VALUES(track_speed_source         )
+            ,track_startlat                 = VALUES(track_startlat             )
+            ,track_startlong                = VALUES(track_startlong            )
+            ,track_endlat                   = VALUES(track_endlat               )
+            ,track_endlong                  = VALUES(track_endlong              )
+            ,fit_error                      = VALUES(fit_error                  )
+            ,fit_quality                    = VALUES(fit_quality                )
+            ,radiant_ra                     = VALUES(radiant_ra                 )
+            ,radiant_dec                    = VALUES(radiant_dec                )
+            ,radiant_ecl_long               = VALUES(radiant_ecl_long           )
+            ,radiant_ecl_lat                = VALUES(radiant_ecl_lat            )
+            ,radiant_shower                 = VALUES(radiant_shower             )
+            ,radiant_zenith_attractor       = VALUES(radiant_zenith_attractor   )
+            ,timestamp                      = VALUES(timestamp                  )
+
+
+            ;                                      
+                                      ";
         $values = array(
             $meteor->datetimetag,
             $meteor->location,
@@ -57,7 +109,18 @@ class MeteorDao implements DaoInterface
             $meteor->timestamp
         );
         $this->dbh->prepare($query)->execute($values);
-        $meteor->id = $this->dbh->lastInsertId();
+
+        if (!$meteor->id) {
+            $meteor->id = $this->dbh->lastInsertId(); // set the id based on the id generateted in the db
+            
+            // id will still be missing if update instead of insert - select the id from the db
+            if (!$meteor->id) { 
+                $q = $this->dbh->prepare("SELECT id FROM meteor WHERE meteor.datetimetag  = ?");
+                $q->execute(array( $meteor->datetimetag));
+                $id = $q->fetchColumn();
+                $meteor->id = $id;                
+            }
+        }       
     }
 
 

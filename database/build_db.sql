@@ -111,7 +111,9 @@ CREATE TABLE IF NOT EXISTS meteor (
   date DATETIME NULL DEFAULT NULL,
   camera_confirmed tinyint(1) default null,
   user_confirmed tinyint(1) default null,
-  PRIMARY KEY (id));
+  PRIMARY KEY (id),
+  CONSTRAINT unique_meteor_datetimetag UNIQUE(datetimetag)
+  );
 
 
 -- -----------------------------------------------------
@@ -201,6 +203,7 @@ CREATE TABLE IF NOT EXISTS observation_cam_data (
   PRIMARY KEY (id),
   INDEX meteor_id (meteor_id ASC) ,
   INDEX cam_id (cam_id ASC) ,
+   CONSTRAINT observation_cam_data_ UNIQUE(meteor_id, cam_id)  ,
   CONSTRAINT observation_cam_data_ibfk_1
     FOREIGN KEY (meteor_id)
     REFERENCES meteor (id),
@@ -222,6 +225,7 @@ CREATE TABLE IF NOT EXISTS user_review (
   PRIMARY KEY (user_id, meteor_id),
   INDEX fk_users_has_observation_cam_data_users1_idx (user_id ASC),
   INDEX fk_user_review_meteor1_idx (meteor_id ASC),
+  
   CONSTRAINT fk_users_has_observation_cam_data_users1
     FOREIGN KEY (user_id)
     REFERENCES user (id)

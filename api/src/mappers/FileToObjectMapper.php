@@ -11,20 +11,31 @@ require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' .
 class FileToObjectMapper
 {
 
-    protected $datadir;
-    protected $meteors = array();
-    protected $stations = array();
+    private $datadir;
+    private $meteors = array();
+    private $stations = array();
+    private $folder_names_to_intersect = array();
 
-    function __construct($datadir = null)
+    function __construct($datadir = null, $date_from = '19000101', $date_to = '20990101')
     {
         $this->datadir = $datadir;
+        $this->$date_from = $date_from;
+        $this->$date_to = $date_to;
+
+        $period = new DatePeriod(
+            new DateTime($this->$date_from),
+            new DateInterval('P1D'),
+            new DateTime($this->$date_to)
+        );
+   
+        foreach ($period as $date) {
+            $this->folder_names_to_intersect[] = $date->format('Ymd');
+        }        
     }
-
-
 
     protected function getFolderContent($folderpath)
     {
-        return array_diff(scandir($folderpath), array('.', '..'));    // get only content in folder
+        return array_diff(scandir($folderpath), array('.', '..'));    // get only folder content
     }
 
     /**
@@ -34,10 +45,13 @@ class FileToObjectMapper
      */
     public function map(): array
     {
-
-        $datefolders = $this->getFolderContent($this->datadir); // folder with collection of meteors grouped by date in folders (in the format of [yyyyMMdd])
-
-        // Loop goes through each meteor folder
+       
+        // Get the folders that is in the specified range (limits the data loaded)
+        $all_folders = $this->getFolderContent($this->datadir); // folder with collection of meteors grouped by date in folders (in the format of [yyyyMMdd])        
+        $datefolders =  array_intersect($this->folder_names_to_intersect, $all_folders); // pick out the folders that's our specified range
+        
+        
+        // Loop goes through each meteor folder for loading of data
         foreach ($datefolders as $datefolder) {
 
             // Get content of meteor (files, folder, etc)
@@ -141,10 +155,7 @@ class FileToObjectMapper
                         $line =  $myFile->fgets() . PHP_EOL;
                         $trimmedline = trim($line);
                         $words = explode('  ',  $trimmedline, 10);
-                        print "Første".$words[0];
-                        print "Andre".$words[1];
-                        print "Tredje".$words[2];
-                        print "Fjerde".$words[3];
+                     
                         if ($lineno == 1) {
                             $meteor->track_startlong =  str_replace("\n\r\n", "", $words[0]);
                             $meteor->track_startlat =  str_replace("\n\r\n", "", $words[1]);
