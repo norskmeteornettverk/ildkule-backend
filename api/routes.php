@@ -21,7 +21,7 @@ require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' .
 $frontController = new FrontController();
 
 /* The following section routes requests to the correct controller */
-$frontController->post(      '/api/meteors/load',       '/api/LoadController.php'               );  # Loading data from files
+$frontController->post(     '/api/meteors/load',        '/api/LoadController.php'               ); # Loading data from files
 $frontController->get(      '/api/meteors',             '/api/MeteorsController.php'            ); # Get all loaded meteors
 $frontController->get(      '/api/search/$query',       '/api/SearchController.php'             ); # Get all meteors by search string
 $frontController->get(      '/api/filter',              '/api/MeteorFilterController.php'       ); # Get all meteors by filtering
@@ -32,8 +32,7 @@ $frontController->post(     '/api/user/new',            '/api/NewUserController.
 $frontController->post(     '/api/login',               '/api/LoginController.php'              ); # Login user
 $frontController->get(      '/api/users',               '/api/UsersController.php'              ); # Get all users
 $frontController->get(      '/api/user',                '/api/UserController.php'               ); # Get user
-$frontController->post(     '/api/user/myreviews',      '/api/MyReviewsController.php'          );  # Get users' reviews
-$frontController->post(     '/api/user/myreviews',      '/api/MyReviewsController.php'          );  # Get users' reviews
+$frontController->get(      '/api/user/myreviews',      '/api/MyReviewsController.php'          ); # Get users' reviews
 $frontController->get(      '/api/report/$report',      '/api/ReportController.php'             ); # Get report
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -44,7 +43,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 $frontController->any(      '/404',                     '/api/404.php'                          ); # 404
-
 
 /*
 // Dynamic GET. Example with 1 variable

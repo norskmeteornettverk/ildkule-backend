@@ -11,6 +11,7 @@ require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIREC
 require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'dao'.DIRECTORY_SEPARATOR.'StationDao.php'; 
 require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'dao'.DIRECTORY_SEPARATOR.'CamDao.php'; 
 require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'dao'.DIRECTORY_SEPARATOR.'ObservationCamDataDao.php'; 
+require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'dao'.DIRECTORY_SEPARATOR.'UserReviewDao.php'; 
 
 
 
@@ -55,11 +56,13 @@ class MeteorService
 
 
 
-    public function getAllMeteors()
+    public function getAllMeteors($page = -1)
     {
         $meteorDao = new MeteorDao();
-        $meteors = $meteorDao->findAll();
-        $result = array("totalItems" => 800, "meteors" => $meteors, "totalPages" => 80, "currentPage" => 80);
+        $meteors = $meteorDao->findAll($page);
+        $count =  $meteorDao->getCount();        
+        $pages = ceil($count / 10);
+        $result = array("totalItems" => $count, "meteors" => $meteors, "totalPages" => $pages, "currentPage" => 1);
         return json_encode($result);
     }
 
@@ -69,12 +72,18 @@ class MeteorService
         $meteor = $meteorDao->findByID($id);
         $camDataDao = new ObservationCamDataDao();
         $meteorId = $meteor->id;        
-        $camDataFound = $camDataDao->findByMeteorID($meteorId);       
+        $camDataFound = $camDataDao->findByMeteorID($meteorId);   
+        
+        $reviewDao = new UserReviewDao();
+        $reviewsFound = $reviewDao->findByMeteorID($meteorId);    
+        $meteor->user_review =  $reviewsFound;
+
         $meteor->observation_cam_data = $camDataFound;
         $camDao = new CamDao();
         $stationDao = new StationDao();
         $cams  = [];
         $stations = [];
+        $reviews  = [];
         foreach ($meteor->observation_cam_data as $camData) {
             $id = $camData->id;           
             $result = $camDao->findByCamDataID($id );
@@ -84,6 +93,7 @@ class MeteorService
                 $camData->cam->station =  $stationDao->findByCamID($camData->cam->id);               
             }            
         }
+     
         
 
         $result = $meteor;

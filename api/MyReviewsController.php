@@ -6,11 +6,9 @@ require_once 'db.php';
 require_once 'jwt_utils.php';
 
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: POST");
+header("Access-Control-Allow-Methods: GET");
 
 $bearer_token = get_bearer_token();
-
-
 
 if (!empty($bearer_token)) {
 	if (is_jwt_valid($bearer_token)) {
