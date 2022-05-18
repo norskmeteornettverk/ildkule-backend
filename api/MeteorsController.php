@@ -13,7 +13,13 @@ header("Access-Control-Allow-Methods: GET");
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
   $controller = new MeteorController();
-  $json =  $controller->getAllMeteors();
+
+  if( isset($_GET['page'])){
+    $json =  $controller->getAllMeteors($_GET['page']);
+  } else {
+    $json =  $controller->getAllMeteors();
+  }
+
   header('Content-Type: application/json; charset=utf-8');
 
   if ($json === false) {

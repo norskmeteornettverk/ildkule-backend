@@ -21,10 +21,10 @@ class MeteorController
         $meteorService->loadMeteorsFromFiles($root_folder,$date_from, $date_to);
     }
 
-    public function getAllMeteors()
+    public function getAllMeteors($page = -1)
     {
         $meteorService = new MeteorService();
-        return $meteorService->getAllMeteors();
+        return $meteorService->getAllMeteors($page);
     }
 
     public function getMeteorByID($id)

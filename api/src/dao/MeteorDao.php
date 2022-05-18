@@ -15,9 +15,27 @@ class MeteorDao implements DaoInterface
         $this->dbh =  $this->db->getDbh();
     }
 
-    public function findAll()
+    public function getCount()
     {
-        $stmt = $this->dbh->query("SELECT * FROM meteor");
+        $stmt = $this->dbh->query("SELECT count(*) as num FROM meteor");
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row['num'];
+    }
+
+    public function findAll($page = -1)
+    {
+        $stmt = null;
+        if ($page <= -1){
+            $stmt = $this->dbh->query("SELECT * FROM meteor  order by meteor.date desc");
+            $stmt->execute();
+        } else {
+            $query = "SELECT * FROM meteor  order by meteor.date desc LIMIT ? OFFSET ? ";
+            $stmt = $this->dbh->prepare( $query);
+            $stmt->bindValue(1, 10, PDO::PARAM_INT);        
+            $stmt->bindValue(2, ($page-1)*10, PDO::PARAM_INT);       
+            $stmt->execute();            
+        }        
         $stmt->execute();
         $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
         return $result;
@@ -138,7 +156,7 @@ class MeteorDao implements DaoInterface
 
     public function search($search)
     {
-        $stmt  = $this->dbh->prepare("SELECT * FROM meteor WHERE location like ? or datetimetag like ?");
+        $stmt  = $this->dbh->prepare("SELECT * FROM meteor WHERE location like ? or datetimetag like ?  order by meteor.date desc");
         $stmt->execute(array('%' . $search . '%','%' . $search . '%'));
         $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
         return $result;
@@ -190,7 +208,7 @@ class MeteorDao implements DaoInterface
             $query = $query .  "))";        
         }
 
-        $query = $query . " order by meteor.datetimetag desc limit 1000"; 
+        $query = $query . " order by meteor.datetimetag desc limit 100"; 
 
         $sth = $this->dbh->prepare($query);
 
