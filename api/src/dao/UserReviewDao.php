@@ -25,9 +25,12 @@ class UserReviewDao
         $stmt = $this->dbh->prepare("SELECT * FROM user_review WHERE meteor_id = :id;");
         $stmt->bindParam(':id', $id);
         $stmt->execute();
+        $result = array();
         $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'UserReview');
-        return $result;
-
+        if (isset($result)){
+            return $result;
+        } else {
+            return array();
+        }        
     }
-
 }
