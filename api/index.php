@@ -1,13 +1,6 @@
 <?php
-function my_error_handler()
-{
-  $last_error = error_get_last();
-  if ($last_error && $last_error['type']==E_ERROR)
-      {
-        header("HTTP/1.1 500 Internal Server Error");        
-      }
-}
-register_shutdown_function('my_error_handler');
+
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'handlers' . DIRECTORY_SEPARATOR . 'ErrorHandler.php';
 
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
@@ -25,6 +18,7 @@ header( 'Access-Control-Allow-Headers: Authorization, Accept-Encoding, Accept-La
 header( 'Access-Control-Allow-Methods: POST, GET, OPTIONS, DELETE, PUT'); 
 
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'controllers' . DIRECTORY_SEPARATOR . 'FrontController.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'security' . DIRECTORY_SEPARATOR . 'Security.php';
 $frontController = new FrontController();
 
 /* The following section routes requests to the correct controller */
