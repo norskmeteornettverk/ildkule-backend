@@ -3,12 +3,12 @@
     "_id": "d3b810cf-ebdb-40d2-8233-6368fe5ab195",
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "",
-    "name": "Login",
-    "url": "http://127.0.0.1:8081/api/login",
+    "name": "Create new user",
+    "url": "http://127.0.0.1:8081/api/user/",
     "method": "POST",
-    "sortNum": 10000,
+    "sortNum": 6250,
     "created": "2022-05-02T16:40:35.012Z",
-    "modified": "2022-05-15T11:54:31.444Z",
+    "modified": "2022-05-21T01:31:26.852Z",
     "headers": [],
     "params": [],
     "body": {
@@ -16,40 +16,81 @@
       "raw": "{\"username\":\"test\", \"password\":\"test\"}",
       "form": []
     },
-    "auth": {
-      "type": "bearer"
-    },
-    "tests": []
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "set-env-var",
+        "custom": "json.accessToken",
+        "action": "setto",
+        "value": "{{accessToken}}"
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "200"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "contains",
+        "value": "accessToken"
+      }
+    ]
   },
   {
     "_id": "437d99ee-9879-43a2-8513-2f948e2bca93",
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "",
     "name": "Get report: cam",
-    "url": "http://127.0.0.1:8081/api/report/cam",
+    "url": "http://127.0.0.1:8081/api/insight/cam",
     "method": "GET",
     "sortNum": 40000,
     "created": "2022-05-14T12:53:43.410Z",
-    "modified": "2022-05-15T10:00:15.768Z",
+    "modified": "2022-05-20T22:13:55.851Z",
     "headers": [],
     "params": [],
-    "tests": []
+    "tests": [
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "200"
+      },
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "contains",
+        "value": "Kameranavn"
+      }
+    ]
   },
   {
     "_id": "1d7e9696-a580-4d8a-8351-0be3dc7d2a6e",
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "",
     "name": "Load meteors from files",
-    "url": "http://127.0.0.1:8081/api/meteors/load",
+    "url": "http://127.0.0.1:8081/api/meteorload",
     "method": "POST",
     "sortNum": 5000,
     "created": "2022-05-14T16:07:12.406Z",
-    "modified": "2022-05-15T10:00:17.635Z",
+    "modified": "2022-05-20T22:01:01.945Z",
     "headers": [],
     "params": [],
     "body": {
       "type": "json",
-      "raw": "{\"date_from\":\"20211101\", \"date_to\":\"20211105\"}",
+      "raw": "{\"date_from\":\"20211101\", \"date_to\":\"20211102\"}",
       "form": []
     },
     "auth": {
@@ -59,21 +100,47 @@
         "password": "secretpassword"
       }
     },
-    "tests": []
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "contains",
+        "value": "Loading completed"
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<=",
+        "value": "2000"
+      }
+    ]
   },
   {
     "_id": "b32bdd4b-ea3d-472f-afe7-7fd40e770035",
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "",
-    "name": "Get all meteors",
+    "name": "List meteors",
     "url": "http://127.0.0.1:8081/api/meteors/",
     "method": "GET",
     "sortNum": 50000,
     "created": "2022-05-15T10:00:41.163Z",
-    "modified": "2022-05-15T10:01:26.559Z",
+    "modified": "2022-05-20T19:40:40.329Z",
     "headers": [],
     "params": [],
-    "tests": []
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      }
+    ]
   },
   {
     "_id": "6c1a26b7-f7ae-4f50-bd93-db10fcc55f98",
@@ -84,35 +151,79 @@
     "method": "GET",
     "sortNum": 90000,
     "created": "2022-05-15T10:01:34.283Z",
-    "modified": "2022-05-15T10:10:39.779Z",
+    "modified": "2022-05-20T22:35:33.999Z",
     "headers": [],
     "params": [],
-    "tests": []
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "200"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "contains",
+        "value": "id"
+      }
+    ]
   },
   {
     "_id": "6aecbee0-1a80-4fad-aa63-ac6c24791644",
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "",
-    "name": "Search for meteor",
-    "url": "http://127.0.0.1:8081/api/search/skien",
+    "name": "List meteors by searchterm",
+    "url": "http://127.0.0.1:8081/api/meteors?searchTerm=Viken",
     "method": "GET",
     "sortNum": 70000,
     "created": "2022-05-15T10:02:52.162Z",
-    "modified": "2022-05-15T10:05:52.195Z",
+    "modified": "2022-05-20T19:51:21.537Z",
     "headers": [],
-    "params": [],
-    "tests": []
+    "params": [
+      {
+        "name": "searchTerm",
+        "value": "Viken",
+        "isPath": false
+      }
+    ],
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "500"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "contains",
+        "value": "meteors"
+      }
+    ]
   },
   {
     "_id": "cc274eea-9a6b-4b18-9e8c-57819464827d",
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "",
-    "name": "Filter meteors",
-    "url": "http://127.0.0.1:8081/api/filter?stationName=larvik&year=2021&meteorClass=krysspeilet",
+    "name": "List meteors by filter",
+    "url": "http://127.0.0.1:8081/api/meteors?stationName=larvik&year=2021&meteorClass=krysspeilet",
     "method": "GET",
     "sortNum": 80000,
     "created": "2022-05-15T10:02:54.932Z",
-    "modified": "2022-05-15T11:43:39.301Z",
+    "modified": "2022-05-20T19:45:29.605Z",
     "headers": [],
     "params": [
       {
@@ -137,35 +248,48 @@
     "_id": "c642c16d-8635-499c-9d80-ba63bff7e791",
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "",
-    "name": "Update meteor",
-    "url": "http://127.0.0.1:8081/api/meteor/1 ",
+    "name": "Update meteor classification",
+    "url": "http://127.0.0.1:8081/api/meteor/1",
     "method": "PUT",
     "sortNum": 100000,
     "created": "2022-05-15T10:03:30.390Z",
-    "modified": "2022-05-15T10:43:04.279Z",
+    "modified": "2022-05-21T03:22:47.894Z",
     "headers": [],
     "params": [],
     "body": {
       "type": "json",
-      "raw": "{\r\n    \"id\": \"1\",\r\n    \"datetimetag\": \"20211101024505\",\r\n    \"location\": null,\r\n    \"camera_confirmed\": \"0\",\r\n    \"user_confirmed\": \"1\",\r\n    \"date\": \"2021-11-01 02:45:05\",\r\n    \"track_startheight\": null,\r\n    \"track_endheight\": null,\r\n    \"track_groundtrack\": null,\r\n    \"track_course\": null,\r\n    \"track_incidence\": null,\r\n    \"track_speed\": null,\r\n    \"track_speed_source\": null,\r\n    \"track_startlat\": null,\r\n    \"track_startlong\": null,\r\n    \"track_endlat\": null,\r\n    \"track_endlong\": null,\r\n    \"fit_error\": null,\r\n    \"fit_quality\": null,\r\n    \"radiant_ra\": null,\r\n    \"radiant_dec\": null,\r\n    \"radiant_ecl_long\": null,\r\n    \"radiant_ecl_lat\": null,\r\n    \"radiant_shower\": null,\r\n    \"radiant_zenith_attractor\": null,\r\n    \"timestamp\": null,\r\n    \"observation_cam_data\": [\r\n        {\r\n            \"cam\": {\r\n                \"id\": \"1\",\r\n                \"cam_name\": \"cam2\",\r\n                \"created\": \"2022-05-14 22:45:52\",\r\n                \"station\": {\r\n                    \"id\": \"1\",\r\n                    \"station_name\": \"sorreisa\",\r\n                    \"created\": \"2022-05-14 22:45:52\",\r\n                    \"cams\": []\r\n                }\r\n            },\r\n            \"id\": \"1\",\r\n            \"created\": \"2022-05-14 22:45:52\",\r\n            \"trail_frames\": \"19\",\r\n            \"trail_duration\": \"4.67\",\r\n            \"trail_slope\": \"7.14\",\r\n            \"trail_offset\": \"-11135.6\",\r\n            \"trail_speed\": \"7.2361\",\r\n            \"trail_correlation\": \"0.5\",\r\n            \"trail_positions\": \"1686.9,915.6 1688.5,927.0 1690.8,938.8 1691.8,949.3 1694.4,962.3 1697.1,974.2 1698.0,983.7 1699.2,995.8 1700.4,1006.0 1703.3,1018.2 1703.7,1027.4 1705.9,1037.7 1707.2,1048.9 1707.1,1057.8 1708.6,1068.7 1710.7,1077.1 1710.8,1087.0 1711.8,1097.0 1714.0,1107.9\",\r\n            \"trail_timestamps\": \"1635734705.29 1635734705.36 1635734705.43 1635734705.50 1635734705.57 1635734705.64 1635734705.71 1635734705.79 1635734705.86 1635734705.93 1635734706.00 1635734706.07 1635734706.14 1635734706.21 1635734706.29 1635734706.36 1635734706.43 1635734706.50 1635734706.57\",\r\n            \"trail_coordinates\": \"119.54,28.84 119.41,28.31 119.31,27.74 119.18,27.26 119.07,26.63 119.01,26.04 118.89,25.61 118.75,25.04 118.64,24.56 118.59,23.96 118.46,23.54 118.41,23.03 118.30,22.50 118.16,22.10 118.07,21.57 118.05,21.15 117.92,20.69 117.82,20.22 117.78,19.67\",\r\n            \"trail_gnomonic\": \"0.013970,0.080159 0.012060,0.070831 0.010575,0.060917 0.008498,0.052433 0.006955,0.041459 0.005949,0.031225 0.004137,0.023598 0.001893,0.013704 0.000200,0.005386 -0.000673,-0.005166 -0.002670,-0.012511 -0.003488,-0.021415 -0.005242,-0.030679 -0.007566,-0.037669 -0.008997,-0.046839 -0.009351,-0.054338 -0.011608,-0.062265 -0.013239,-0.070566 -0.013970,-0.080159\",\r\n            \"trail_midpoint\": \"118.63,24.26\",\r\n            \"trail_arc\": \"9.3\",\r\n            \"trail_brightness\": \"6\",\r\n            \"trail_size\": \"2021-11-01 02:45:05.28 UTC (1635734705.29)\",\r\n            \"trail_frame_brightness\": \"2021-11-01 02:45:06.57 UTC (1635734706.57)\",\r\n            \"video_start\": \"2021-11-01 02:46:33\",\r\n            \"video_end\": null,\r\n            \"video_wallclock\": \"0000-00-00 00:00:00\",\r\n            \"video_heigth\": \"0\",\r\n            \"video_raw\": \"1024\",\r\n            \"video_flash\": \"768\",\r\n            \"config_swidth\": \"1\",\r\n            \"config_sheight\": \"1600\",\r\n            \"config_swdec\": \"0\",\r\n            \"config_downscale_thr\": \"10\",\r\n            \"config_mintrail_sec\": \"6\",\r\n            \"config_maxtrail_sec\": \"140\",\r\n            \"config_mintrail\": \"1.4336\",\r\n            \"config_maxtrail\": \"102.4\",\r\n            \"config_minspeed\": null,\r\n            \"config_maxspeed\": null,\r\n            \"config_minspeed_kms\": \"1\",\r\n            \"config_maxspeed_kms\": \"3\",\r\n            \"config_leveltest\": null,\r\n            \"config_numspots\": \"1\",\r\n            \"config_brightness\": \"900\",\r\n            \"config_flash_thr\": \"0\",\r\n            \"config_lookahead\": \"8\",\r\n            \"config_exit\": \"256\",\r\n            \"config_peak\": \"0\",\r\n            \"config_filter\": null,\r\n            \"config_dct_threshold\": null,\r\n            \"config_correlation\": null,\r\n            \"config_spacing_correlation\": \"0\",\r\n            \"config_gnomonic_correlation\": \"1635700000\",\r\n            \"config_nothreads\": \"1\",\r\n            \"config_lastreport_ts\": \"15\",\r\n            \"config_ts_future\": \"45\",\r\n            \"config_snapshot_interval\": null,\r\n            \"config_snapshot_integration\": null,\r\n            \"config_log_file\": null,\r\n            \"config_mask_file\": null,\r\n            \"config_max_file\": null,\r\n            \"config_save_file\": null,\r\n            \"config_pto_file\": null,\r\n            \"config_pto_scale\": null,\r\n            \"config_pto_width\": \"0\",\r\n            \"config_pto_height\": null,\r\n            \"config_execute\": \"/meteor/cam2\",\r\n            \"config_event_dir\": \"69.141802\",\r\n            \"config_snapshot_dir\": \"18.132711\",\r\n            \"summary_latitude\": \"41\",\r\n            \"summary_longitude\": \"2021\",\r\n            \"summary_elevation\": \"120\",\r\n            \"summary_timestamp\": \"2011-04-21 02:25:00\",\r\n            \"summary_startpos\": null,\r\n            \"summary_endpos\": \"-22.8\",\r\n            \"summary_duration\": \"1\",\r\n            \"summary_sunalt\": \"0.989429\",\r\n            \"summary_recalibrated\": \"1\",\r\n            \"summary_meteor_probability\": \"0.989429\"\r\n        }\r\n    ]\r\n}",
+      "raw": "{\n    \"id\": \"1\",\n    \"datetimetag\": \"20211101024505\",\n    \"location\": null,\n    \"camera_confirmed\": \"0\",\n    \"user_confirmed\": \"1\",\n    \"date\": \"2021-11-01 02:45:05\",\n    \"track_startheight\": null,\n    \"track_endheight\": null,\n    \"track_groundtrack\": null,\n    \"track_course\": null,\n    \"track_incidence\": null,\n    \"track_speed\": null,\n    \"track_speed_source\": null,\n    \"track_startlat\": null,\n    \"track_startlong\": null,\n    \"track_endlat\": null,\n    \"track_endlong\": null,\n    \"fit_error\": null,\n    \"fit_quality\": null,\n    \"radiant_ra\": null,\n    \"radiant_dec\": null,\n    \"radiant_ecl_long\": null,\n    \"radiant_ecl_lat\": null,\n    \"radiant_shower\": null,\n    \"radiant_zenith_attractor\": null,\n    \"timestamp\": null,\n    \"observation_cam_data\": [\n        {\n            \"cam\": {\n                \"id\": \"1\",\n                \"cam_name\": \"cam2\",\n                \"created\": \"2022-05-14 22:45:52\",\n                \"station\": {\n                    \"id\": \"1\",\n                    \"station_name\": \"sorreisa\",\n                    \"created\": \"2022-05-14 22:45:52\",\n                    \"cams\": []\n                }\n            },\n            \"id\": \"1\",\n            \"created\": \"2022-05-14 22:45:52\",\n            \"trail_frames\": \"19\",\n            \"trail_duration\": \"4.67\",\n            \"trail_slope\": \"7.14\",\n            \"trail_offset\": \"-11135.6\",\n            \"trail_speed\": \"7.2361\",\n            \"trail_correlation\": \"0.5\",\n            \"trail_positions\": \"1686.9,915.6 1688.5,927.0 1690.8,938.8 1691.8,949.3 1694.4,962.3 1697.1,974.2 1698.0,983.7 1699.2,995.8 1700.4,1006.0 1703.3,1018.2 1703.7,1027.4 1705.9,1037.7 1707.2,1048.9 1707.1,1057.8 1708.6,1068.7 1710.7,1077.1 1710.8,1087.0 1711.8,1097.0 1714.0,1107.9\",\n            \"trail_timestamps\": \"1635734705.29 1635734705.36 1635734705.43 1635734705.50 1635734705.57 1635734705.64 1635734705.71 1635734705.79 1635734705.86 1635734705.93 1635734706.00 1635734706.07 1635734706.14 1635734706.21 1635734706.29 1635734706.36 1635734706.43 1635734706.50 1635734706.57\",\n            \"trail_coordinates\": \"119.54,28.84 119.41,28.31 119.31,27.74 119.18,27.26 119.07,26.63 119.01,26.04 118.89,25.61 118.75,25.04 118.64,24.56 118.59,23.96 118.46,23.54 118.41,23.03 118.30,22.50 118.16,22.10 118.07,21.57 118.05,21.15 117.92,20.69 117.82,20.22 117.78,19.67\",\n            \"trail_gnomonic\": \"0.013970,0.080159 0.012060,0.070831 0.010575,0.060917 0.008498,0.052433 0.006955,0.041459 0.005949,0.031225 0.004137,0.023598 0.001893,0.013704 0.000200,0.005386 -0.000673,-0.005166 -0.002670,-0.012511 -0.003488,-0.021415 -0.005242,-0.030679 -0.007566,-0.037669 -0.008997,-0.046839 -0.009351,-0.054338 -0.011608,-0.062265 -0.013239,-0.070566 -0.013970,-0.080159\",\n            \"trail_midpoint\": \"118.63,24.26\",\n            \"trail_arc\": \"9.3\",\n            \"trail_brightness\": \"6\",\n            \"trail_size\": \"2021-11-01 02:45:05.28 UTC (1635734705.29)\",\n            \"trail_frame_brightness\": \"2021-11-01 02:45:06.57 UTC (1635734706.57)\",\n            \"video_start\": \"2021-11-01 02:46:33\",\n            \"video_end\": null,\n            \"video_wallclock\": \"0000-00-00 00:00:00\",\n            \"video_heigth\": \"0\",\n            \"video_raw\": \"1024\",\n            \"video_flash\": \"768\",\n            \"config_swidth\": \"1\",\n            \"config_sheight\": \"1600\",\n            \"config_swdec\": \"0\",\n            \"config_downscale_thr\": \"10\",\n            \"config_mintrail_sec\": \"6\",\n            \"config_maxtrail_sec\": \"140\",\n            \"config_mintrail\": \"1.4336\",\n            \"config_maxtrail\": \"102.4\",\n            \"config_minspeed\": null,\n            \"config_maxspeed\": null,\n            \"config_minspeed_kms\": \"1\",\n            \"config_maxspeed_kms\": \"3\",\n            \"config_leveltest\": null,\n            \"config_numspots\": \"1\",\n            \"config_brightness\": \"900\",\n            \"config_flash_thr\": \"0\",\n            \"config_lookahead\": \"8\",\n            \"config_exit\": \"256\",\n            \"config_peak\": \"0\",\n            \"config_filter\": null,\n            \"config_dct_threshold\": null,\n            \"config_correlation\": null,\n            \"config_spacing_correlation\": \"0\",\n            \"config_gnomonic_correlation\": \"1635700000\",\n            \"config_nothreads\": \"1\",\n            \"config_lastreport_ts\": \"15\",\n            \"config_ts_future\": \"45\",\n            \"config_snapshot_interval\": null,\n            \"config_snapshot_integration\": null,\n            \"config_log_file\": null,\n            \"config_mask_file\": null,\n            \"config_max_file\": null,\n            \"config_save_file\": null,\n            \"config_pto_file\": null,\n            \"config_pto_scale\": null,\n            \"config_pto_width\": \"0\",\n            \"config_pto_height\": null,\n            \"config_execute\": \"/meteor/cam2\",\n            \"config_event_dir\": \"69.141802\",\n            \"config_snapshot_dir\": \"18.132711\",\n            \"summary_latitude\": \"41\",\n            \"summary_longitude\": \"2021\",\n            \"summary_elevation\": \"120\",\n            \"summary_timestamp\": \"2011-04-21 02:25:00\",\n            \"summary_startpos\": null,\n            \"summary_endpos\": \"-22.8\",\n            \"summary_duration\": \"1\",\n            \"summary_sunalt\": \"0.989429\",\n            \"summary_recalibrated\": \"1\",\n            \"summary_meteor_probability\": \"0.989429\"\n        }\n    ]\n}",
       "form": []
     },
     "auth": {
       "type": "bearer",
-      "bearer": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InRlc3QiLCJ1c2VyX2lkIjoiMSIsImV4cCI6MTY1MjYxMjI2MH0.AFGMTcH-Vvo4pNGozEHc3yej6bZwe0iB8yao995Bviw"
+      "bearer": "{{accessToken}}"
     },
-    "tests": []
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "200"
+      }
+    ]
   },
   {
     "_id": "f075795b-449e-4f31-8eb7-470aeb653ce3",
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "",
-    "name": "Rate meteor",
-    "url": "http://127.0.0.1:8081/api/classify",
+    "name": "Post meteor rating",
+    "url": "http://127.0.0.1:8081/api/meteor/1/review",
     "method": "POST",
     "sortNum": 110000,
     "created": "2022-05-15T10:03:55.204Z",
-    "modified": "2022-05-15T11:21:13.826Z",
+    "modified": "2022-05-20T22:49:59.340Z",
     "headers": [],
     "params": [],
     "body": {
@@ -175,7 +299,7 @@
     },
     "auth": {
       "type": "bearer",
-      "bearer": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InRlc3QiLCJ1c2VyX2lkIjoiMSIsImV4cCI6MTY1MjYxMzk2NH0.Obv4JnVw4EzwumpEIPt3oPoCE55CP3XsCyCogWPSl0w"
+      "bearer": "{{accessToken}}"
     },
     "tests": []
   },
@@ -183,18 +307,209 @@
     "_id": "e57a61a7-4565-4e1e-b24b-81a14313caf2",
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "",
-    "name": "Get users meteor ratings",
-    "url": "http://127.0.0.1:8081/api/user/myreviews",
-    "method": "POST",
+    "name": "Get users details",
+    "url": "http://127.0.0.1:8081/api/user/1/details",
+    "method": "GET",
     "sortNum": 120000,
     "created": "2022-05-15T10:04:28.900Z",
-    "modified": "2022-05-15T11:26:45.090Z",
+    "modified": "2022-05-20T23:00:12.953Z",
     "headers": [],
     "params": [],
     "auth": {
       "type": "bearer",
-      "bearer": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InRlc3QiLCJ1c2VyX2lkIjoiMSIsImV4cCI6MTY1MjYxNDg4M30.R6WEOvX9idp4uTQoGcWeopAMO-soPSSGV2n_mVb9bOc"
+      "bearer": "{{accessToken}}"
     },
     "tests": []
+  },
+  {
+    "_id": "5af49745-4213-43f8-bfb7-1d042938a116",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "",
+    "name": "List meteors by page 2",
+    "url": "http://127.0.0.1:8081/api/meteors?page=2",
+    "method": "GET",
+    "sortNum": 60000,
+    "created": "2022-05-20T19:42:56.311Z",
+    "modified": "2022-05-21T01:21:50.742Z",
+    "headers": [],
+    "params": [
+      {
+        "name": "page",
+        "value": "2",
+        "isPath": false
+      }
+    ],
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "json-query",
+        "custom": "json.currentPage",
+        "action": "equal",
+        "value": "2"
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "300"
+      }
+    ]
+  },
+  {
+    "_id": "e1d71361-0895-4efd-9cb5-24e466c622fe",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "",
+    "name": "Get user",
+    "url": "http://127.0.0.1:8081/api/user/1",
+    "method": "GET",
+    "sortNum": 25000,
+    "created": "2022-05-20T20:14:58.972Z",
+    "modified": "2022-05-20T21:17:34.505Z",
+    "headers": [],
+    "params": [],
+    "auth": {
+      "type": "bearer",
+      "bearer": "{{accessToken}}"
+    },
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "contains",
+        "value": "id"
+      }
+    ]
+  },
+  {
+    "_id": "2e0e8ddd-ee5d-4ec6-87c8-f4d716e11aae",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "",
+    "name": "Get report: station",
+    "url": "http://127.0.0.1:8081/api/insight/station",
+    "method": "GET",
+    "sortNum": 45000,
+    "created": "2022-05-20T22:20:48.765Z",
+    "modified": "2022-05-20T22:22:43.746Z",
+    "headers": [],
+    "params": [],
+    "tests": [
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "200"
+      },
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "contains",
+        "value": "Stasjonsnavn"
+      }
+    ]
+  },
+  {
+    "_id": "279f6064-227e-4016-b64d-5188031229be",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "",
+    "name": "List meteors limit 20",
+    "url": "http://127.0.0.1:8081/api/meteors?page=1&limit=15",
+    "method": "GET",
+    "sortNum": 65000,
+    "created": "2022-05-20T23:43:04.754Z",
+    "modified": "2022-05-21T01:18:58.355Z",
+    "headers": [],
+    "params": [
+      {
+        "name": "page",
+        "value": "1",
+        "isPath": false
+      },
+      {
+        "name": "limit",
+        "value": "15",
+        "isPath": false
+      }
+    ],
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "300"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "contains",
+        "value": "meteors"
+      }
+    ]
+  },
+  {
+    "_id": "a30f0142-dbe2-4f03-a7b9-5c9c8adaa4f3",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "",
+    "name": "Log in",
+    "url": "http://127.0.0.1:8081/api/login",
+    "method": "POST",
+    "sortNum": 7500,
+    "created": "2022-05-21T01:30:42.238Z",
+    "modified": "2022-05-21T03:12:00.445Z",
+    "headers": [],
+    "params": [],
+    "body": {
+      "type": "text",
+      "raw": "{\"username\":\"test\", \"password\":\"test\"}",
+      "form": []
+    },
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "set-env-var",
+        "custom": "json.accessToken",
+        "action": "setto",
+        "value": "{{accessToken}}"
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "200"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "contains",
+        "value": "accessToken"
+      }
+    ]
   }
 ]
