@@ -17,24 +17,25 @@ class MeteorDao implements DaoInterface
 
     public function getCount()
     {
-        $stmt = $this->dbh->query("SELECT count(*) as num FROM meteor");
+        $stmt = $this->dbh->query("SELECT count(id) as num FROM meteor");
         $stmt->execute();
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row['num'];
     }
 
-    public function findAll($page = -1)
+    public function findAll($page = -1, $lim = 10)
     {
         $stmt = null;
-        if ($page <= -1){
-            $stmt = $this->dbh->query("SELECT * FROM meteor  order by meteor.date desc");
-            $stmt->execute();
-        } else {
+        if ($page <= -1){            
             $query = "SELECT * FROM meteor  order by meteor.date desc LIMIT ? OFFSET ? ";
             $stmt = $this->dbh->prepare( $query);
-            $stmt->bindValue(1, 10, PDO::PARAM_INT);        
-            $stmt->bindValue(2, ($page-1)*10, PDO::PARAM_INT);       
-            $stmt->execute();            
+            $stmt->bindValue(1, $lim, PDO::PARAM_INT);        
+            $stmt->bindValue(2, 0, PDO::PARAM_INT);                           
+        } else {              
+            $query = "SELECT * FROM meteor  order by meteor.date desc LIMIT ? OFFSET ? ";
+            $stmt = $this->dbh->prepare( $query);
+            $stmt->bindValue(1, $lim, PDO::PARAM_INT);        
+            $stmt->bindValue(2, ($page-1)*((int)$lim), PDO::PARAM_INT);                          
         }        
         $stmt->execute();
         $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
