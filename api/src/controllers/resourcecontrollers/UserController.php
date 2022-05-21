@@ -2,29 +2,21 @@
 
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'config.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'db.php';
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'jwt_utils.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'User.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'dao' . DIRECTORY_SEPARATOR . 'DatabaseConnection.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'dao' . DIRECTORY_SEPARATOR . 'UserDao.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'service'.DIRECTORY_SEPARATOR.'UserService.php'; 
 
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST");
 
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	// Create new account 
-
 	$data = json_decode(file_get_contents("php://input", true));
-	$sql = "INSERT INTO user(username, password) VALUES('" . mysqli_real_escape_string($dbConn, $data->username) . "', '" . mysqli_real_escape_string($dbConn, $data->password) . "')";
-	$result = dbQuery($sql);
-
-	if ($result) {
-		http_response_code(200);
-		echo json_encode(array('success' => 'You registered successfully'));
-	} else {
-		http_response_code(500);
-		echo json_encode(array('error' => 'Something went wrong, please contact administrator'));
-	}
+	$userService = new UserService();
+	$userService->createNewUser($data->username, $data->password);
 } elseif ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($id)) {
 	// Get user account
-
 	$bearer_token = get_bearer_token();
 	if (is_jwt_valid($bearer_token)) {
 		$sql = "SELECT id, username, role, user_level, create_time, update_time FROM user where username = '" . mysqli_real_escape_string($dbConn, getUserFromToken($bearer_token)["username"]) . "' limit 1";
