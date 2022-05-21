@@ -1,7 +1,5 @@
 <?php
 
-ini_set('display_errors', 1);
-
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'config.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'Meteor.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'dao' . DIRECTORY_SEPARATOR . 'DatabaseConnection.php';
@@ -12,12 +10,12 @@ header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET");
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-  $controller = new MeteorController();
+  $meteorService = new MeteorService();
 
   if( isset($_GET['page'])){
-    $json =  $controller->getAllMeteors($_GET['page']);
+    $json =  $meteorService->getAllMeteors($_GET['page']);
   } else {
-    $json =  $controller->getAllMeteors();
+    $json =  $meteorService->getAllMeteors();
   }
 
   header('Content-Type: application/json; charset=utf-8');
