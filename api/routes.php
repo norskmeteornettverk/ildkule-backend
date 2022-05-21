@@ -1,9 +1,16 @@
 <?php
+function my_error_handler()
+{
+  $last_error = error_get_last();
+  if ($last_error && $last_error['type']==E_ERROR)
+      {
+        header("HTTP/1.1 500 Internal Server Error");        
+      }
+}
+register_shutdown_function('my_error_handler');
 
-session_start();
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
-#error_reporting(E_ALL);
 
  // Allow from any origin
  if (isset($_SERVER['HTTP_ORIGIN'])) {
@@ -21,19 +28,38 @@ require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' .
 $frontController = new FrontController();
 
 /* The following section routes requests to the correct controller */
-$frontController->post(     '/api/meteors/load',        '/api/LoadController.php'               ); # Loading data from files
-$frontController->get(      '/api/meteors',             '/api/MeteorsController.php'            ); # Get all loaded meteors
-$frontController->get(      '/api/search/$query',       '/api/SearchController.php'             ); # Get all meteors by search string
-$frontController->get(      '/api/filter',              '/api/MeteorFilterController.php'       ); # Get all meteors by filtering
-$frontController->get(      '/api/meteor/$id',          '/api/MeteorController.php'             ); # Get single meteor
-$frontController->put(      '/api/meteor/$id',          '/api/MeteorController.php'             ); # Update meteor - e.g. update verification on meteor
-$frontController->post(     '/api/classify',            '/api/MeteorReviewController.php'       ); # Review meteor
-$frontController->post(     '/api/user/new',            '/api/NewUserController.php'            ); # Register new user
-$frontController->post(     '/api/login',               '/api/LoginController.php'              ); # Login user
-$frontController->get(      '/api/users',               '/api/UsersController.php'              ); # Get all users
-$frontController->get(      '/api/user',                '/api/UserController.php'               ); # Get user
-$frontController->get(      '/api/user/myreviews',      '/api/MyReviewsController.php'          ); # Get users' reviews
-$frontController->get(      '/api/report/$report',      '/api/ReportController.php'             ); # Get report
+
+/* User functions */
+$frontController->post(	'/api/user'	                            ,'/api/src/controllers/resourcecontrollers/UserController.php'                  ); # Post a new user
+$frontController->get(	'/api/user/$id'	                        ,'/api/src/controllers/resourcecontrollers/UserController.php'                  ); # Get user
+$frontController->post(	'/api/login'	                          ,'/api/src/controllers/resourcecontrollers/UserLoginController.php'             ); # Post a new login 
+$frontController->put(	'/api/user/$id/tutorialcomplete'	      ,'/api/src/controllers/resourcecontrollers/UserTutorialController.php'          ); # Update users tutorial complete status
+$frontController->put(	'/api/user/$id/password'	              ,'/api/src/controllers/resourcecontrollers/UserPasswordController.php'          ); # Update password
+$frontController->post(	'/api/user/$id/password/reset'	        ,'/api/src/controllers/resourcecontrollers/UserPasswordResetController.php'     ); # Post a password reset request
+$frontController->get(	'/api/user/$id/details'	                ,'/api/src/controllers/resourcecontrollers/UserDetailsController.php'           ); # Get user details
+
+/* User administration */
+$frontController->put(	'/api/user/$id/userlevel'	              ,'/api/src/controllers/resourcecontrollers/UserLevelController.php'             ); # Update the user's level
+$frontController->put(	'/api/user/$id/userrole'	              ,'/api/src/controllers/resourcecontrollers/UserRoleController.php'              ); # Update the user's role
+$frontController->put(	'/api/user/$id/active'	                ,'/api/src/controllers/resourcecontrollers/UserActiveController.php'            ); # Update the user's active status
+$frontController->get(	'/api/users'	                          ,'/api/src/controllers/resourcecontrollers/UserListController.php'              ); # List users
+
+/* Meteor functions */
+$frontController->get(	'/api/meteors'	                        ,'/api/src/controllers/resourcecontrollers/MeteorListController.php'            ); # List meteors
+$frontController->get(	'/api/meteor/$id'	                      ,'/api/src/controllers/resourcecontrollers/MeteorController.php'                ); # Get meteor
+$frontController->post(	'/api/meteor/$id/review'                ,'/api/src/controllers/resourcecontrollers/MeteorReviewController.php'          ); # Post review 
+
+/* Meteor administration */
+$frontController->put(	'/api/meteor/$id'	                      ,'/api/src/controllers/resourcecontrollers/MeteorController.php'                ); # Update meteor
+$frontController->put(	'/api/meteor/$id/classification'	      ,'/api/src/controllers/resourcecontrollers/MeteorClassificationController.php'  ); # Update meteor classification
+$frontController->get(	'/api/insight/$reportname'              ,'/api/src/controllers/resourcecontrollers/InsightDashboardController.php'      ); # Get insight dashboard
+$frontController->get(	'/api/meteorboard'                      ,'/api/src/controllers/resourcecontrollers/MeteorAdminBoardController.php'      ); # List meteors with admin details
+
+/* Various functions */
+$frontController->post(	'/api/meteorload'	                      ,'/api/src/controllers/resourcecontrollers/FileLoadController.php'              ); # Post a loading request 
+$frontController->post(	'/api/reportmeteor'	                    ,'/api/src/controllers/resourcecontrollers/ReportMeteorController.php'          ); # Post a seen meteor
+$frontController->post(	'/api/contact'	                        ,'/api/src/controllers/resourcecontrollers/ContactController.php'               ); # Post a contact form
+
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   header( 'Access-Control-Allow-Headers: Authorization, Accept-Encoding, Accept-Language,Access-Control-Request-Headers, Origin, Referer,  Content-Type, x-requested-with, Accept, DNT, Referer, sec-ch-ua, sec-ch-ua-mobile, sec-ch-ua-platform, Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site, User-Agent'); 
@@ -42,7 +68,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   die();
 }
 
-$frontController->any(      '/404',                     '/api/404.php'                          ); # 404
+http_response_code(404);
+
+//$frontController->any(      '/404',                     '/api/404.php'                          ); # 404
 
 /*
 // Dynamic GET. Example with 1 variable

@@ -1,5 +1,8 @@
 <?php
 
+ini_set('display_errors', 1);
+
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'config.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'config.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'dao' . DIRECTORY_SEPARATOR . 'DatabaseConnection.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'ObservationCamData.php';
@@ -11,36 +14,49 @@ require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' .
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'dao' . DIRECTORY_SEPARATOR . 'CamDao.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'dao' . DIRECTORY_SEPARATOR . 'ObservationCamDataDao.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'mappers' . DIRECTORY_SEPARATOR . 'FileToObjectMapper.php';
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'controllers' . DIRECTORY_SEPARATOR . 'MeteorController.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'service' . DIRECTORY_SEPARATOR . 'MeteorService.php';
+
 
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: POST");
+header("Access-Control-Allow-Methods: GET");
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $root_folder = $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . Config::data_folder . DIRECTORY_SEPARATOR;
-  $data = json_decode(file_get_contents("php://input", true));
-  if (isset($_SERVER["HTTP_AUTHORIZATION"])) {
-    $auth = $_SERVER["HTTP_AUTHORIZATION"];
-    $auth_array = explode(" ", $auth);
-    $un_pw = explode(":", base64_decode($auth_array[1]));
-    $un = $un_pw[0];
-    $pw = $un_pw[1];
-    if ($un == "sys_admin" && $pw = "secretpassword") {
-      $controller = new MeteorController();
-
-      try {
-        $controller->loadMeteorsFromFiles($root_folder, $data->date_from, $data->date_to);
-        http_response_code(200);
-        echo json_encode(array('msg' => 'Loading completed'));
-      } catch (InvalidArgumentException $e) {
-        http_response_code(400);
-        echo json_encode(array('error' => 'Bad parameters'));
-      } finally {
-        //optional code that always runs
-      }
-    } else {
-      http_response_code(401);
-      echo json_encode(array('error' => 'Not authorized'));
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+  if (isset($_GET['searchTerm'])) {
+    $meteorService = new MeteorService();
+    $json = $meteorService->search($_GET['searchTerm']);
+  } elseif (isset($_GET['page'])) {
+    if (isset($_GET['limit'])) {      
+      $page = $_GET['page'];
+      $limit = $_GET['limit'];
+      $meteorService = new MeteorService();
+      $json = $meteorService->getAllMeteors($page, $limit);
+    } else {      
+      $meteorService = new MeteorService();
+      $json = $meteorService->getAllMeteors(($_GET['page']));
     }
+  } elseif (isset($_GET['limit'])) {       
+    $meteorService = new MeteorService();
+    $json = $meteorService->getAllMeteors(1, isset($_GET['limit']));
+  } elseif (isset($_GET['stationName']) || isset($_GET['year']) || isset($_GET['meteorClass'])) {
+    $stationName = null;
+    $year = null;
+    $meteorClass = null;
+    $meteorService = new MeteorService();
+    $json =  $meteorService->filter($stationName, $year, $meteorClass);
+  } else {
+    $meteorService = new MeteorService();
+    $json = $meteorService->getAllMeteors(1);
   }
-};
+  if ($json === false) {
+    // Avoid echo of empty string (which is invalid JSON), and
+    // JSONify the error message instead:
+    $json = json_encode(["jsonError" => json_last_error_msg()]);
+    if ($json === false) {
+      // This should not happen, but we go all the way now:
+      $json = '{"jsonError":"unknown"}';
+    }
+    // Set HTTP response status code to: 500 - Internal Server Error
+    http_response_code(500);
+  }
+  echo $json;
+}

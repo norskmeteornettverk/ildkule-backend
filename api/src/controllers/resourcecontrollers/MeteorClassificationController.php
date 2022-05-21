@@ -1,41 +1,15 @@
 <?php
-header("Access-Control-Allow-Origin: *");
 
-ini_set('display_errors', 1);
-
-
-require_once 'db.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'config.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'db.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'jwt_utils.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'Meteor.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'dao' . DIRECTORY_SEPARATOR . 'DatabaseConnection.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'dao' . DIRECTORY_SEPARATOR . 'MeteorDao.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'controllers' . DIRECTORY_SEPARATOR . 'MeteorController.php';
-require_once 'jwt_utils.php';
 
 
-// Handle request for a meteor
-if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-	header('Content-Type: application/json; charset=utf-8');
-	$controller = new MeteorController();
-
-	$json = $controller->getMeteorByID($id);
-
-	if ($json === false or !isset($json)) {
-		// Avoid echo of empty string (which is invalid JSON), and
-		// JSONify the error message instead:
-		$json = json_encode(["jsonError" => json_last_error_msg()]);
-		if ($json === false) {
-		  // This should not happen, but we go all the way now:
-		  $json = '{"jsonError":"unknown"}';
-		}
-		// Set HTTP response status code to: 500 - Internal Server Error
-		http_response_code(500);
-	  }
-	echo $json;
-};
-
-
-// Handle request for updating meteor 
+// Set or update meteor classification
 if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
 
 	$bearer_token = get_bearer_token();
@@ -47,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
 
 			$data = json_decode(file_get_contents("php://input", true));
 
-			// handle user confirmation data - only field that gets updated
+			// handle user classification - only field that gets updated!
 			$classification =   mysqli_real_escape_string($dbConn, $data->user_confirmed);
 			$confirmed = -1;
 			if ($classification == "1") {

@@ -1,12 +1,15 @@
 <?php
 
-require_once 'db.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'config.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'db.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'jwt_utils.php';
+
 
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET");
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-	if ($report == "cam") {
+	if ($reportname == "cam") {
 		$sql = "select  CONCAT(UCASE(LEFT( s.station_name, 1)), 
 		SUBSTRING( s.station_name, 2)) as Stasjonsnavn, 
 c.cam_name as Kameranavn, 
@@ -34,7 +37,7 @@ order by  CONCAT(UCASE(LEFT( s.station_name, 1)),
 		echo json_encode($rows);
 	}
 
-	if ($report == "station") {
+	if ($reportname == "station") {
 		$sql = "select 
 		CONCAT(UCASE(LEFT( s.station_name, 1)), 
 									SUBSTRING( s.station_name, 2)) as Stasjonsnavn,
@@ -63,7 +66,7 @@ order by  CONCAT(UCASE(LEFT( s.station_name, 1)),
 	}
 
 
-	if ($report == "total") {
+	if ($reportname == "total") {
 		$sql = "select  
 		min(m.date) ForsteObservasjonsTidspunkt, 
 		max(m.date) SisteObervasjonsTidspunkt, 
@@ -85,7 +88,7 @@ order by  CONCAT(UCASE(LEFT( s.station_name, 1)),
 		echo json_encode($rows[0]);
 	}
 
-	if ($report == "coordinates") {
+	if ($reportname == "coordinates") {
 		$sql = "SELECT track_endlat lat, track_endlong lng FROM 153413_ildkule_dev.meteor where track_endlat is not null";
 		$results = dbQuery($sql);
 		$rows = array();
