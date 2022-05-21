@@ -1,1 +1,24 @@
-[]
+[
+  {
+    "_id": "bbccddb6-2630-442f-b9d3-915349b3c9f6",
+    "name": "Test",
+    "default": true,
+    "sortNum": 10000,
+    "created": "2022-05-20T20:07:02.872Z",
+    "modified": "2022-05-21T03:31:52.300Z",
+    "data": [
+      {
+        "name": "username",
+        "value": "test"
+      },
+      {
+        "name": "password",
+        "value": "test"
+      },
+      {
+        "name": "accessToken",
+        "value": ""
+      }     
+    ]
+  }
+]
