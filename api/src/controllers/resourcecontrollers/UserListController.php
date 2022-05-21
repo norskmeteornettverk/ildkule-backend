@@ -1,7 +1,6 @@
 <?php
 
 require_once 'db.php';
-require_once 'jwt_utils.php';
 
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET");
