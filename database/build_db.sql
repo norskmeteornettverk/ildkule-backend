@@ -10,6 +10,11 @@ CREATE TABLE IF NOT EXISTS user (
   password VARCHAR(255) NULL DEFAULT NULL,
   role VARCHAR(255) NULL,
   user_level SMALLINT NULL,
+  tutorial_completed BOOLEAN,
+  confirmed BOOLEAN,
+  confirm_token VARCHAR (1000),
+  password_reset_token VARCHAR (1000),
+  password_reset_request_time TIMESTAMP NULL,
   create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time TIMESTAMP NULL,
   PRIMARY KEY (id))
