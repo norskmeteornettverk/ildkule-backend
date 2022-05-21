@@ -236,7 +236,7 @@ class MeteorDao implements DaoInterface
     {
         //TODO - kladd, må nok skrives om.
         $query = "DELETE FROM meteor WHERE id = :id;";
-        $stmt = $this->dbh->execute($query);
+        $stmt = $this->dbh->prepare($query);
         if ($stmt->execute()) {
             print 'You deleted ' . $id . ' successfully';
         } else {
@@ -247,7 +247,7 @@ class MeteorDao implements DaoInterface
     {
         //TODO - kladd - men hvilke attributter trenger vi egentlig å oppdatere fra frontend? blir det på en 'confirmed' så må vi nok få det inn som egen kolonne i meteor. 
         $query = "UPDATE meteor SET confirmed = :confirmed; WHERE id = :id;";
-        $stmt = $this->dbh->execute($query);
+        $stmt = $this->dbh->prepare($query);
         if ($stmt->execute()) {
             print 'You updated ' . $id . '. Confirmed is now set to ' . $confirmed;
         } else {
