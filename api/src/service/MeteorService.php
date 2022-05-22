@@ -98,6 +98,18 @@ class MeteorService
         }
     }
 
+    public function reviewMeteor($meteorId, $userId, $rating)
+    {
+
+        $sql = "INSERT INTO user_review (user_id, confirmed, meteor_id) VALUES (" .  strval($userId) . ", " . strval($rating) . ", " . strval($meteorId) . ")  ON DUPLICATE KEY UPDATE confirmed = VALUES(confirmed); ";
+		return dbQuery($sql);
+    }
+
+    public function updateClassification($meteorId, $classification)
+    {
+        throw new Exception('Not implemented');
+    }
+
     public function search($searchString)
     {
         $meteorDao = new MeteorDao();
@@ -210,5 +222,8 @@ order by  CONCAT(UCASE(LEFT( s.station_name, 1)),
 
 
     }
+
+
+
 
 }

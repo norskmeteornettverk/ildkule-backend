@@ -2,6 +2,7 @@
 
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'config.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'db.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]).DIRECTORY_SEPARATOR.'api'.DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'service'.DIRECTORY_SEPARATOR.'MeteorService.php'; 
 
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -27,10 +28,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 			$confirmed = -1;
 		};
 
-		$sql = "INSERT INTO user_review (user_id, confirmed, meteor_id) VALUES (" .  strval($data->userID) . ", " . strval($confirmed) . ", " . strval($data->meteorID) . ")  ON DUPLICATE KEY UPDATE confirmed = VALUES(confirmed); ";
-		error_log($sql);
-		$result = dbQuery($sql);
-
+		$service = new MeteorService();
+		$result = $service->reviewMeteor($data->meteorID, $data->userID,$confirmed );
+		
 		if ($result) {
 			if ($classification == "Positive") {
 				echo json_encode(array('msg' => 'Takk for din anbefaling (Ja)'));
