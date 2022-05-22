@@ -34,7 +34,6 @@ class UserLoginController extends BaseController
 			http_response_code(200); #200 Ok
 			echo json_encode(array('message' => 'Innlogging utført!','token' => $jwt, 'accessToken' => $jwt, 'id' => $id, 'email' => 'test@test.com', 'username' => $username, "user_level" => 'LEVEL_MEDIUM', "roles" => ['ROLE_ADMIN', 'ROLE_MODERATOR', 'ROLE_USER']));
 		}
-
 	}
 
 
@@ -58,6 +57,6 @@ class UserLoginController extends BaseController
 
 }
 
-new UserLoginController();
+$controller = new UserLoginController(false, null, null, true, null);
+$controller->handleRequest();
 
-//End of file
