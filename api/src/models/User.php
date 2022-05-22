@@ -39,6 +39,18 @@ class User implements JsonSerializable
 
     return $this;
   }
+
+  public function __isset($name)
+  {
+    $getter = 'get' . ucfirst($name);
+    if (method_exists($this, $getter)) {
+      return !is_null($this->$getter());
+    }
+    else {
+      return isset($this->$name);
+    }
+  }
+
   /* Serializes the object to a value that can be serialized natively by json_encode().    Returns data which can be serialized by json_encode(), which is a value of any type other than a resource. */
   public function jsonSerialize()
   {
