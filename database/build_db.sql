@@ -8,10 +8,10 @@ CREATE TABLE IF NOT EXISTS user (
   id INT(11) NOT NULL AUTO_INCREMENT,
   username VARCHAR(255) NULL DEFAULT NULL UNIQUE,
   password VARCHAR(255) NULL DEFAULT NULL,
-  role VARCHAR(255) NULL,
-  user_level SMALLINT NULL,
-  tutorial_completed BOOLEAN,
-  confirmed BOOLEAN,
+  role VARCHAR(255)  DEFAULT 'ROLE_USER',
+  user_level VARCHAR(255) DEFAULT 0,
+  tutorial_completed BOOLEAN DEFAULT false,
+  confirmed BOOLEAN DEFAULT false,
   confirm_token VARCHAR (1000),
   password_reset_token VARCHAR (1000),
   password_reset_request_time TIMESTAMP NULL,
@@ -245,4 +245,4 @@ CREATE TABLE IF NOT EXISTS user_review (
 -- -----------------------------------------------------
 -- Table test data
 -- -----------------------------------------------------
-insert into user (username, password) values ('test', 'test')
+insert into user (username, password, role) values ('test', 'test', 'ROLE_ADMIN')
