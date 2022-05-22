@@ -49,9 +49,11 @@ class UserService
         $userDao->updateTutorialPerformed($user);
     }
 
-    public function getUser()
+    public function getUserById(int $id)
     {
-        throw new Exception('Not implemented');
+        $userDao = new UserDao();
+        $user = $userDao->findById($id);
+        return $user;
     }
 
     public function changePassword()
