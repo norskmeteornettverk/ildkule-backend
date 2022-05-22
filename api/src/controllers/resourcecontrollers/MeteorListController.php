@@ -36,10 +36,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
   } elseif (isset($_GET['limit'])) {       
     $meteorService = new MeteorService();
     $json = $meteorService->getAllMeteors(1, isset($_GET['limit']));
-  } elseif (isset($_GET['stationName']) || isset($_GET['year']) || isset($_GET['meteorClass'])) {
-    $stationName = null;
-    $year = null;
-    $meteorClass = null;
+  } elseif (isset($_GET['stationName']) || isset($_GET['year']) || isset($_GET['meteorClass'])) {    
+    $stationName = (isset($_GET['stationName']) ? $_GET['stationName'] : null ) ;
+    $year = (isset($_GET['year'])? $_GET['year']: null ) ;
+    $meteorClass = (isset($_GET['meteorClass'])? $_GET['meteorClass']: null ) ;
     $meteorService = new MeteorService();
     $json =  $meteorService->filter($stationName, $year, $meteorClass);
   } else {
