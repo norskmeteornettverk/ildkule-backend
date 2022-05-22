@@ -1,6 +1,4 @@
-
 <?php
-
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 
@@ -18,3 +16,9 @@ header( 'Access-Control-Allow-Methods: POST, GET, OPTIONS, DELETE, PUT');
 
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'controllers' . DIRECTORY_SEPARATOR . 'FrontController.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'security' . DIRECTORY_SEPARATOR . 'Security.php';
+
+//Load Composer's autoloader
+realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'vendor/autoload.php';
+
+
+// end of file
