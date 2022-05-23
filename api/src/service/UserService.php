@@ -45,7 +45,8 @@ class UserService
     {
         $userDao = new UserDao();
         $user = $userDao->findById($userId);
-        $user->turtorial_completed = $isCompleted;
+        $user->tutorial_completed = $isCompleted;
+        if ($user->user_level == 0 or is_null($user->user_level)) $user->user_level = 1;
         $userDao->updateTutorialPerformed($user);
     }
 

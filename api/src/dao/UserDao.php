@@ -33,11 +33,12 @@ class UserDao
 
     public function updateTutorialPerformed($user)
     {
-        $query = "update user set tutorial_completed = ? where id = ? ;";
+        $query = "update user set tutorial_completed = ?, user_level = ? where id = ? ;";
         $dbh = $this->db->getDbh();
         $stmt = $dbh->prepare($query);
         $stmt->bindValue(1, $user->tutorial_completed, PDO::PARAM_BOOL);
-        $stmt->bindValue(2, $user->id, PDO::PARAM_INT);
+        $stmt->bindValue(2, $user->user_level, PDO::PARAM_INT);
+        $stmt->bindValue(3, $user->id, PDO::PARAM_INT);
         $stmt->execute();
         return $user;
     }
