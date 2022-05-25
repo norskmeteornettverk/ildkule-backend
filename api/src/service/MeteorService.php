@@ -54,10 +54,10 @@ class MeteorService
 
 
 
-    public function getAllMeteors($page = -1, $limit = 10)
+    public function getAllMeteors($page = -1, $limit = 10, $orderBy = null, $order = null)
     {
         $meteorDao = new MeteorDao();
-        $meteors = $meteorDao->findAll($page, $limit);
+        $meteors = $meteorDao->findAll($page, $limit, $orderBy, $order);
         $count = $meteorDao->getCount();
         $pages = ceil($count / $limit);
         $result = array("totalItems" => $count, "meteors" => $meteors, "totalPages" => $pages, "currentPage" => 1);

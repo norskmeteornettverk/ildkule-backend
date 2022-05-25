@@ -5,14 +5,14 @@ require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' .
 class MeteorDao implements DaoInterface
 {
 
-    protected  $db;
-    protected  $dbh;
-    protected  $reflection;
+    protected $db;
+    protected $dbh;
+    protected $reflection;
 
     function __construct()
     {
         $this->db = new DatabaseConnection(Config::host, Config::port, Config::database, Config::user, Config::password);
-        $this->dbh =  $this->db->getDbh();
+        $this->dbh = $this->db->getDbh();
     }
 
     public function getCount()
@@ -23,22 +23,74 @@ class MeteorDao implements DaoInterface
         return $row['num'];
     }
 
-    public function findAll($page = -1, $lim = 10)
+    /**
+    * Finds meteors in datasource and handles pagination and ordering.
+    *
+    * @param int $page Result page (pagination)
+    * @param int $lim Results per page
+    * @param string $orderBy Order by this column. Available columns are "date", "crossingbearing" and "Ratings"
+    * @param string $order Optional. Description.
+    * @return array()
+    */
+    public function findAll($page = -1, $lim = 10, $orderBy = null, $order = null)
     {
-        $stmt = null;
-        if ($page <= -1){            
-            $query = "SELECT * FROM meteor  order by meteor.date desc LIMIT ? OFFSET ? ";
-            $stmt = $this->dbh->prepare( $query);
-            $stmt->bindValue(1, $lim, PDO::PARAM_INT);        
-            $stmt->bindValue(2, 0, PDO::PARAM_INT);                           
-        } else {              
-            $query = "SELECT * FROM meteor  order by meteor.date desc LIMIT ? OFFSET ? ";
-            $stmt = $this->dbh->prepare( $query);
-            $stmt->bindValue(1, $lim, PDO::PARAM_INT);        
-            $stmt->bindValue(2, ($page-1)*((int)$lim), PDO::PARAM_INT);                          
-        }        
+        $stmt = null;        
+        $query = "SELECT 
+            meteor.*
+            ,COALESCE(ratings.ratings, 0) ratings
+            ,COALESCE(ratings.positive_ratings, 0) as positive_ratings
+            ,COALESCE(ratings.negative_ratings, 0) as negative_ratings   
+            FROM meteor 
+            left outer join 
+            (
+                select user_review.meteor_id, 
+                sum(case when user_review.confirmed = 1 then 1 else 0 end) as positive_ratings,
+                sum(case when user_review.confirmed = 0 then 1 else 0 end) as negative_ratings,
+                count(*) ratings 
+                from user_review 
+                group by user_review.meteor_id
+            ) as ratings on meteor.id  = ratings.meteor_id ";
+
+        $orderSQL = "order by ";
+
+        if (!is_null($orderBy) && !is_null($order)) {
+            if ($orderBy == "date") {
+                $orderSQL = $orderSQL . " meteor.date ";
+            }
+            elseif ($orderBy == "crossbearing") {
+                $orderSQL = $orderSQL . " meteor.camera_confirmed ";
+            }
+            elseif ($orderBy == "ratings") {
+                $orderSQL = $orderSQL . " COALESCE(ratings.ratings, 0) ";
+            }
+            else {
+                $orderSQL = $orderSQL . " meteor.date ";
+            }
+
+            if ($order == "asc") {
+                $orderSQL = $orderSQL . " asc ";
+            }
+            elseif ($order == "desc") {
+                $orderSQL = $orderSQL . " desc ";
+            }
+            else {
+                $orderSQL = $orderSQL . " desc ";
+            }
+        }
+        else {
+            $orderSQL = $orderSQL . " meteor.date desc ";
+        }
+
+        $query = $query . $orderSQL;
+        $query = $query . " LIMIT ? OFFSET ? ";
+
+        $stmt = $this->dbh->prepare($query);
+        $stmt->bindValue(1, $lim, PDO::PARAM_INT);
+        $stmt->bindValue(2, 0, PDO::PARAM_INT);    
+
         $stmt->execute();
         $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
+
         return $result;
     }
 
@@ -131,15 +183,15 @@ class MeteorDao implements DaoInterface
 
         if (!$meteor->id) {
             $meteor->id = $this->dbh->lastInsertId(); // set the id based on the id generateted in the db
-            
+
             // id will still be missing if update instead of insert - select the id from the db
-            if (!$meteor->id) { 
+            if (!$meteor->id) {
                 $q = $this->dbh->prepare("SELECT id FROM meteor WHERE meteor.datetimetag  = ?");
-                $q->execute(array( $meteor->datetimetag));
+                $q->execute(array($meteor->datetimetag));
                 $id = $q->fetchColumn();
-                $meteor->id = $id;                
+                $meteor->id = $id;
             }
-        }       
+        }
     }
 
 
@@ -157,21 +209,21 @@ class MeteorDao implements DaoInterface
 
     public function search($search)
     {
-        $stmt  = $this->dbh->prepare("SELECT * FROM meteor WHERE location like ? or datetimetag like ?  order by meteor.date desc");
-        $stmt->execute(array('%' . $search . '%','%' . $search . '%'));
+        $stmt = $this->dbh->prepare("SELECT * FROM meteor WHERE location like ? or datetimetag like ?  order by meteor.date desc");
+        $stmt->execute(array('%' . $search . '%', '%' . $search . '%'));
         $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
         return $result;
     }
 
     public function filter($stationName, $year, $meteorClass)
-    {      
+    {
         $stationNameFilterList = [];
         $yearFilterList = [];
         $meteorClassFilterList = [];
 
         $query = "select meteor.* from meteor where 1=1";
 
-        $where = [];       
+        $where = [];
 
         if (!empty($stationName)) {
             $stationNameFilterList = explode(",", $stationName, 10);
@@ -182,52 +234,52 @@ class MeteorDao implements DaoInterface
                 if ($index !== array_key_last($stationNameFilterList))
                     $query = $query . ",";
             }
-            $query = $query .  ") )";
+            $query = $query . ") )";
         }
 
         if (!empty($year)) {
             $yearFilterList = explode(",", $year, 10);
             $query = $query . " AND   year(date) in (";
-            foreach ($yearFilterList as $index => $year) {  
-                $query = $query .  "?";
-                array_push($where, array( $year, "int"));              
+            foreach ($yearFilterList as $index => $year) {
+                $query = $query . "?";
+                array_push($where, array($year, "int"));
                 if ($index !== array_key_last($yearFilterList))
                     $query = $query . ",";
             }
-            $query = $query .  ")";
+            $query = $query . ")";
         }
 
         if (!empty($meteorClass)) {
             $meteorClassFilterList = explode(",", $meteorClass, 10);
             $query = $query . " AND   (case when track_endheight < 40 and track_endheight is not null then 'Meteorittkandidat' when track_endheight is not null then 'Krysspeilet' else 'Upeilet' end   in (  ";
-            foreach ($meteorClassFilterList as $index => $meteorClass) {  
+            foreach ($meteorClassFilterList as $index => $meteorClass) {
                 $query = $query . "?";
-                array_push($where, array($meteorClass, "string"));             
+                array_push($where, array($meteorClass, "string"));
                 if ($index !== array_key_last($meteorClassFilterList))
                     $query = $query . ",";
             }
-            $query = $query .  "))";        
+            $query = $query . "))";
         }
 
-        $query = $query . " order by meteor.datetimetag desc limit 100"; 
+        $query = $query . " order by meteor.datetimetag desc limit 100";
 
         $sth = $this->dbh->prepare($query);
 
-        for ($i = 0; $i < count($where); $i++)  {
-            if ($where[$i][1] == "string" ){               
-                $sth->bindParam($i+1,$where[$i][0], PDO::PARAM_STR);                
+        for ($i = 0; $i < count($where); $i++) {
+            if ($where[$i][1] == "string") {
+                $sth->bindParam($i + 1, $where[$i][0], PDO::PARAM_STR);
             }
 
-            if ($where[$i][1] == "int" ){               
-                $sth->bindParam($i+1,$where[$i][0], PDO::PARAM_INT);                
-            }                     
+            if ($where[$i][1] == "int") {
+                $sth->bindParam($i + 1, $where[$i][0], PDO::PARAM_INT);
+            }
 
 
-        }  
+        }
 
         $sth->execute();
 
-        $data  = $sth->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
+        $data = $sth->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
 
         return $data;
     }
@@ -239,7 +291,8 @@ class MeteorDao implements DaoInterface
         $stmt = $this->dbh->prepare($query);
         if ($stmt->execute()) {
             print 'You deleted ' . $id . ' successfully';
-        } else {
+        }
+        else {
             print 'Failed to delete ' . $id . ' from database';
         }
     }
@@ -250,7 +303,8 @@ class MeteorDao implements DaoInterface
         $stmt = $this->dbh->prepare($query);
         if ($stmt->execute()) {
             print 'You updated ' . $id . '. Confirmed is now set to ' . $confirmed;
-        } else {
+        }
+        else {
             print 'Failed to update ' . $id;
         }
     }

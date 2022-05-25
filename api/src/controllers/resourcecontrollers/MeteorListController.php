@@ -23,28 +23,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
   if (isset($_GET['searchTerm'])) {
     $meteorService = new MeteorService();
     $json = $meteorService->search($_GET['searchTerm']);
-  } elseif (isset($_GET['page'])) {
-    if (isset($_GET['limit'])) {      
-      $page = $_GET['page'];
-      $limit = $_GET['limit'];
-      $meteorService = new MeteorService();
-      $json = $meteorService->getAllMeteors($page, $limit);
-    } else {      
-      $meteorService = new MeteorService();
-      $json = $meteorService->getAllMeteors(($_GET['page']));
-    }
-  } elseif (isset($_GET['limit'])) {       
+  
+}
+  elseif (isset($_GET['stationName']) || isset($_GET['year']) || isset($_GET['meteorClass'])) {
+    $stationName = (isset($_GET['stationName']) ? $_GET['stationName'] : null);
+    $year = (isset($_GET['year']) ? $_GET['year'] : null);
+    $meteorClass = (isset($_GET['meteorClass']) ? $_GET['meteorClass'] : null);
     $meteorService = new MeteorService();
-    $json = $meteorService->getAllMeteors(1, isset($_GET['limit']));
-  } elseif (isset($_GET['stationName']) || isset($_GET['year']) || isset($_GET['meteorClass'])) {    
-    $stationName = (isset($_GET['stationName']) ? $_GET['stationName'] : null ) ;
-    $year = (isset($_GET['year'])? $_GET['year']: null ) ;
-    $meteorClass = (isset($_GET['meteorClass'])? $_GET['meteorClass']: null ) ;
+    $json = $meteorService->filter($stationName, $year, $meteorClass);
+  }
+  else {
+    $page = isset($_GET['page']) ? $_GET['page'] : -1;
+    $limit = isset($_GET['limit']) ? $_GET['limit'] : 20;
+    $orderby = isset($_GET['orderby']) ? $_GET['orderby'] : "date";
+    $order = isset($_GET['order']) ? $_GET['order'] : "desc";
     $meteorService = new MeteorService();
-    $json =  $meteorService->filter($stationName, $year, $meteorClass);
-  } else {
-    $meteorService = new MeteorService();
-    $json = $meteorService->getAllMeteors(1);
+    $json = $meteorService->getAllMeteors($page, $limit, $orderby, $order);
   }
   if ($json === false) {
     // Avoid echo of empty string (which is invalid JSON), and
