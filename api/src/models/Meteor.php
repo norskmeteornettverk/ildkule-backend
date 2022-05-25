@@ -31,6 +31,10 @@ class Meteor implements JsonSerializable
   protected $timestamp;
   protected array $observation_cam_data = array();
   protected array $user_review = array();
+  protected $ratings;
+  protected $positive_ratings;
+  public $negative_ratings;
+
 
   public function __contruct()
   {
