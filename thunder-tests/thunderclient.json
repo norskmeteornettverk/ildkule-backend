@@ -13,7 +13,7 @@
     "params": [],
     "body": {
       "type": "text",
-      "raw": "{\"username\":\"test@test.com", \"password\":\"fdghfdghj\"}",
+      "raw": "{\"username\":\"\", \"password\":\"fdghfdghj\"}",
       "form": []
     },
     "tests": [
@@ -674,6 +674,27 @@
         "custom": "",
         "action": "<",
         "value": "300"
+      }
+    ]
+  },
+  {
+    "_id": "594ed97c-56cb-4dab-984d-24c114ad8241",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "40777170-8050-46fc-ae63-cf36c3075b0c",
+    "name": "Send report",
+    "url": "http://127.0.0.1:8081/api/reportmeteor",
+    "method": "GET",
+    "sortNum": 15000,
+    "created": "2022-05-25T09:46:48.299Z",
+    "modified": "2022-05-25T09:47:15.980Z",
+    "headers": [],
+    "params": [],
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
       }
     ]
   }
