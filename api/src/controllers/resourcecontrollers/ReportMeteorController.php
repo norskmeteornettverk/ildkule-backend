@@ -7,9 +7,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	
 
 	$data = json_decode(file_get_contents("php://input", true));
-	
-
-	print($data->form->navn);
 
 	//include script that contains function that sends mail - dependant on phpmailer       
 	require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . "phpmailer" . DIRECTORY_SEPARATOR . "mailer.php";
@@ -18,16 +15,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	$email = "meteorrapport@ildkule.net";
 
 	$body =
-		'
-		Hei'.$data->form->navn.' !
-		Vi har mottatt forespørsel om å resette ditt passord på ildkule.net.<br/>
-		Om du ikke har gjort dette, kan du set bort i fra denne e-posten.<br/>
-		Om du vil resette passordet, <a href="' . Config::frontUrl . '/resetpassword?passwordResetId=' . $user->password_reset_token . '"> besøker du oss her </a><br/>
-		<br/>
-		Hilsen ildkule.net            
-		';
+		'Hei!<br>' . $data->form->navn . ' har meldt inn en ny observasjon via ildkule.net.<br><br>' .
+		'<table style="">
+		<tr>
+		  <th>Felt</th>
+		  <th>Innrapportert data</th>
+		</tr>
+		<tr>
+		  <td>Kontaktinformasjon</td>
+		  <td>'. $data->form->navn .',<br> ' . $data->form->epost . ',<br> ' . $data->form->epost . '</td>
+		</tr>
+		<tr>
+		  <td>Observasjonssted</td>
+		  <td>Lat: ' . $data->form->latitude . ',<br> Long: ' . $data->form->longitude . '</td>
+		</tr>
+        <tr>
+		  <td>Først sett</td>
+		  <td>Himmelretning: ' . $data->form->firstdirection . ',<br> Høyde: '. $data->form->firstheight . '</td>
+		</tr>        
+        <tr>
+		  <td>Sist sett</td>
+		  <td>Himmelretning: ' . $data->form->lastdirection . ',<br> Høyde: ' . $data->form->lastheight . '</td>
+		</tr>
+         <tr>
+		  <td>Farge</td>
+		  <td>' . $data->form->farge . '</td>
+		</tr>
+        <tr>
+		  <td>Lysstyrke</td>
+		  <td>' . $data->form->lysstyrke . '</td>
+		</tr>
+        <tr>
+		  <td>Varighet</td>
+		  <td>' . $data->form->varighet . '</td>
+		</tr>
+        <tr>
+		  <td>Kommentarer:</td>
+		  <td>' . $data->form->melding . '</td>
+		</tr>
+	  </table><br><br>
+	  Denne e-posten er automatisk sendt fra ildkule.net.';
 
-	sendMeteorMail($email, "Test fra ildkule", $body, $body);
+	sendMeteorMail($email, "Ny observasjon fra ildkule.net", $body, $body);
 
 	/*
 
