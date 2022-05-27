@@ -16,14 +16,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 	$body =
 		'Hei!<br>' . $data->form->navn . ' har meldt inn en ny observasjon via ildkule.net.<br><br>' .
-		'<table style="">
+		'<table style="border: solid 1px; padding: 5px; text-align: left;">
 		<tr>
 		  <th>Felt</th>
 		  <th>Innrapportert data</th>
 		</tr>
 		<tr>
 		  <td>Kontaktinformasjon</td>
-		  <td>'. $data->form->navn .',<br> ' . $data->form->epost . ',<br> ' . $data->form->epost . '</td>
+		  <td>'. $data->form->navn .',<br> ' . $data->form->epost . ',<br>Tlf: ' . $data->form->telefon . '</td>
 		</tr>
 		<tr>
 		  <td>Observasjonssted</td>
