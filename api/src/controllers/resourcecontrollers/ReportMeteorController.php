@@ -17,15 +17,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	$body =
 		'Hei!<br>' . $data->form->navn . ' har meldt inn en ny observasjon via ildkule.net.<br><br>' .
 		'<table style="border: solid 1px; padding: 5px; text-align: left;">
-		<tr>
+		<tr style="background-color: #D6EEEE;">
 		  <th>Felt</th>
 		  <th>Innrapportert data</th>
 		</tr>
 		<tr>
-		  <td>Kontaktinformasjon</td>
+		  <td style>Kontaktinformasjon</td>
 		  <td>'. $data->form->navn .',<br> ' . $data->form->epost . ',<br>Tlf: ' . $data->form->telefon . '</td>
 		</tr>
-		<tr>
+		<tr style="background-color: #D6EEEE;">
 		  <td>Observasjonssted</td>
 		  <td>Lat: ' . $data->form->latitude . ',<br> Long: ' . $data->form->longitude . '</td>
 		</tr>
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		  <td>Først sett</td>
 		  <td>Himmelretning: ' . $data->form->firstdirection . ',<br> Høyde: '. $data->form->firstheight . '</td>
 		</tr>        
-        <tr>
+        <tr style="background-color: #D6EEEE;">
 		  <td>Sist sett</td>
 		  <td>Himmelretning: ' . $data->form->lastdirection . ',<br> Høyde: ' . $data->form->lastheight . '</td>
 		</tr>
@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		  <td>Farge</td>
 		  <td>' . $data->form->farge . '</td>
 		</tr>
-        <tr>
+        <tr style="background-color: #D6EEEE;">
 		  <td>Lysstyrke</td>
 		  <td>' . $data->form->lysstyrke . '</td>
 		</tr>
@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		  <td>Varighet</td>
 		  <td>' . $data->form->varighet . '</td>
 		</tr>
-        <tr>
+        <tr style="background-color: #D6EEEE;">
 		  <td>Kommentarer:</td>
 		  <td>' . $data->form->melding . '</td>
 		</tr>
