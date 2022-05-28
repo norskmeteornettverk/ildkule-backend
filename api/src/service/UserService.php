@@ -22,7 +22,9 @@ class UserService
     public function createNewUser(string $username, string $password)
     {
 
-        $user = new User($username, $password);
+        $user = new User();
+        $user->password = $password;
+        $user->username = $username;
         $userDao = new UserDao();
         $userDao->insert($user);
         return $user;

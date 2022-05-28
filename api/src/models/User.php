@@ -15,18 +15,47 @@ class User implements JsonSerializable
   protected $password_reset_request_time;
   protected $confirmed;
 
-  function __construct($username = null, $password = null)
+   private function validateEmail($email)
   {
-    if (isset($username) && isset($password)) {
-      $this->username = $username;
-      $this->password = $password;
+    if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+      return true;
+    }
+    else {
+      return false;
     }
   }
+
+  //validates username as e-mail
+  public function setUsername($email)
+  {
+    if ($this->validateEmail(($email))) {
+      $this->username = $email;
+    }
+    else {
+      throw new InvalidArgumentException("Brukernavet er ugyldig");
+    }
+  }
+
+  //validates username as e-mail
+  public function setPassword($password)
+  {
+    if (strlen($password) >= 8) {
+      $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+      $this->password = $hashed_password;      
+    }
+    else {
+      throw new InvalidArgumentException("Ugyldig lengde på passord");
+    }
+  }
+
 
   //magic getters and setters, fixing it for every property.
   public function __get($property)
   {
     if (property_exists($this, $property)) {
+      if (method_exists($this, $method = 'get' . ucfirst($property))) {
+        return $this->$method($property);
+      }
       return $this->$property;
     }
   }
@@ -34,6 +63,10 @@ class User implements JsonSerializable
   public function __set($property, $value)
   {
     if (property_exists($this, $property)) {
+      if (method_exists($this, $method = 'set' . ucfirst($property))) {
+        $this->$method($value);
+        return $this;
+      }
       $this->$property = $value;
     }
 
