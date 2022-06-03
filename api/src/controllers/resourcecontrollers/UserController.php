@@ -7,8 +7,8 @@ require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' .
 class UserController extends AbstractController
 {
 	/**
-     * Get user account
-     */
+	 * Get user account
+	 */
 	protected function get()
 	{
 		// Get user account
@@ -35,11 +35,11 @@ class UserController extends AbstractController
 			http_response_code(401); #401 Unauthorized
 			echo json_encode(array('error' => 'Unauthorized'));
 		}
-	}	
-	
-    /**
-     * Create a new account
-     */
+	}
+
+	/**
+	 * Create a new account
+	 */
 	protected function post()
 	{
 		$data = json_decode(file_get_contents("php://input", true));
@@ -54,7 +54,33 @@ class UserController extends AbstractController
 
 	protected function patch()
 	{
-		http_response_code(403);
+		$data = json_decode(file_get_contents("php://input", true));
+		// Get user account
+		$bearer_token = get_bearer_token();
+		if (is_jwt_valid($bearer_token)) {
+			$user = null;
+			$userService = new UserService();
+			$user = $userService->getUserByID($this->resourceId);
+			if (isset($user) && $data->id == $user->id) {
+				if (isset($data->role)) {
+					$user->role = $data->role;
+					$userService->changeUserRole($user);
+				}
+				if (isset($data->user_level)) {
+					$user->user_level = $data->user_level;
+					$userService->changeUserLevel($user);
+				}
+				echo json_encode(array('message' => "Oppdatert"));
+			}
+			else {
+				http_response_code(404); #404 Not found
+				echo json_encode(array('error' => 'User not found'));
+			}
+		}
+		else {
+			http_response_code(401); #401 Unauthorized
+			echo json_encode(array('error' => 'Unauthorized'));
+		}
 	}
 
 	protected function delete()

@@ -16,7 +16,53 @@ class ContactController extends AbstractController
 
   protected function post()
   {
-    http_response_code(403);
+    $validRequest = $this->controlRequest(AbstractController::AUTHENTICATION_IGNORE, AbstractController::USER_ROLE_IGNORE, AbstractController::USER_LEVEL_IGNORE, AbstractController::REQUEST_PERFORM_CONTROL);
+    if (!$validRequest)  return;
+
+    $data = json_decode(file_get_contents("php://input", true));
+
+    //include script that contains function that sends mail - dependant on phpmailer       
+    require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . "phpmailer" . DIRECTORY_SEPARATOR . "mailer.php";
+
+    $email = "meteorrapport@ildkule.net"; //Send contact form to this e-mail
+
+    $body =
+      'Hei!<br>' . $data->form->fornavn . ' har sendt inn et kontaktskjema via ildkule.net.<br><br>' .
+      '<table style="border: solid 1px; padding: 5px; text-align: left;">
+      <tr style="background-color: #D6EEEE;">
+        <th>Felt</th>
+        <th>Verdi</th>
+      </tr>
+      <tr>
+        <td >Fornavn</td>
+        <td>' . $data->form->fornavn . '</td>
+      </tr>
+      <tr style="background-color: #D6EEEE;">
+        <td>Etternavn</td>
+        <td>' . $data->form->etternavn . '</td>
+      </tr>
+      <tr>
+        <td >E-post</td>
+        <td>' . $data->form->epost . '</td>
+      </tr>
+      <tr style="background-color: #D6EEEE;">
+        <td>Melding</td>
+        <td>' . $data->form->melding . '</td>
+      </tr>       
+      </table><br><br>
+      Denne e-posten er automatisk sendt fra ildkule.net.';
+
+    try {
+      sendMeteorMail($email, "Ny kontaktmelding fra ildkule.net", $body, $body);
+      http_response_code(200);
+      echo json_encode(array('message' => 'Kontaktskjema mottatt og sendt'));
+    }
+    catch (Exception $e) {
+      http_response_code(500);
+      error_log("Something went wrong when trying to contact form to mail");
+      echo json_encode(array('error' => 'Beklager, vi kunne ikke motta og sende kontaktskjemaet - prøv igjen ved senere anledning'));
+    }
+
   }
 
 
@@ -38,5 +84,5 @@ class ContactController extends AbstractController
   }
 }
 
-$controller = new ContactController(AbstractController::AUTHENTICATION_IGNORE , AbstractController::USER_ROLE_IGNORE, AbstractController::USER_LEVEL_IGNORE, AbstractController::REQUEST_IGNORE, $resourceId = null);
+$controller = new ContactController(AbstractController::AUTHENTICATION_IGNORE, AbstractController::USER_ROLE_IGNORE, AbstractController::USER_LEVEL_IGNORE, AbstractController::REQUEST_PERFORM_CONTROL, $resourceId = null);
 $controller->handleRequest();

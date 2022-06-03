@@ -17,6 +17,10 @@ class FileLoadController extends AbstractController
 
   protected function post()
   {
+
+    $validRequest = $this->controlRequest(AbstractController::AUTHENTICATION_IGNORE, AbstractController::USER_ROLE_IGNORE, AbstractController::USER_LEVEL_IGNORE, AbstractController::REQUEST_PERFORM_CONTROL);
+    if (!$validRequest)  return;
+
     $root_folder = $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . Config::data_folder . DIRECTORY_SEPARATOR; # root folder for data files
     $data = json_decode(file_get_contents("php://input", true)); # get parameters
     if (isset($_SERVER["HTTP_AUTHORIZATION"])) {

@@ -18,12 +18,13 @@ abstract class AbstractController
     public const USER_LEVEL_MEDIUM = 2;
     public const USER_LEVEL_LOW = 1;
     public const USER_LEVEL_IGNORE = 0;
-    public const USER_ROLE_ADMIN = 3;
-    public const USER_ROLE_MODERATOR = 2;
-    public const USER_ROLE_USER = 1;
-    public const USER_ROLE_IGNORE = 0;
+    public const USER_ROLE_ADMIN = 'ROLE_ADMIN';
+    public const USER_ROLE_MODERATOR = 'ROLE_MOD';
+    public const USER_ROLE_USER = 'ROLE_USER';
+    public const USER_ROLE_IGNORE = 'IGNORE';
 
 
+    
     function __construct(
         bool $checkAuthentication,
         $role,
@@ -47,6 +48,7 @@ abstract class AbstractController
     */
     public function handleRequest()
     {
+       /*
         $token = get_bearer_token();
         if ($this->checkAuthentication && !$this->isAuthenticated($token)) {
             //If is not logged in or is having incorrect token
@@ -76,6 +78,53 @@ abstract class AbstractController
             // if everything is ok, run the application logic
             $this->getAndRunMethod();
             die();
+        }
+
+        */
+        $this->getAndRunMethod();
+
+    }
+
+    protected function controlRequest(bool $checkAuthentication, string $role, int $level, bool $checkJson)
+    {
+        $token = get_bearer_token();
+
+        if (!isset($token) && $checkAuthentication){
+            //If user is not logged (not having a token)
+            http_response_code(401); #401 Unauthorized
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(array('error' => 'Not authenticated', 'message' => 'Ikke autentisert - du må være innlogget'));
+            die();
+        } elseif (isset($token) && $checkAuthentication && !$this->isAuthenticated($token)) {
+            //If user is having a incorrect token
+            http_response_code(401); #401 Unauthorized
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(array('error' => 'Not authenticated', 'message' => 'Ikke autentisert - du må være innlogget'));
+            die();
+        }
+        elseif (isset($role) && $role <> 'IGNORE'  && $this->getRole($token) != $role) {
+            //If the user have insufficiant role
+            http_response_code(403); #403 Forbidden
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(array('error' => 'Not authorized', 'message' => 'Du har ikke gyldig brukerrolle for denne funksjonen'));
+            die();
+        }
+        elseif (isset($level) && $level <> 0 && $this->getLevel($token) != $level) {
+            //If the user have insufficiant level
+            http_response_code(403); #403 Forbidden
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(array('error' => 'Not authorized', 'message' => 'Du har ikke gyldig brukernivå for denne funksjonen'));
+            die();
+        }
+        elseif (isset($checkJson) && !$this->isJsonValid()) {
+            //Check if the format on the payload is correct. It should be validated in the json format
+            http_response_code(400); #400 Bad request
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(array('error' => 'Bad request format (json not validated)', 'message' => 'Det er feil i foresporselen'));
+            die();
+        }
+        else {
+            return true;
         }
 
     }

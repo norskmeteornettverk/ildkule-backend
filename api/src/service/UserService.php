@@ -89,7 +89,7 @@ class UserService
             Hei!<br/>
             Vi har mottatt forespørsel om å resette ditt passord på ildkule.net.<br/>
             Om du ikke har gjort dette, kan du set bort i fra denne e-posten.<br/>
-            Om du vil resette passordet, <a href="'.Config::frontUrl.'/resetpassword?passwordResetId=' . $user->password_reset_token . '"> besøker du oss her </a><br/>
+            Om du vil resette passordet, <a href="'.Config::frontUrl.'/brukerprofil/nullstillpassord?passwordResetId=' . $user->password_reset_token . '"> besøker du oss her </a><br/>
             <br/>
             Hilsen ildkule.net            
             ';
@@ -119,9 +119,10 @@ class UserService
     }
 
 
-    public function listUsers()
+    public function listUsers($page = -1, $lim = 10, $orderBy = null, $order = null)
     {
-        throw new Exception('Not implemented');
+        $userDao = new UserDao();
+        return $userDao->findAll($page, $lim, $orderBy, $order);
     }
 
     public function confirmUser()
@@ -134,14 +135,16 @@ class UserService
         throw new Exception('Not implemented');
     }
 
-    public function changeUserLevel()
+    public function changeUserLevel($user)
     {
-        throw new Exception('Not implemented');
+        $userDao = new UserDao();
+        $userDao->updateLevel($user);
     }
 
-    public function changeUserRole()
+    public function changeUserRole($user)
     {
-        throw new Exception('Not implemented');
+        $userDao = new UserDao();
+        $userDao->updateRole($user);
     }
 
 }

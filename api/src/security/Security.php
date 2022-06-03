@@ -41,25 +41,25 @@ function is_jwt_valid($jwt, $secret = 'secret') {
 }
 
 function getUserFromToken($jwt) {	
-	$tokenParts = explode('.', $jwt);
+	$tokenParts = explode('.', $jwt);	
 	$payload = base64_decode($tokenParts[1]);	
-	$token_header_array = json_decode($payload, true);	
-	return  $token_header_array;
+	$userId = json_decode($payload)->user_id;	
+	return  $userId;	
 	
 }
 
 function getLevelFromToken($jwt) {	
-	$tokenParts = explode('.', $jwt);
-	$payload = base64_decode($tokenParts[4]);	
-	$token_header_array = json_decode($payload, true);	
-	return  $token_header_array;	
+	$tokenParts = explode('.', $jwt);	
+	$payload = base64_decode($tokenParts[1]);	
+	$userLevel = json_decode($payload)->user_level;	
+	return  $userLevel;		
 }
 
 function getRolesFromToken($jwt) {	
 	$tokenParts = explode('.', $jwt);
-	$payload = base64_decode($tokenParts[5]);	
-	$token_header_array = json_decode($payload, true);	
-	return  $token_header_array;	
+	$payload = base64_decode($tokenParts[1]);	
+	$role = json_decode($payload)->role;	
+	return  $role;	
 }
 function base64url_encode($data) {
     return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
@@ -74,9 +74,8 @@ function get_authorization_header(){
 		$headers = trim($_SERVER["HTTP_AUTHORIZATION"]);
 	} else if (function_exists('apache_request_headers')) {
 		$requestHeaders = apache_request_headers();
-		// Server-side fix for bug in old Android versions (a nice side-effect of this fix means we don't care about capitalization for Authorization)
+		// fix for bug in old Android versions
 		$requestHeaders = array_combine(array_map('ucwords', array_keys($requestHeaders)), array_values($requestHeaders));
-		//print_r($requestHeaders);
 		if (isset($requestHeaders['Authorization'])) {
 			$headers = trim($requestHeaders['Authorization']);
 		}

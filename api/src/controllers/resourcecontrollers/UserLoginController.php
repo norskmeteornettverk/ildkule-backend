@@ -35,7 +35,7 @@ class UserLoginController extends AbstractController
 				$user_level = $row['user_level'];
 				$confirmed = $row['confirmed'];
 				$headers = array('alg' => 'HS256', 'typ' => 'JWT');
-				$payload = array('username' => $username, 'user_id' => $id, 'exp' => (time() + 36000)); // set expiration time to ten hours
+				$payload = array('username' => $username, 'user_id' => $id, 'exp' => (time() + 36000), 'role'=>$role, 'user_level'=>$user_level);   // set expiration time to ten hours
 				$jwt = generate_jwt($headers, $payload);
 				http_response_code(200); #200 Ok
 				echo json_encode(array('message' => 'Innlogging utført!', 'token' => $jwt, 'accessToken' => $jwt, 'id' => $id, 'email' => $username, 'username' => $username, 'user_role' => $role, 'roles' => [$role], 'user_level' => $user_level, 'tutorial_completed' => boolval($tutorial_completed), 'confirmed' => boolval($confirmed)));

@@ -1,9 +1,9 @@
 <?php
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'handlers' . DIRECTORY_SEPARATOR . 'ErrorHandler.php';
+//require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'handlers' . DIRECTORY_SEPARATOR . 'ErrorHandler.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'bootstrap.php';
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   header( 'Access-Control-Allow-Headers: Authorization, Accept-Encoding, Accept-Language,Access-Control-Request-Headers, Origin, Referer,  Content-Type, x-requested-with, Accept, DNT, Referer, sec-ch-ua, sec-ch-ua-mobile, sec-ch-ua-platform, Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site, User-Agent'); 
-  header( 'Access-Control-Allow-Methods: POST, GET, OPTIONS, DELETE, PUT'); 
+  header( 'Access-Control-Allow-Methods: POST, GET, OPTIONS, DELETE, PUT, PATCH'); 
   http_response_code(200);
   die();
 }
@@ -22,6 +22,7 @@ $frontController->post(	'/api/passwordresetrequest'             ,'/api/src/contr
 $frontController->put(	'/api/user/$id/userlevel'	              ,'/api/src/controllers/resourcecontrollers/UserLevelController.php'             ); # Update the user's level
 $frontController->put(	'/api/user/$id/userrole'	              ,'/api/src/controllers/resourcecontrollers/UserRoleController.php'              ); # Update the user's role
 $frontController->put(	'/api/user/$id/active'	                ,'/api/src/controllers/resourcecontrollers/UserActiveController.php'            ); # Update the user's active status
+$frontController->patch('/api/user/$id'	                        ,'/api/src/controllers/resourcecontrollers/UserController.php'                  ); # Update provided fields of a user
 $frontController->get(	'/api/users'	                          ,'/api/src/controllers/resourcecontrollers/UserListController.php'              ); # List users
 /* Meteor functions */
 $frontController->get(	'/api/meteors'	                        ,'/api/src/controllers/resourcecontrollers/MeteorListController.php'            ); # List meteors

@@ -15,7 +15,7 @@ function sendMeteorMail(string $email, string $subject, string $body , string $a
     $mail = new PHPMailer(true);
     try {
         //Server settings
-        $mail->SMTPDebug = SMTP::DEBUG_SERVER; //Enable verbose debug output
+        (Config::testMode) ? ( $mail->SMTPDebug = SMTP::DEBUG_SERVER) : ( $mail->SMTPDebug = SMTP::DEBUG_OFF); //Enable verbose debug output
         $mail->CharSet = 'UTF-8';
         $mail->isSMTP(); //Send using SMTP
         $mail->Host = Config::emailServer; //Set the SMTP server to send through
