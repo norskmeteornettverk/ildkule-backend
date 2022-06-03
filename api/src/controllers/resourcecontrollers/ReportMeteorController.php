@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 	$body =
 		'Hei!<br>' . $data->form->navn . ' har meldt inn en ny observasjon via ildkule.net.<br><br>' .
-		'<table style="border: solid 1px; padding: 5px; text-align: left;">
+		'<table style="border: solid 1px; padding: 5px; text-align: left; width=50%">
 		<tr style="background-color: #D6EEEE;">
 		  <th>Felt</th>
 		  <th>Innrapportert data</th>
