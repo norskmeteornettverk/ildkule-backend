@@ -21,6 +21,16 @@ class ContactController extends AbstractController
 
     $data = json_decode(file_get_contents("php://input", true));
 
+    // reCAPTCHA validation
+    $rcToken = $data->rcToken;    
+    $recaptcha_secret = Config::recaptcha_secret;
+    $response = file_get_contents("https://www.google.com/recaptcha/api/siteverify?secret=".$recaptcha_secret."&response=".$rcToken);
+    $response = json_decode($response, true);
+    if($response["success"] === false) {
+      http_response_code(401);
+      echo json_encode(array('message' => 'Kontaktskjema mottatt, men forespørsel ble ikke autetisert som en vanlig bruker med reCAPTCHA'));
+    } 
+
     //include script that contains function that sends mail - dependant on phpmailer       
     require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . "phpmailer" . DIRECTORY_SEPARATOR . "mailer.php";
 
