@@ -5,14 +5,14 @@ require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' .
 class ObservationCamDataDao implements DaoInterface
 {
 
-    protected  $db;
-    protected  $dbh;
-    protected  $reflection;
+    protected $db;
+    protected $dbh;
+    protected $reflection;
 
     function __construct()
     {
         $this->db = new DatabaseConnection(Config::host, Config::port, Config::database, Config::user, Config::password);
-        $this->dbh =  $this->db->getDbh();
+        $this->dbh = $this->db->getDbh();
     }
 
     public function findAll()
@@ -101,7 +101,8 @@ class ObservationCamDataDao implements DaoInterface
         summary_duration,
         summary_sunalt,
         summary_recalibrated,
-        summary_meteor_probability)
+        summary_meteor_probability
+        )
         VALUES
         (?
         ,?        
@@ -180,7 +181,7 @@ class ObservationCamDataDao implements DaoInterface
         ,?
         )
         ON DUPLICATE KEY UPDATE 
-        trail_frames =values( trail_frames ) 
+        trail_frames = values( trail_frames ) 
          ,trail_duration =values(         trail_duration ) 
          ,trail_slope =values(         trail_slope ) 
          ,trail_offset =values(         trail_offset ) 
@@ -259,7 +260,7 @@ class ObservationCamDataDao implements DaoInterface
         
         
         ";
-        
+
         $values = array(
             $camData->meteor->id,
             $camData->cam->id,
@@ -276,6 +277,8 @@ class ObservationCamDataDao implements DaoInterface
             $camData->trail_midpoint,
             $camData->trail_arc,
             $camData->trail_brightness,
+            $camData->trail_dct_midpoint,
+            $camData->trail_dct,
             $camData->trail_size,
             $camData->trail_frame_brightness,
             $camData->video_start,
@@ -333,23 +336,22 @@ class ObservationCamDataDao implements DaoInterface
             $camData->summary_duration,
             $camData->summary_sunalt,
             $camData->summary_recalibrated,
-            $camData->summary_meteor_probability,
-            $camData->summary_recalibrated,
             $camData->summary_meteor_probability
-            
+
+
         );
         $this->dbh->prepare($query)->execute($values);
 
 
         if (!$camData->id) {
             $camData->id = $this->dbh->lastInsertId(); // set the id based on the id generateted in the db
-            
+
             // id will still be missing if update instead of insert - select the id from the db
-            if (!$camData->id) { 
+            if (!$camData->id) {
                 $q = $this->dbh->prepare("SELECT id FROM observation_cam_data WHERE meteor_id=? and cam_id = ?");
-                $q->execute(array( $camData->meteor->id,  $camData->cam->id));
+                $q->execute(array($camData->meteor->id, $camData->cam->id));
                 $id = $q->fetchColumn();
-                $camData->id = $id;                
+                $camData->id = $id;
             }
         }
 
@@ -375,18 +377,18 @@ class ObservationCamDataDao implements DaoInterface
         $stmt->bindParam(':id', $meteorId);
         $stmt->execute();
         $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'ObservationCamData');
-        return $result;        
+        return $result;
     }
 
 
-    public function delete($id)    
+    public function delete($id)
     {
         throw new Exception('Not implemented');
-       
+
     }
 
-    
-  
+
+
     public function update($id, $confirmed)
     {
         //TODO - kladd - men hvilke attributter trenger vi egentlig å oppdatere fra frontend? blir det på en 'confirmed' så må vi nok få det inn som egen kolonne i meteor. 
