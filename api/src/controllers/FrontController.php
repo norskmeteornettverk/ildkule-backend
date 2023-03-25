@@ -1,7 +1,7 @@
 <?php
 
 // Based on the PHP Router https://phprouter.com/
-class FrontController 
+class Router 
 {
     
 public function get($route, $path_to_include){

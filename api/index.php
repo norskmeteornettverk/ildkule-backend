@@ -1,5 +1,10 @@
 <?php
-//require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'handlers' . DIRECTORY_SEPARATOR . 'ErrorHandler.php';
+
+/**
+ * This script sets up the routing for between the incoming HTTP requests and various resource controllers such as 
+ * such as for users and meteors. It uses Router (Based on the PHP Router https://phprouter.com/) to map routes to their controllers.
+ */
+
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'bootstrap.php';
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   header( 'Access-Control-Allow-Headers: Authorization, Accept-Encoding, Accept-Language,Access-Control-Request-Headers, Origin, Referer,  Content-Type, x-requested-with, Accept, DNT, Referer, sec-ch-ua, sec-ch-ua-mobile, sec-ch-ua-platform, Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site, User-Agent'); 
@@ -7,8 +12,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   http_response_code(200);
   die();
 }
-$frontController = new FrontController();
+$frontController = new Router();
 /* The following section routes requests to the correct controller */
+
 /* User functions */
 $frontController->post(	'/api/user'	                            ,'/api/src/controllers/resourcecontrollers/UserController.php'                  ); # Post a new user
 $frontController->get(	'/api/user/$id'	                        ,'/api/src/controllers/resourcecontrollers/UserController.php'                  ); # Get user
@@ -18,26 +24,33 @@ $frontController->put(	'/api/user/$id/password'	              ,'/api/src/control
 $frontController->get(	'/api/user/$id/details'	                ,'/api/src/controllers/resourcecontrollers/UserDetailsController.php'           ); # Get user details
 $frontController->put(	'/api/passwordresetrequest'             ,'/api/src/controllers/resourcecontrollers/UserPasswordResetController.php'     ); # Update password
 $frontController->post(	'/api/passwordresetrequest'             ,'/api/src/controllers/resourcecontrollers/UserPasswordResetController.php'     ); # Post a password reset request
+
 /* User administration */
 $frontController->put(	'/api/user/$id/userlevel'	              ,'/api/src/controllers/resourcecontrollers/UserLevelController.php'             ); # Update the user's level
 $frontController->put(	'/api/user/$id/userrole'	              ,'/api/src/controllers/resourcecontrollers/UserRoleController.php'              ); # Update the user's role
 $frontController->put(	'/api/user/$id/active'	                ,'/api/src/controllers/resourcecontrollers/UserActiveController.php'            ); # Update the user's active status
 $frontController->patch('/api/user/$id'	                        ,'/api/src/controllers/resourcecontrollers/UserController.php'                  ); # Update provided fields of a user
 $frontController->get(	'/api/users'	                          ,'/api/src/controllers/resourcecontrollers/UserListController.php'              ); # List users
+
 /* Meteor functions */
 $frontController->get(	'/api/meteors'	                        ,'/api/src/controllers/resourcecontrollers/MeteorListController.php'            ); # List meteors
 $frontController->get(	'/api/meteor/$id'	                      ,'/api/src/controllers/resourcecontrollers/MeteorController.php'                ); # Get meteor
 $frontController->post(	'/api/meteor/$id/review'                ,'/api/src/controllers/resourcecontrollers/MeteorReviewController.php'          ); # Post review 
+
 /* Meteor administration */
 $frontController->put(	'/api/meteor/$id'	                      ,'/api/src/controllers/resourcecontrollers/MeteorController.php'                ); # Update meteor
 $frontController->put(	'/api/meteor/$id/classification'	      ,'/api/src/controllers/resourcecontrollers/MeteorClassificationController.php'  ); # Update meteor classification
 $frontController->get(	'/api/insight/$reportname'              ,'/api/src/controllers/resourcecontrollers/InsightDashboardController.php'      ); # Get insight dashboard
 $frontController->get(	'/api/meteorboard'                      ,'/api/src/controllers/resourcecontrollers/MeteorAdminBoardController.php'      ); # List meteors with admin details
+
 /* Various functions */
 $frontController->post(	'/api/meteorload'	                      ,'/api/src/controllers/resourcecontrollers/FileLoadController.php'              ); # Post a loading request 
 $frontController->post(	'/api/reportmeteor'	                    ,'/api/src/controllers/resourcecontrollers/ReportMeteorController.php'          ); # Post a seen meteor
 $frontController->post(	'/api/contact'	                        ,'/api/src/controllers/resourcecontrollers/ContactController.php'               ); # Post a contact form
-// return 404 if the routing has not picked up the request
+$frontController->post(	'/api/stationlog'	                      ,'/api/src/controllers/resourcecontrollers/StationLogController.php'            ); # Post a log from a meteor station
+$frontController->get(	'/api/stationlog'	                      ,'/api/src/controllers/resourcecontrollers/StationLogController.php'            ); # List log
+
+// Return 404 if the routing has not picked up the request
 http_response_code(404);
 header('Content-Type: application/json; charset=utf-8');
 echo json_encode(array('error' => "Resource or method doesn't exists", 'message' => 'Ressursen eller funksjonen eksisterer ikke'));
