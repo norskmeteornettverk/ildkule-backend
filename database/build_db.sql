@@ -6,8 +6,8 @@ DROP TABLE IF EXISTS user ;
 
 CREATE TABLE IF NOT EXISTS user (
   id INT(11) NOT NULL AUTO_INCREMENT,
-  username VARCHAR(255) NULL DEFAULT NULL UNIQUE,
-  password VARCHAR(255) NULL DEFAULT NULL,
+  username VARCHAR(255) NOT NULL UNIQUE,
+  password VARCHAR(255) NOT NULL,
   role VARCHAR(255)  DEFAULT 'ROLE_USER',
   user_level VARCHAR(255) DEFAULT 0,
   tutorial_completed BOOLEAN DEFAULT false,
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS manual_input_observation (
   id INT NOT NULL,
   latitude FLOAT NULL,
   longitude FLOAT NULL,
-  date_time DATETIME NULL,
+  date_time DATETIME(3) NULL,
   first_recorded_direction VARCHAR(45) NULL,
   first_recorded_altitude VARCHAR(45) NULL,
   last_recorded_direction VARCHAR(45) NULL,
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS meteor (
   radiant_shower VARCHAR(100) NULL DEFAULT NULL,
   radiant_zenith_attractor VARCHAR(100) NULL DEFAULT NULL,
   timestamp VARCHAR(100) NULL DEFAULT NULL,
-  date DATETIME NULL DEFAULT NULL,
+  date DATETIME(3) NULL DEFAULT NULL,
   camera_confirmed tinyint(1) default null,
   user_confirmed tinyint(1) default null,
   PRIMARY KEY (id),
@@ -149,9 +149,9 @@ CREATE TABLE IF NOT EXISTS observation_cam_data (
   trail_dct VARCHAR(1000) NULL DEFAULT NULL,
   trail_size VARCHAR(1000) NULL DEFAULT NULL,
   trail_frame_brightness VARCHAR(1000) NULL DEFAULT NULL,
-  video_start DATETIME NULL DEFAULT NULL,
-  video_end DATETIME NULL DEFAULT NULL,
-  video_wallclock DATETIME NULL DEFAULT NULL,
+  video_start DATETIME(3) NULL DEFAULT NULL,
+  video_end DATETIME(3) NULL DEFAULT NULL,
+  video_wallclock DATETIME(3) NULL DEFAULT NULL,
   video_heigth INT(11) NULL DEFAULT NULL,
   video_raw INT(11) NULL DEFAULT NULL,
   video_flash INT(11) NULL DEFAULT NULL,
@@ -198,7 +198,7 @@ CREATE TABLE IF NOT EXISTS observation_cam_data (
   summary_latitude FLOAT NULL DEFAULT NULL,
   summary_longitude FLOAT NULL DEFAULT NULL,
   summary_elevation INT(11) NULL DEFAULT NULL,
-  summary_timestamp DATETIME NULL DEFAULT NULL,
+  summary_timestamp DATETIME(3) NULL DEFAULT NULL,
   summary_startpos FLOAT NULL DEFAULT NULL,
   summary_endpos FLOAT NULL DEFAULT NULL,
   summary_duration FLOAT NULL DEFAULT NULL,
@@ -208,6 +208,7 @@ CREATE TABLE IF NOT EXISTS observation_cam_data (
   PRIMARY KEY (id),
   INDEX meteor_id (meteor_id ASC) ,
   INDEX cam_id (cam_id ASC) ,
+  INDEX video_start (video_start ASC),
    CONSTRAINT observation_cam_data_ UNIQUE(meteor_id, cam_id)  ,
   CONSTRAINT observation_cam_data_ibfk_1
     FOREIGN KEY (meteor_id)
@@ -245,4 +246,6 @@ CREATE TABLE IF NOT EXISTS user_review (
 -- -----------------------------------------------------
 -- Table test data
 -- -----------------------------------------------------
-insert into user (username, password, role) values ('test', 'test', 'ROLE_ADMIN')
+insert into user (username, password, role) values ('test@test.no', 'meteorer', 'ROLE_ADMIN')
+insert into user (username, password, role) values ('hansen.nikolai@gmail.com', 'meteorer', 'ROLE_USER')
+
