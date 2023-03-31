@@ -3,3 +3,6 @@ config.php
 data/
 .vscode/settings.json
 phpmailer/mailer.php
+/vendor/
+.vscode/launch.json
+thunder-tests/thunderEnvironment.json
