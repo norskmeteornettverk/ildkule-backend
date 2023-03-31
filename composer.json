@@ -1,4 +1,6 @@
 {
+    
+
     "require": {
         "phpmailer/phpmailer": "^6.6"
     },
@@ -8,6 +10,8 @@
     },
 
     "autoload": {
-        "classmap": ["api", "api/src"]
+        "classmap": ["api", "api/src"],
+        "psr-4": {
+            "Ildkule\\": "src/"}
     }
 }

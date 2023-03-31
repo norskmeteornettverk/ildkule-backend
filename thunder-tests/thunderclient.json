@@ -8,12 +8,12 @@
     "method": "POST",
     "sortNum": 10000,
     "created": "2022-05-02T16:40:35.012Z",
-    "modified": "2022-05-22T13:19:52.145Z",
+    "modified": "2023-03-26T10:00:04.240Z",
     "headers": [],
     "params": [],
     "body": {
       "type": "text",
-      "raw": "{\"username\":\"\", \"password\":\"fdghfdghj\"}",
+      "raw": "{\"username\":\"hansen.nikolai@gmail.com\", \"password\":\"123453454565673\"}",
       "form": []
     },
     "tests": [
@@ -22,12 +22,6 @@
         "custom": "",
         "action": "equal",
         "value": "200"
-      },
-      {
-        "type": "set-env-var",
-        "custom": "json.accessToken",
-        "action": "setto",
-        "value": "{{accessToken}}"
       },
       {
         "type": "res-time",
@@ -39,7 +33,7 @@
         "type": "res-body",
         "custom": "",
         "action": "contains",
-        "value": "accessToken"
+        "value": "message"
       }
     ]
   },
@@ -85,12 +79,12 @@
     "method": "POST",
     "sortNum": 10000,
     "created": "2022-05-14T16:07:12.406Z",
-    "modified": "2022-05-23T18:06:02.376Z",
+    "modified": "2023-03-25T00:40:11.218Z",
     "headers": [],
     "params": [],
     "body": {
       "type": "json",
-      "raw": "{\"date_from\":\"20211101\", \"date_to\":\"20211130\"}",
+      "raw": "{\"date_from\":\"20230314\", \"date_to\":\"20230315\"}",
       "form": []
     },
     "auth": {
@@ -108,16 +102,16 @@
         "value": "200"
       },
       {
-        "type": "res-body",
-        "custom": "",
-        "action": "contains",
-        "value": "Loading completed"
-      },
-      {
         "type": "res-time",
         "custom": "",
         "action": "<=",
         "value": "2000"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "isjson",
+        "value": ""
       }
     ]
   },
@@ -223,7 +217,7 @@
     "method": "GET",
     "sortNum": 50000,
     "created": "2022-05-15T10:02:54.932Z",
-    "modified": "2022-05-22T13:21:34.569Z",
+    "modified": "2022-06-02T21:51:36.755Z",
     "headers": [],
     "params": [
       {
@@ -242,7 +236,26 @@
         "isPath": false
       }
     ],
-    "tests": []
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "isjson",
+        "value": ""
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<=",
+        "value": "300"
+      }
+    ]
   },
   {
     "_id": "c642c16d-8635-499c-9d80-ba63bff7e791",
@@ -289,7 +302,7 @@
     "method": "POST",
     "sortNum": 80000,
     "created": "2022-05-15T10:03:55.204Z",
-    "modified": "2022-05-22T13:21:41.502Z",
+    "modified": "2022-06-02T21:52:30.077Z",
     "headers": [],
     "params": [],
     "body": {
@@ -301,7 +314,26 @@
       "type": "bearer",
       "bearer": "{{accessToken}}"
     },
-    "tests": []
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "isjson",
+        "value": ""
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<=",
+        "value": "300"
+      }
+    ]
   },
   {
     "_id": "e57a61a7-4565-4e1e-b24b-81a14313caf2",
@@ -312,14 +344,27 @@
     "method": "GET",
     "sortNum": 40000,
     "created": "2022-05-15T10:04:28.900Z",
-    "modified": "2022-05-22T13:20:02.267Z",
+    "modified": "2022-05-30T20:32:21.788Z",
     "headers": [],
     "params": [],
     "auth": {
       "type": "bearer",
       "bearer": "{{accessToken}}"
     },
-    "tests": []
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "300"
+      }
+    ]
   },
   {
     "_id": "5af49745-4213-43f8-bfb7-1d042938a116",
@@ -429,11 +474,11 @@
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "40777170-8050-46fc-ae63-cf36c3075b0c",
     "name": "List meteors and limit result list to 20 meteors",
-    "url": "http://127.0.0.1:8081/api/meteors?page=1&limit=15",
+    "url": "https://www.ildkule.net/api/meteors?page=1&limit=80&orderby=date&order=desc",
     "method": "GET",
     "sortNum": 30000,
     "created": "2022-05-20T23:43:04.754Z",
-    "modified": "2022-05-22T13:21:31.653Z",
+    "modified": "2022-06-02T21:48:10.997Z",
     "headers": [],
     "params": [
       {
@@ -443,7 +488,17 @@
       },
       {
         "name": "limit",
-        "value": "15",
+        "value": "80",
+        "isPath": false
+      },
+      {
+        "name": "orderby",
+        "value": "date",
+        "isPath": false
+      },
+      {
+        "name": "order",
+        "value": "desc",
         "isPath": false
       }
     ],
@@ -465,6 +520,12 @@
         "custom": "",
         "action": "contains",
         "value": "meteors"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "isjson",
+        "value": ""
       }
     ]
   },
@@ -472,17 +533,17 @@
     "_id": "a30f0142-dbe2-4f03-a7b9-5c9c8adaa4f3",
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "b147f670-b8b2-4289-9945-b11ba4d0171f",
-    "name": "Log in",
+    "name": "Log in with correct credentials",
     "url": "http://127.0.0.1:8081/api/login",
     "method": "POST",
     "sortNum": 20000,
     "created": "2022-05-21T01:30:42.238Z",
-    "modified": "2022-05-22T22:21:13.830Z",
+    "modified": "2022-06-02T21:48:44.382Z",
     "headers": [],
     "params": [],
     "body": {
       "type": "json",
-      "raw": "{\"username\":\"test\", \"password\":\"test\"}",
+      "raw": "{\"username\":\"hansen.nikolai@gmail.com\", \"password\":\"123453454565673\"}",
       "form": []
     },
     "tests": [
@@ -502,13 +563,19 @@
         "type": "res-time",
         "custom": "",
         "action": "<",
-        "value": "200"
+        "value": "300"
       },
       {
         "type": "res-body",
         "custom": "",
         "action": "contains",
         "value": "accessToken"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "isjson",
+        "value": ""
       }
     ]
   },
@@ -521,7 +588,7 @@
     "method": "PUT",
     "sortNum": 50000,
     "created": "2022-05-21T22:24:57.521Z",
-    "modified": "2022-05-22T13:20:08.041Z",
+    "modified": "2022-06-02T21:45:38.954Z",
     "headers": [],
     "params": [],
     "body": {
@@ -544,7 +611,7 @@
         "type": "res-time",
         "custom": "",
         "action": "<",
-        "value": "200"
+        "value": "300"
       }
     ]
   },
@@ -557,7 +624,7 @@
     "method": "POST",
     "sortNum": 45000,
     "created": "2022-05-22T15:48:19.710Z",
-    "modified": "2022-05-22T22:26:02.489Z",
+    "modified": "2022-06-02T21:45:27.242Z",
     "headers": [],
     "params": [],
     "body": {
@@ -573,22 +640,10 @@
         "value": "200"
       },
       {
-        "type": "set-env-var",
-        "custom": "json.accessToken",
-        "action": "setto",
-        "value": "{{accessToken}}"
-      },
-      {
         "type": "res-time",
         "custom": "",
         "action": "<",
-        "value": "200"
-      },
-      {
-        "type": "res-body",
-        "custom": "",
-        "action": "contains",
-        "value": "accessToken"
+        "value": "1000"
       }
     ]
   },
@@ -597,13 +652,34 @@
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "b147f670-b8b2-4289-9945-b11ba4d0171f",
     "name": "Get users",
-    "url": "http://127.0.0.1:8081/api/users",
+    "url": "http://127.0.0.1:8081/api/users?page=1&limit=10&orderby=username&order=asc",
     "method": "GET",
     "sortNum": 35000,
     "created": "2022-05-24T20:08:51.726Z",
-    "modified": "2022-05-24T20:09:09.599Z",
+    "modified": "2022-05-28T20:06:28.925Z",
     "headers": [],
-    "params": [],
+    "params": [
+      {
+        "name": "page",
+        "value": "1",
+        "isPath": false
+      },
+      {
+        "name": "limit",
+        "value": "10",
+        "isPath": false
+      },
+      {
+        "name": "orderby",
+        "value": "username",
+        "isPath": false
+      },
+      {
+        "name": "order",
+        "value": "asc",
+        "isPath": false
+      }
+    ],
     "auth": {
       "type": "bearer",
       "bearer": "{{accessToken}}"
@@ -632,7 +708,7 @@
     "method": "GET",
     "sortNum": 25000,
     "created": "2022-05-24T22:19:05.059Z",
-    "modified": "2022-05-24T22:19:51.841Z",
+    "modified": "2022-06-02T21:47:18.974Z",
     "headers": [],
     "params": [
       {
@@ -667,7 +743,7 @@
         "type": "json-query",
         "custom": "json.currentPage",
         "action": "equal",
-        "value": "2"
+        "value": "1"
       },
       {
         "type": "res-time",
@@ -680,13 +756,13 @@
   {
     "_id": "594ed97c-56cb-4dab-984d-24c114ad8241",
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
-    "containerId": "40777170-8050-46fc-ae63-cf36c3075b0c",
+    "containerId": "76e94bdf-e4fb-4ba0-84e2-d9b1e974cd4f",
     "name": "Send report",
     "url": "http://127.0.0.1:8081/api/reportmeteor",
-    "method": "GET",
-    "sortNum": 15000,
+    "method": "POST",
+    "sortNum": 10000,
     "created": "2022-05-25T09:46:48.299Z",
-    "modified": "2022-05-25T09:47:15.980Z",
+    "modified": "2022-06-02T19:27:56.146Z",
     "headers": [],
     "params": [],
     "tests": [
@@ -695,6 +771,257 @@
         "custom": "",
         "action": "equal",
         "value": "200"
+      }
+    ]
+  },
+  {
+    "_id": "defff31f-4d27-46d6-9561-e8bbb7408e13",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "b147f670-b8b2-4289-9945-b11ba4d0171f",
+    "name": "Log in with correct username and incorrect password",
+    "url": "http://127.0.0.1:8081/api/login",
+    "method": "POST",
+    "sortNum": 25000,
+    "created": "2022-05-28T12:43:46.405Z",
+    "modified": "2023-03-26T10:28:10.005Z",
+    "headers": [],
+    "params": [],
+    "body": {
+      "type": "json",
+      "raw": "{\"username\":\"hansen.nikolai@gmail.com\", \"password\":\"123453454\"}",
+      "form": []
+    },
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "401"
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "300"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "contains",
+        "value": "error"
+      }
+    ]
+  },
+  {
+    "_id": "b6db5397-4dd1-40da-83ae-4dc084a839db",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "b147f670-b8b2-4289-9945-b11ba4d0171f",
+    "name": "Log in with incorrect username and correct password",
+    "url": "http://127.0.0.1:8081/api/login",
+    "method": "POST",
+    "sortNum": 22500,
+    "created": "2022-05-28T12:44:24.862Z",
+    "modified": "2022-05-30T20:33:52.652Z",
+    "headers": [],
+    "params": [],
+    "body": {
+      "type": "json",
+      "raw": "{\"username\":\"hansen.nikolai@gmail.co\", \"password\":\"123453454565673\"}",
+      "form": []
+    },
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "401"
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "300"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "contains",
+        "value": "error"
+      }
+    ]
+  },
+  {
+    "_id": "82169ffc-64fe-49d2-8389-d0c9e2bb9fc0",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "76e94bdf-e4fb-4ba0-84e2-d9b1e974cd4f",
+    "name": "Send contact form",
+    "url": "http://127.0.0.1:8081/api/contact",
+    "method": "POST",
+    "sortNum": 20000,
+    "created": "2022-06-02T19:25:32.788Z",
+    "modified": "2022-06-02T19:28:06.897Z",
+    "headers": [],
+    "params": [],
+    "body": {
+      "type": "json",
+      "raw": "{\r\n    \"form\": {\r\n        \"fornavn\": \"Test fornavn\",\r\n        \"etternavn\": \"Test etternavn\",\r\n        \"epost\": \"meteorrapport@ildkule.net\",\r\n        \"melding\": \"Hei, dette er en testmelding\"\r\n    }\r\n}",
+      "form": []
+    },
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      }
+    ]
+  },
+  {
+    "_id": "a7d7f924-deb9-46d7-b825-e700c5193c46",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "d5c656cb-5d9e-471a-b6f1-d144216201cf",
+    "name": "Get meteorboard",
+    "url": "http://127.0.0.1:8081/api/meteorboard",
+    "method": "GET",
+    "sortNum": 10000,
+    "created": "2022-06-02T19:29:59.858Z",
+    "modified": "2022-06-02T21:53:18.818Z",
+    "headers": [],
+    "params": [],
+    "auth": {
+      "type": "bearer",
+      "bearer": "{{accessToken}}"
+    },
+    "tests": [
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "200"
+      },
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "isjson",
+        "value": ""
+      }
+    ]
+  },
+  {
+    "_id": "87d40aa7-5a33-4c3b-8624-1cdb64ce4636",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "61b3a040-9bf3-4b1d-948c-4bb6feab6bd9",
+    "name": "Send report Copy",
+    "url": "http://127.0.0.1:8081/api/stationlog",
+    "method": "POST",
+    "sortNum": 10000,
+    "created": "2022-06-11T17:21:10.267Z",
+    "modified": "2022-06-13T20:01:09.138Z",
+    "headers": [],
+    "params": [],
+    "body": {
+      "type": "json",
+      "raw": "{\"station\": {\"name\": \"sorreisa\", \"code\": \"SOR\", \"log_time\": \"2022-06-13T18:09:21.179539\"}}",
+      "form": []
+    },
+    "auth": {
+      "type": "bearer",
+      "bearer": "secretmeteor"
+    },
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      }
+    ]
+  },
+  {
+    "_id": "35c93e3a-5854-485f-818e-cfc26b13e575",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "61b3a040-9bf3-4b1d-948c-4bb6feab6bd9",
+    "name": "Get log",
+    "url": "http://127.0.0.1:8081/api/stationlog",
+    "method": "GET",
+    "sortNum": 20000,
+    "created": "2022-06-13T18:32:32.268Z",
+    "modified": "2022-06-13T18:33:07.127Z",
+    "headers": [],
+    "params": [],
+    "auth": {
+      "type": "bearer",
+      "bearer": "{{accessToken}}"
+    },
+    "tests": [
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "200"
+      },
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "isjson",
+        "value": ""
+      }
+    ]
+  },
+  {
+    "_id": "5434fb5d-2cb5-431b-aac2-5e51d2e0f7c2",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "adc8a1f4-eda2-4606-b17e-ba2848632510",
+    "name": "Sync meteors from files",
+    "url": "http://127.0.0.1:8081/api/meteorload",
+    "method": "PUT",
+    "sortNum": 20000,
+    "created": "2023-03-28T19:40:27.231Z",
+    "modified": "2023-03-28T19:41:16.070Z",
+    "headers": [],
+    "params": [],
+    "body": {
+      "type": "json",
+      "raw": "{\"date_from\":\"20230314\", \"date_to\":\"20230315\"}",
+      "form": []
+    },
+    "auth": {
+      "type": "basic",
+      "basic": {
+        "username": "sys_admin",
+        "password": "secretpassword"
+      }
+    },
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<=",
+        "value": "2000"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "isjson",
+        "value": ""
       }
     ]
   }

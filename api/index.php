@@ -45,6 +45,7 @@ $frontController->get(	'/api/meteorboard'                      ,'/api/src/contro
 
 /* Various functions */
 $frontController->post(	'/api/meteorload'	                      ,'/api/src/controllers/resourcecontrollers/FileLoadController.php'              ); # Post a loading request 
+$frontController->put(	'/api/meteorload'	                      ,'/api/src/controllers/resourcecontrollers/FileLoadController.php'              ); # Post a sync/update request 
 $frontController->post(	'/api/reportmeteor'	                    ,'/api/src/controllers/resourcecontrollers/ReportMeteorController.php'          ); # Post a seen meteor
 $frontController->post(	'/api/contact'	                        ,'/api/src/controllers/resourcecontrollers/ContactController.php'               ); # Post a contact form
 $frontController->post(	'/api/stationlog'	                      ,'/api/src/controllers/resourcecontrollers/StationLogController.php'            ); # Post a log from a meteor station

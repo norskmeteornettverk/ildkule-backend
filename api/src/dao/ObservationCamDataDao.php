@@ -101,11 +101,13 @@ class ObservationCamDataDao implements DaoInterface
         summary_duration,
         summary_sunalt,
         summary_recalibrated,
-        summary_meteor_probability
+        summary_meteor_probability,
+        source_folder
         )
         VALUES
         (?
         ,?        
+        ,?
         ,?
         ,?
         ,?
@@ -254,6 +256,7 @@ class ObservationCamDataDao implements DaoInterface
          ,summary_sunalt =values(         summary_sunalt ) 
          ,summary_recalibrated =values(         summary_recalibrated ) 
          ,summary_meteor_probability=values(         summary_meteor_probability)
+         ,source_folder=values(         source_folder)
         ;
 
             
@@ -336,7 +339,8 @@ class ObservationCamDataDao implements DaoInterface
             $camData->summary_duration,
             $camData->summary_sunalt,
             $camData->summary_recalibrated,
-            $camData->summary_meteor_probability
+            $camData->summary_meteor_probability,
+            $camData->source_folder
 
 
         );

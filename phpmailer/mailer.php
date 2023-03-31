@@ -1,4 +1,6 @@
 <?php
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php' ;
+
 //Import PHPMailer classes into the global namespace
 //These must be at the top of your script, not inside a function
 use PHPMailer\PHPMailer\PHPMailer;
@@ -7,7 +9,6 @@ use PHPMailer\PHPMailer\Exception;
 
 //Load Composer's autoloader
 
-require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php' ;
 
 function sendMeteorMail(string $email, string $subject, string $body , string $altbody)
 {

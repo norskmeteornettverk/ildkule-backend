@@ -40,6 +40,7 @@ class ImgHelper
 
         // get the type of the image
         // we need the type to determine the correct loader
+
         $type = exif_imagetype($src);
 
 
@@ -111,9 +112,14 @@ class ImgHelper
         imagecopyresampled(
             $thumbnail,
             $image,
-            0, 0, 0, 0,
-            $targetWidth, $targetHeight,
-            $width, $height
+            0,
+            0,
+            0,
+            0,
+            $targetWidth,
+            $targetHeight,
+            $width,
+            $height
         );
 
 

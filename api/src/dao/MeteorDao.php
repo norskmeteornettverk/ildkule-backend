@@ -24,17 +24,17 @@ class MeteorDao implements DaoInterface
     }
 
     /**
-    * Finds meteors in datasource and handles pagination and ordering.
-    *
-    * @param int $page Result page (pagination)
-    * @param int $lim Results per page
-    * @param string $orderBy Order by this column. Available columns are "date", "crossingbearing" and "Ratings"
-    * @param string $order Optional. Description.
-    * @return array()
-    */
+     * Finds meteors in datasource and handles pagination and ordering.
+     *
+     * @param int $page Result page (pagination)
+     * @param int $lim Results per page
+     * @param string $orderBy Order by this column. Available columns are "date", "crossingbearing" and "Ratings"
+     * @param string $order Optional. Description.
+     * @return array()
+     */
     public function findAll($page = -1, $lim = 10, $orderBy = null, $order = null)
     {
-        $stmt = null;        
+        $stmt = null;
         $query = "SELECT 
             meteor.*
             ,COALESCE(ratings.ratings, 0) ratings
@@ -49,35 +49,32 @@ class MeteorDao implements DaoInterface
                 count(*) ratings 
                 from user_review 
                 group by user_review.meteor_id
-            ) as ratings on meteor.id  = ratings.meteor_id ";
+            ) as ratings on meteor.id  = ratings.meteor_id
+            where (user_confirmed is null or user_confirmed <> 0)
+            
+             ";
 
         $orderSQL = "order by ";
 
         if (!is_null($orderBy) && !is_null($order)) {
             if ($orderBy == "date") {
                 $orderSQL = $orderSQL . " meteor.date ";
-            }
-            elseif ($orderBy == "crossbearing") {
+            } elseif ($orderBy == "crossbearing") {
                 $orderSQL = $orderSQL . " meteor.camera_confirmed ";
-            }
-            elseif ($orderBy == "ratings") {
+            } elseif ($orderBy == "ratings") {
                 $orderSQL = $orderSQL . " COALESCE(ratings.ratings, 0) ";
-            }
-            else {
+            } else {
                 $orderSQL = $orderSQL . " meteor.date ";
             }
 
             if ($order == "asc") {
                 $orderSQL = $orderSQL . " asc ";
-            }
-            elseif ($order == "desc") {
+            } elseif ($order == "desc") {
+                $orderSQL = $orderSQL . " desc ";
+            } else {
                 $orderSQL = $orderSQL . " desc ";
             }
-            else {
-                $orderSQL = $orderSQL . " desc ";
-            }
-        }
-        else {
+        } else {
             $orderSQL = $orderSQL . " meteor.date desc ";
         }
 
@@ -86,7 +83,7 @@ class MeteorDao implements DaoInterface
 
         $stmt = $this->dbh->prepare($query);
         $stmt->bindValue(1, $lim, PDO::PARAM_INT);
-        $stmt->bindValue(2, 0, PDO::PARAM_INT);    
+        $stmt->bindValue(2, 0, PDO::PARAM_INT);
 
         $stmt->execute();
         $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
@@ -120,8 +117,12 @@ class MeteorDao implements DaoInterface
             radiant_ecl_lat,  
             radiant_shower, 
             radiant_zenith_attractor, 
-            timestamp)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            timestamp,
+            source_folder, 
+            source_removed,
+            source_incorrect_detection            
+            )
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?  )
             ON DUPLICATE 
             KEY UPDATE 
             
@@ -149,15 +150,21 @@ class MeteorDao implements DaoInterface
             ,radiant_shower                 = VALUES(radiant_shower             )
             ,radiant_zenith_attractor       = VALUES(radiant_zenith_attractor   )
             ,timestamp                      = VALUES(timestamp                  )
+            ,source_folder                  = VALUES(source_folder              )
+            ,source_removed                 = VALUES(source_removed             )
+            ,source_incorrect_detection     = VALUES(source_incorrect_detection )
 
 
             ;                                      
                                       ";
+
+
+
         $values = array(
             $meteor->datetimetag,
             $meteor->location,
             $meteor->camera_confirmed,
-            ($meteor->date instanceof DateTime) ? $meteor->date->format('Y-m-d H:i:s') : null,
+            ($meteor->date instanceof DateTime) ? $meteor->date->format('Y-m-d H:i:s.u') : null,
             $meteor->track_startheight,
             $meteor->track_endheight,
             $meteor->track_groundtrack,
@@ -177,7 +184,10 @@ class MeteorDao implements DaoInterface
             $meteor->radiant_ecl_lat,
             $meteor->radiant_shower,
             $meteor->radiant_zenith_attractor,
-            $meteor->timestamp
+            $meteor->timestamp,
+            $meteor->source_folder,
+            $meteor->source_removed,
+            $meteor->source_incorrect_detection
         );
         $this->dbh->prepare($query)->execute($values);
 
@@ -197,7 +207,7 @@ class MeteorDao implements DaoInterface
 
     public function findByID($id)
     {
-        $query = "SELECT * FROM meteor WHERE id = :id;";
+        $query = "SELECT * FROM meteor WHERE (user_confirmed is null or user_confirmed <> 0) and id = :id;";
         $stmt = $this->dbh->prepare($query);
         $stmt->bindParam(':id', $id);
         $stmt->setFetchMode(PDO::FETCH_INTO, new Meteor());
@@ -209,7 +219,7 @@ class MeteorDao implements DaoInterface
 
     public function search($search)
     {
-        $stmt = $this->dbh->prepare("SELECT * FROM meteor WHERE location like ? or datetimetag like ?  order by meteor.date desc");
+        $stmt = $this->dbh->prepare("SELECT * FROM meteor WHERE (user_confirmed is null or user_confirmed <> 0) and location like ? or datetimetag like ?  order by meteor.date desc");
         $stmt->execute(array('%' . $search . '%', '%' . $search . '%'));
         $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
         return $result;
@@ -221,7 +231,7 @@ class MeteorDao implements DaoInterface
         $yearFilterList = [];
         $meteorClassFilterList = [];
 
-        $query = "select meteor.* from meteor where 1=1";
+        $query = "select meteor.* from meteor where 1=1 and (user_confirmed is null or user_confirmed <> 0) ";
 
         $where = [];
 
@@ -291,21 +301,22 @@ class MeteorDao implements DaoInterface
         $stmt = $this->dbh->prepare($query);
         if ($stmt->execute()) {
             print 'You deleted ' . $id . ' successfully';
-        }
-        else {
+        } else {
             print 'Failed to delete ' . $id . ' from database';
         }
     }
-    public function update($id, $confirmed)
+    public function update($id, $data)
     {
-        //TODO - kladd - men hvilke attributter trenger vi egentlig å oppdatere fra frontend? blir det på en 'confirmed' så må vi nok få det inn som egen kolonne i meteor. 
-        $query = "UPDATE meteor SET confirmed = :confirmed; WHERE id = :id;";
-        $stmt = $this->dbh->prepare($query);
-        if ($stmt->execute()) {
-            print 'You updated ' . $id . '. Confirmed is now set to ' . $confirmed;
+        $columns = array_keys($data);
+        $setClauses = array_map(function ($column) {
+            return "$column = :$column";
+        }, $columns);
+        $setClauseString = implode(", ", $setClauses);
+        $stmt = $this->dbh->prepare("UPDATE meteor SET $setClauseString WHERE id = :id");
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+        foreach ($data as $column => $value) {
+            $stmt->bindParam(":$column", $value);
         }
-        else {
-            print 'Failed to update ' . $id;
-        }
+        $stmt->execute();
     }
 }

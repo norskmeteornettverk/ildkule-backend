@@ -90,7 +90,7 @@ DROP TABLE IF EXISTS meteor ;
 
 CREATE TABLE IF NOT EXISTS meteor (
   id INT(9) UNSIGNED NOT NULL AUTO_INCREMENT,
-  datetimetag CHAR(14) NOT NULL,
+  datetimetag CHAR(50) NOT NULL,
   location VARCHAR(100) NULL DEFAULT NULL,
   create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
   track_startheight FLOAT NULL DEFAULT NULL,
@@ -116,6 +116,9 @@ CREATE TABLE IF NOT EXISTS meteor (
   date DATETIME(3) NULL DEFAULT NULL,
   camera_confirmed tinyint(1) default null,
   user_confirmed tinyint(1) default null,
+  source_folder VARCHAR(100) NULL DEFAULT NULL,
+  source_removed tinyint(1) default null,
+  source_incorrect_detection tinyint(1) default null,
   PRIMARY KEY (id),
   CONSTRAINT unique_meteor_datetimetag UNIQUE(datetimetag)
   );
@@ -205,6 +208,7 @@ CREATE TABLE IF NOT EXISTS observation_cam_data (
   summary_sunalt FLOAT NULL DEFAULT NULL,
   summary_recalibrated INT(11) NULL DEFAULT NULL,
   summary_meteor_probability FLOAT NULL DEFAULT NULL,
+  source_folder VARCHAR(100) NULL DEFAULT NULL,
   PRIMARY KEY (id),
   INDEX meteor_id (meteor_id ASC) ,
   INDEX cam_id (cam_id ASC) ,
@@ -246,6 +250,5 @@ CREATE TABLE IF NOT EXISTS user_review (
 -- -----------------------------------------------------
 -- Table test data
 -- -----------------------------------------------------
-insert into user (username, password, role) values ('test@test.no', 'meteorer', 'ROLE_ADMIN')
-insert into user (username, password, role) values ('hansen.nikolai@gmail.com', 'meteorer', 'ROLE_USER')
+insert into user (username, password, role) values ('test@test.com', '$2y$10$obUwZf5C/ocikzMRLaIKfe4Rf2wqH7zt3WDRliXj8br/vyDF9S68K', 'ROLE_ADMIN')
 

@@ -15,6 +15,12 @@ require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' .
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'db.php';
 
 
+/**
+ * Class MeteorService
+ * 
+ * Provides methods to interact with meteor data.
+ * 
+ */
 class MeteorService
 {
     public function loadMeteorsFromFiles($root_folder, $date_from, $date_to)
@@ -43,6 +49,36 @@ class MeteorService
                 }
             }
         }
+    }
+
+    public function syncMeteorsFromFiles($root_folder)
+    {
+    
+        set_time_limit(600);
+
+        $m = new FileToObjectMapper(realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_folder . DIRECTORY_SEPARATOR, '20230314', '20230318');
+        $meteors = $m->mapSpecifiedMeteorFolders(["wrongs" . DIRECTORY_SEPARATOR . "001910"]);       
+
+        $meteorDao = new MeteorDao();
+        $stationDao = new StationDao();
+        $camDao = new CamDao();
+        $camDataDao = new ObservationCamDataDao();
+        foreach ($meteors as $meteor) {
+            $meteorDao->insert($meteor);
+            if ($meteor->observation_cam_data) {
+                foreach ($meteor->observation_cam_data as $cam_data) {
+                    if ($cam_data->cam) {
+                        if ($cam_data->cam->station) {
+                            $stationDao->insert($cam_data->cam->station);
+                        }
+                        $camDao->insert($cam_data->cam);
+                        $camDataDao->insert($cam_data);
+                    }
+                }
+            }
+        }
+
+        
     }
 
     private function validateDate($date, $format = 'Y-m-d')
