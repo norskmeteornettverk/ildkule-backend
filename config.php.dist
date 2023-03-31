@@ -1,0 +1,22 @@
+<?php
+
+class Config
+{
+    const host = '';
+    const port = "3306";
+    const database = '';
+    const user = '';
+    const password = '';
+    const apiUser = '';
+    const apiPassword = '';
+    const data_folder = 'data';
+    const emailForMeteorReport = '';
+    const pwForMeteorReport = '';
+    const emailServer = '';
+    const emailServerPort = 587;
+    const frontUrl = '';
+    const testMode = false;
+    const recaptcha_secret = "";
+    const log_key = "";
+    const devMode = true;
+}
