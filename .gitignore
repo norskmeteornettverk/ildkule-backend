@@ -7,3 +7,6 @@ phpmailer/mailer.php
 vendor/
 .vscode/launch.json
 thunder-tests/thunderEnvironment.json
+.devcontainer/docker-compose.yml
+.devcontainer/Dockerfile
+.devcontainer/devcontainer.json
