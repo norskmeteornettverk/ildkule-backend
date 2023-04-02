@@ -51,14 +51,61 @@ class MeteorService
         }
     }
 
-    public function syncMeteorsFromFiles($root_folder)
+    public function setMeteorAsMissingInSource($meteor_id)
     {
-    
-        set_time_limit(600);
+        $meteorDao = new MeteorDao();
+        $meteor = $meteorDao->findByID($meteor_id);
 
-        $m = new FileToObjectMapper(realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_folder . DIRECTORY_SEPARATOR, '20230314', '20230318');
-        $meteors = $m->mapSpecifiedMeteorFolders(["wrongs" . DIRECTORY_SEPARATOR . "001910"]);       
+        // Print meteor data
+        echo json_encode($meteor) . PHP_EOL;
 
+        // Print datatype of meteor->date
+        echo gettype($meteor->date) . PHP_EOL;
+
+        if ($meteor) {
+            $meteor->source_removed = 1;
+            $meteorDao->updateByObject($meteor);
+        }
+    }
+
+    public function syncMeteorsFromFiles()
+    {
+
+        $cut_off = "2023-01-01 00:00:00"; // Meteors updated after this date will be updated (checks source and database)
+
+        // Retrieve meteors from source
+        $m = new FileToObjectMapper(realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_folder . DIRECTORY_SEPARATOR, "190101", "20990101");
+        $sourceMeteors = $m->getMeteorFoldersUpdatedAfterDate(realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_folder, $cut_off, ["thumbnail.jpg"], true);
+
+        // Retrieve source folders names of meteors in the database
+        $date = date("Y-m-d H:i:s", strtotime($cut_off));
+        $dataAccessHelper = new DataAccessHelper();
+        $conditions = [">=" => ["create_time", $date]];
+        $databaseResults = $dataAccessHelper->getMiscData("meteor", array("id", "create_time", "source_folder"), $conditions);
+
+        $databaseMeteors = array();
+        foreach ($databaseResults as $row) {
+            $databaseMeteors[] = $row["source_folder"];
+        }
+
+        $databaseMeteors = array_filter($databaseMeteors); // Remove empty values - some meteors have no source folder due to being manually added
+
+        // Print the results
+        //echo "Source meteors: " . implode(", ", $sourceMeteors) . "\n";
+        //echo "Database meteors: " . implode(", ", $databaseMeteors) . "\n";
+
+        // Find the meteors in the source array that are not in the database array
+        $missingInDatabase = array_diff($sourceMeteors, $databaseMeteors);
+
+        // Find the meteors in the database array that are not in the source array
+        $missingInSource = array_diff($databaseMeteors, $sourceMeteors);
+
+        // Print the results
+        //echo "Missing in database: " . implode(", ", $missingInDatabase) . "\n";
+        //echo "Missing in source: " . implode(", ", $missingInSource) . "\n";
+
+        // Insert meteors missing in the database
+        $meteors = $m->mapSpecifiedMeteorFolders($missingInDatabase);
         $meteorDao = new MeteorDao();
         $stationDao = new StationDao();
         $camDao = new CamDao();
@@ -78,7 +125,21 @@ class MeteorService
             }
         }
 
-        
+        // Update meteors missing in the source from the database
+        $idsOfMeteorsMissingInSource = array();
+
+        foreach ($databaseResults as $row) {
+            if (in_array($row['source_folder'], $missingInSource)) {
+                $idsOfMeteorsMissingInSource[] = $row['id'];
+            }
+        }
+
+        //echo "Ids of meteors missing in source: " . implode(", ", $idsOfMeteorsMissingInSource) . "\n";
+
+        $meteorService = new MeteorService();
+        foreach ($idsOfMeteorsMissingInSource as $missingInSourceMeteorId) {
+            $meteorService->setMeteorAsMissingInSource($missingInSourceMeteorId);
+        }
     }
 
     private function validateDate($date, $format = 'Y-m-d')
@@ -128,8 +189,7 @@ class MeteorService
             }
             $result = $meteor;
             return json_encode($result);
-        }
-        else {
+        } else {
             return null;
         }
     }
@@ -137,8 +197,8 @@ class MeteorService
     public function reviewMeteor($meteorId, $userId, $rating)
     {
 
-        $sql = "INSERT INTO user_review (user_id, confirmed, meteor_id) VALUES (" .  strval($userId) . ", " . strval($rating) . ", " . strval($meteorId) . ")  ON DUPLICATE KEY UPDATE confirmed = VALUES(confirmed); ";
-		return dbQuery($sql);
+        $sql = "INSERT INTO user_review (user_id, confirmed, meteor_id) VALUES (" . strval($userId) . ", " . strval($rating) . ", " . strval($meteorId) . ")  ON DUPLICATE KEY UPDATE confirmed = VALUES(confirmed); ";
+        return dbQuery($sql);
     }
 
     public function updateClassification($meteorId, $classification)

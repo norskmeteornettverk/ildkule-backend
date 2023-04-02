@@ -1,6 +1,7 @@
 db_connection.php
 config.php
 data/
+data_sample/
 .vscode/settings.json
 phpmailer/mailer.php
 vendor/

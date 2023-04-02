@@ -67,25 +67,28 @@ function testMeteorServiceSync()
 function findMeteorsToUpdate()
 {
 
-    $cut_off = "2023-03-29 02:00:14"; // Meteors updated after this date will be updated (checks source and database)
+    $cut_off = "2023-01-01 00:00:00"; // Meteors updated after this date will be updated (checks source and database)
 
-    $m = new FileToObjectMapper(realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_folder . DIRECTORY_SEPARATOR, "20230314", "20230315");
+    // Retrieve meteors from source
+    $m = new FileToObjectMapper(realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_folder . DIRECTORY_SEPARATOR, "190101", "20990101");
     $sourceMeteors = $m->getMeteorFoldersUpdatedAfterDate(realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_folder, $cut_off, ["thumbnail.jpg"], true);
-    //echo "Source folders (filtered): " . implode(", ", $sourceMeteors) . "\n";
 
-
+    // Retrieve source folders names of meteors in the database
     $date = date("Y-m-d H:i:s", strtotime($cut_off));
     $dataAccessHelper = new DataAccessHelper();
-    $conditions = [">=" => ["create_time", $date]];  
-    $result = $dataAccessHelper->getMiscData("meteor", array("id", "create_time", "source_folder"), $conditions);
-
+    $conditions = [">=" => ["create_time", $date]];
+    $databaseResults = $dataAccessHelper->getMiscData("meteor", array("id", "create_time", "source_folder"), $conditions);
 
     $databaseMeteors = array();
-    foreach ($result as $row) {
-        $databaseMeteors[] = $row["source_folder"];        
+    foreach ($databaseResults as $row) {
+        $databaseMeteors[] = $row["source_folder"];
     }
 
     $databaseMeteors = array_filter($databaseMeteors); // Remove empty values - some meteors have no source folder due to being manually added
+
+    // Print the results
+    echo "Source meteors: " . implode(", ", $sourceMeteors) . "\n";
+    echo "Database meteors: " . implode(", ", $databaseMeteors) . "\n";
 
     // Find the meteors in the source array that are not in the database array
     $missingInDatabase = array_diff($sourceMeteors, $databaseMeteors);
@@ -97,9 +100,8 @@ function findMeteorsToUpdate()
     echo "Missing in database: " . implode(", ", $missingInDatabase) . "\n";
     echo "Missing in source: " . implode(", ", $missingInSource) . "\n";
 
-
+    // Insert meteors missing in the database
     $meteors = $m->mapSpecifiedMeteorFolders($missingInDatabase);
-
     $meteorDao = new MeteorDao();
     $stationDao = new StationDao();
     $camDao = new CamDao();
@@ -118,7 +120,24 @@ function findMeteorsToUpdate()
             }
         }
     }
+
+    // Update meteors missing in the source from the database
+    $idsOfMeteorsMissingInSource = array();
+    
+    foreach ($databaseResults as $row) {
+        if (in_array($row['source_folder'], $missingInSource)) {
+            $idsOfMeteorsMissingInSource[] = $row['id'];
+        }
+    }
+
+    echo "Ids of meteors missing in source: " . implode(", ", $idsOfMeteorsMissingInSource) . "\n";
+    
+    $meteorService = new MeteorService();
+    foreach ($idsOfMeteorsMissingInSource as $missingInSourceMeteorId) {
+        $meteorService->setMeteorAsMissingInSource($missingInSourceMeteorId);
+    }
+
+
 }
-//testMeteorServiceSync();
 
 findMeteorsToUpdate();
