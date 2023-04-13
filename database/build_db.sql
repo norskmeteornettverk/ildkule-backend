@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS meteor (
   date DATETIME(3) NULL DEFAULT NULL,
   camera_confirmed tinyint(1) default null,
   user_confirmed tinyint(1) default null,
+  source_basefolder VARCHAR(100) NULL DEFAULT NULL,
   source_folder VARCHAR(100) NULL DEFAULT NULL,
   source_removed tinyint(1) default null,
   source_incorrect_detection tinyint(1) default null,
