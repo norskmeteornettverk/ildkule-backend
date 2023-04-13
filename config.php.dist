@@ -2,21 +2,29 @@
 
 class Config
 {
+    // database settings
     const host = '';
     const port = "3306";
     const database = '';
     const user = '';
     const password = '';
+
+    // settings for data sync api
     const apiUser = '';
     const apiPassword = '';
-    const data_folder = 'data';
-    const emailForMeteorReport = '';
+    const data_folder = 'data'; // data for actual meteors
+    const data_wrong_folder = 'data_wrong'; // data for incorrect meteors, already filtered out
+
+    // various settings
+    const frontUrl = ''; // hostname client side application
+    const testMode = false;
+    const recaptcha_secret = ""; // google api key for recaptcha
+    const log_key = ""; // http key for logging from external camera stations or main server
+    const devMode = true;
+
+    // E-mail setting for functionality sending e-mails
+    const emailForMeteorReport = ''; 
     const pwForMeteorReport = '';
     const emailServer = '';
     const emailServerPort = 587;
-    const frontUrl = '';
-    const testMode = false;
-    const recaptcha_secret = "";
-    const log_key = "";
-    const devMode = true;
 }
