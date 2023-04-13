@@ -29,6 +29,7 @@ class Meteor implements JsonSerializable
   protected $radiant_shower;
   protected $radiant_zenith_attractor;
   protected $timestamp;
+  protected $source_basefolder;  
   protected $source_folder;
   protected $source_removed;
   protected $source_incorrect_detection;
