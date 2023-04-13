@@ -12,6 +12,7 @@ require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' .
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'dao' . DIRECTORY_SEPARATOR . 'CamDao.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'dao' . DIRECTORY_SEPARATOR . 'ObservationCamDataDao.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'dao' . DIRECTORY_SEPARATOR . 'UserReviewDao.php';
+require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'helpers' . DIRECTORY_SEPARATOR . 'DataAccessHelper.php';
 require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'db.php';
 
 
@@ -51,16 +52,10 @@ class MeteorService
         }
     }
 
-    public function setMeteorAsMissingInSource($meteor_id)
+    private function setMeteorAsMissingInSource($meteor_id)
     {
         $meteorDao = new MeteorDao();
         $meteor = $meteorDao->findByID($meteor_id);
-
-        // Print meteor data
-        echo json_encode($meteor) . PHP_EOL;
-
-        // Print datatype of meteor->date
-        echo gettype($meteor->date) . PHP_EOL;
 
         if ($meteor) {
             $meteor->source_removed = 1;
@@ -68,14 +63,26 @@ class MeteorService
         }
     }
 
+    /**
+     * Syncs meteors from the source folder to the database.
+     *
+     * @return array An associative array containing the following keys and their
+     *               respective values:
+     *               - 'found_in_source': The number of meteors found in the source.
+     *               - 'found_in_database': The number of meteors found in the database.
+     *               - 'missing_in_database': The number of meteors missing in the database.
+     *               - 'missing_in_source': The number of meteors missing in the source.
+     */
     public function syncMeteorsFromFiles()
     {
+        $cut_off = "2015-01-01 00:00:00"; // Meteors updated after this date will be updated (checks source and database)
 
-        $cut_off = "2023-01-01 00:00:00"; // Meteors updated after this date will be updated (checks source and database)
+        // Retrieve meteor folder names from source
+        $m = new FileToObjectMapper(realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_folder . DIRECTORY_SEPARATOR, "19000101", "20990101");
+        $sourceMeteors = $m->getMeteorFoldersUpdatedAfterDate(realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_folder, $cut_off, [], true);
+        $badMeteorFolders = $m->getMeteorFoldersUpdatedAfterDate(realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_wrong_folder, $cut_off, [], true);
 
-        // Retrieve meteors from source
-        $m = new FileToObjectMapper(realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_folder . DIRECTORY_SEPARATOR, "190101", "20990101");
-        $sourceMeteors = $m->getMeteorFoldersUpdatedAfterDate(realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_folder, $cut_off, ["thumbnail.jpg"], true);
+        $sourceMeteors = array_merge($sourceMeteors, $badMeteorFolders);
 
         // Retrieve source folders names of meteors in the database
         $date = date("Y-m-d H:i:s", strtotime($cut_off));
@@ -85,14 +92,11 @@ class MeteorService
 
         $databaseMeteors = array();
         foreach ($databaseResults as $row) {
+            $row["source_folder"] = str_replace("/", DIRECTORY_SEPARATOR, str_replace("\\", DIRECTORY_SEPARATOR, $row["source_folder"]));
             $databaseMeteors[] = $row["source_folder"];
         }
 
         $databaseMeteors = array_filter($databaseMeteors); // Remove empty values - some meteors have no source folder due to being manually added
-
-        // Print the results
-        //echo "Source meteors: " . implode(", ", $sourceMeteors) . "\n";
-        //echo "Database meteors: " . implode(", ", $databaseMeteors) . "\n";
 
         // Find the meteors in the source array that are not in the database array
         $missingInDatabase = array_diff($sourceMeteors, $databaseMeteors);
@@ -100,18 +104,61 @@ class MeteorService
         // Find the meteors in the database array that are not in the source array
         $missingInSource = array_diff($databaseMeteors, $sourceMeteors);
 
-        // Print the results
-        //echo "Missing in database: " . implode(", ", $missingInDatabase) . "\n";
-        //echo "Missing in source: " . implode(", ", $missingInSource) . "\n";
+        // Count the number of meteors in each category
+        $foundInSourceCount = count($sourceMeteors);
+        $foundInDatabaseCount = count($databaseMeteors);
+        $missingInDatabaseCount = count($missingInDatabase);
+        $missingInSourceCount = count($missingInSource);
 
         // Insert meteors missing in the database
-        $meteors = $m->mapSpecifiedMeteorFolders($missingInDatabase);
+        $slicedMeteorFolderList = array_slice($missingInDatabase, 0, 5000); // Limit to avoid timeouts
+        rsort($slicedMeteorFolderList); // Sort in descending order to ensure that the most recent meteors are inserted first
+        $this->insertMeteors($slicedMeteorFolderList);
+
+        // Update meteors missing in the source from the database
+        $idsOfMeteorsMissingInSource = array();
+        foreach ($databaseResults as $row) {
+            if (in_array($row['source_folder'], $missingInSource)) {
+                $idsOfMeteorsMissingInSource[] = $row['id'];
+            }
+        }
+
+        foreach ($idsOfMeteorsMissingInSource as $missingInSourceMeteorId) {
+            $this->setMeteorAsMissingInSource($missingInSourceMeteorId);
+        }
+
+        // Return an array with the counts
+        $result = array(
+            'found_in_source' => $foundInSourceCount,
+            'found_in_database' => $foundInDatabaseCount,
+            'missing_in_database' => $missingInDatabaseCount,
+            'missing_in_source' => $missingInSourceCount
+        );
+
+        return $result;
+
+    }
+
+    /**
+     * Insert meteors to the database based on list of meteor folders
+     *  
+     * @param array $meteorFolderList
+     */
+    private function insertMeteors($meteorFolderList)
+    {
+        $m = new FileToObjectMapper(realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_folder, "190101", "20990101");
+
+        $meteors = $m->mapSpecifiedMeteorFolders($meteorFolderList); // Load files from the only the specified meteor folder into objects
+
+        $meteorInsertedCount = 0;
+
         $meteorDao = new MeteorDao();
         $stationDao = new StationDao();
         $camDao = new CamDao();
         $camDataDao = new ObservationCamDataDao();
         foreach ($meteors as $meteor) {
             $meteorDao->insert($meteor);
+            $meteorInsertedCount++;
             if ($meteor->observation_cam_data) {
                 foreach ($meteor->observation_cam_data as $cam_data) {
                     if ($cam_data->cam) {
@@ -123,22 +170,6 @@ class MeteorService
                     }
                 }
             }
-        }
-
-        // Update meteors missing in the source from the database
-        $idsOfMeteorsMissingInSource = array();
-
-        foreach ($databaseResults as $row) {
-            if (in_array($row['source_folder'], $missingInSource)) {
-                $idsOfMeteorsMissingInSource[] = $row['id'];
-            }
-        }
-
-        //echo "Ids of meteors missing in source: " . implode(", ", $idsOfMeteorsMissingInSource) . "\n";
-
-        $meteorService = new MeteorService();
-        foreach ($idsOfMeteorsMissingInSource as $missingInSourceMeteorId) {
-            $meteorService->setMeteorAsMissingInSource($missingInSourceMeteorId);
         }
     }
 
@@ -222,6 +253,14 @@ class MeteorService
         return json_encode($result);
     }
 
+    public function getMeteorCoordinateData($fromDate, $toDate, $stations)
+    {
+        $dataAccess = new DataAccessHelper();
+        $meteors = $dataAccess->getMeteorCoordinateData($fromDate, $toDate, $stations);
+                return $meteors;
+    }
+    
+
     public function getInsight($reportName)
     {
         if ($reportName == "cam") {
@@ -251,6 +290,7 @@ order by  CONCAT(UCASE(LEFT( s.station_name, 1)),
             }
             echo json_encode($rows);
         }
+        ;
 
         if ($reportName == "station") {
             $sql = "select 
@@ -279,6 +319,7 @@ order by  CONCAT(UCASE(LEFT( s.station_name, 1)),
             }
             echo json_encode($rows);
         }
+        ;
 
 
         if ($reportName == "total") {
@@ -302,24 +343,41 @@ order by  CONCAT(UCASE(LEFT( s.station_name, 1)),
             }
             echo json_encode($rows[0]);
         }
+        ;
 
         if ($reportName == "coordinates") {
-            $sql = "SELECT track_endlat lat, track_endlong lng FROM 153413_ildkule_dev.meteor where track_endlat is not null";
+            $sql = "SELECT 
+            track_endlat lat, 
+            track_endlong lng, 
+            radiant_ra, 
+            radiant_dec, 
+            radiant_ecl_lat, 
+            radiant_ecl_long, 
+            track_speed, 
+            track_endheight, 
+            REPLACE(TRIM(radiant_shower), '\n', '') AS radiant_shower, 
+            REPLACE(TRIM( meteor.date ), '\n', '') AS date        
+          FROM 
+            meteor 
+          WHERE  1=1
+            and track_speed > 0
+            and track_endheight > 0
+            and track_speed < 1000
+            and track_startheight < 1000
+            and track_startheight > track_endheight
+            AND date >= DATE_SUB(NOW(), INTERVAL 2 YEAR) 
+          ORDER BY 
+            date DESC 
+          LIMIT 300
+          ";
             $results = dbQuery($sql);
             $rows = array();
             while ($row = dbFetchAssoc($results)) {
                 $rows[] = $row;
             }
+
             echo json_encode($rows);
         }
         ;
-
-
-
-
     }
-
-
-
-
 }

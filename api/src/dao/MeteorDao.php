@@ -118,11 +118,12 @@ class MeteorDao implements DaoInterface
             radiant_shower, 
             radiant_zenith_attractor, 
             timestamp,
+            source_basefolder, 
             source_folder, 
             source_removed,
             source_incorrect_detection            
             )
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?  )
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?  )
             ON DUPLICATE 
             KEY UPDATE 
             
@@ -150,6 +151,7 @@ class MeteorDao implements DaoInterface
             ,radiant_shower                 = VALUES(radiant_shower             )
             ,radiant_zenith_attractor       = VALUES(radiant_zenith_attractor   )
             ,timestamp                      = VALUES(timestamp                  )
+            ,source_basefolder              = VALUES(source_basefolder          )
             ,source_folder                  = VALUES(source_folder              )
             ,source_removed                 = VALUES(source_removed             )
             ,source_incorrect_detection     = VALUES(source_incorrect_detection )
@@ -185,6 +187,7 @@ class MeteorDao implements DaoInterface
             $meteor->radiant_shower,
             $meteor->radiant_zenith_attractor,
             $meteor->timestamp,
+            $meteor->source_basefolder,
             $meteor->source_folder,
             $meteor->source_removed,
             $meteor->source_incorrect_detection
@@ -346,6 +349,7 @@ class MeteorDao implements DaoInterface
             radiant_shower = ?,
             radiant_zenith_attractor = ?,
             timestamp = ?,
+            source_basefolder = ?,
             source_folder = ?,
             source_removed = ?,
             source_incorrect_detection = ?
@@ -376,6 +380,7 @@ class MeteorDao implements DaoInterface
             $meteor->radiant_shower,
             $meteor->radiant_zenith_attractor,
             $meteor->timestamp,
+            $meteor->source_basefolder,
             $meteor->source_folder,
             $meteor->source_removed,
             $meteor->source_incorrect_detection,

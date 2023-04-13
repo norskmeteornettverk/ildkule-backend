@@ -1,6 +1,7 @@
 db_connection.php
 config.php
 data/
+data_wrong/
 data_sample/
 .vscode/settings.json
 phpmailer/mailer.php
@@ -10,3 +11,4 @@ thunder-tests/thunderEnvironment.json
 .devcontainer/docker-compose.yml
 .devcontainer/Dockerfile
 .devcontainer/devcontainer.json
+/img/

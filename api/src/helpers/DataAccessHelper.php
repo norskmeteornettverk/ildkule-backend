@@ -51,6 +51,49 @@ class DataAccessHelper
         return $data;
     }
 
+    public function getMeteorCoordinateData($from_date, $to_date, $stations)
+    {
+        // Base query
+        $query = "SELECT DISTINCT track_endlat lat, track_endlong lng, radiant_ra, radiant_dec, radiant_ecl_lat, radiant_ecl_long, track_speed, track_endheight, 
+              REPLACE(TRIM(radiant_shower), '\n', '') AS radiant_shower, 
+              REPLACE(TRIM( m.date ), '\n', '') AS date    
+              FROM station s
+              INNER JOIN cam c ON s.id = c.station_id
+              INNER JOIN observation_cam_data e ON c.id = e.cam_id
+              INNER JOIN meteor m ON e.meteor_id = m.id
+              WHERE track_speed > 0 
+                AND track_endheight > 0
+                AND track_speed < 1000
+                AND track_startheight < 1000
+                AND track_startheight > track_endheight ";
+
+        // Filter by date range
+        if (!empty($from_date) && !empty($to_date)) {
+            $query .= " AND m.date BETWEEN :from_date AND :to_date";
+        }
+
+        // Filter by station names
+        if (!empty($stations)) {
+            $query .= " AND s.station_name IN (" . implode(',', array_map(function ($station) {
+                return "'" . $station . "'";
+            }, $stations)) . ")";
+        }
+
+        $stmt = $this->connection->prepare($query);
+
+        // Bind date parameters if set
+        if (!empty($from_date) && !empty($to_date)) {
+            $stmt->bindParam(':from_date', $from_date);
+            $stmt->bindParam(':to_date', $to_date);
+        }
+
+     
+        $stmt->execute();
+        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt->closeCursor();
+        return $data;
+    }
+
 
 
 

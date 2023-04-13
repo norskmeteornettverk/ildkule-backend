@@ -35,6 +35,7 @@ class FileLoadController extends AbstractController
       if ($un == "sys_admin" && $pw == "secretpassword") {
         $meteorService = new MeteorService();
         try {
+          ini_set('max_execution_time', 600);
           $meteorService->loadMeteorsFromFiles($root_folder, $data->date_from, $data->date_to);
           http_response_code(200);
           echo json_encode(array('message' => 'Innlasting av data fullfoert'));
@@ -57,29 +58,32 @@ class FileLoadController extends AbstractController
     if (!$validRequest)
       return;
 
-    $root_folder = $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . Config::data_folder . DIRECTORY_SEPARATOR; # root folder for data files
-    $data = json_decode(file_get_contents("php://input", true)); # get parameters
-    if (isset($_SERVER["HTTP_AUTHORIZATION"])) {
-      // Control basic authentication before loading files
-      $auth = $_SERVER["HTTP_AUTHORIZATION"];
-      $auth_array = explode(" ", $auth);
-      $un_pw = explode(":", base64_decode($auth_array[1]));
-      $un = $un_pw[0];
-      $pw = $un_pw[1];
-      // If authenticated, start loading files
-      if ($un == Config::apiUser && $pw == Config::apiPassword) {
-        $meteorService = new MeteorService();
-        $meteorService->syncMeteorsFromFiles(realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_folder);
-        http_response_code(200);
-        echo json_encode(array('message' => 'Innlasting av data fullfoert'));
-      }
-    } else {
+    if (!isset($_SERVER["HTTP_AUTHORIZATION"])) {
       http_response_code(401);
       echo json_encode(array('error' => 'Not authorized', 'message' => 'Feil brukernavn eller passord'));
     }
+
+    // Control basic authentication (use basic auth for as specified for job initiated by cron)
+    $auth = $_SERVER["HTTP_AUTHORIZATION"];
+    $auth_array = explode(" ", $auth);
+    $un_pw = explode(":", base64_decode($auth_array[1]));
+    $un = $un_pw[0];
+    $pw = $un_pw[1];
+
+    if (!($un == Config::apiUser && $pw == Config::apiPassword)) {
+      http_response_code(401);
+      echo json_encode(array('error' => 'Not authorized', 'message' => 'Feil brukernavn eller passord'));
+    }
+
+    // If authenticated, start syncing data 
+    $meteorService = new MeteorService();                                                                                                                                                                                                                                                                                                                                                    
+    ini_set('max_execution_time', 600);
+    $counts = $meteorService->syncMeteorsFromFiles();
+    http_response_code(200);
+
+    // Print number of meteors loaded, json encoded
+    echo json_encode(array('message' => 'Loading completed', 'counts' => $counts));
   }
-
-
 
   protected function patch()
   {

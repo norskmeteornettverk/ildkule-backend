@@ -195,15 +195,6 @@ class FileToObjectMapper
     }
 
     /**
-     *  Create meteor thumbnail image to improve loading speeds where needed
-     */
-    private function createMeteorThumbnail($meteorImagePath, $newThumbnailPath)
-    {
-        $imgHelp = new ImgHelper();
-        $imgHelp->createThumbnail($meteorImagePath, $newThumbnailPath, 365);
-    }
-
-    /**
      *
      * Loading of event detection data from individual cameras
      *
@@ -373,40 +364,35 @@ class FileToObjectMapper
     /**
      *
      * Load data from a meteor folder. 
-     * The meteor folder contains data from one meteor.
-     * Folder parameters are stripped for slashed and backslashes and replaced with DIRECTORY_SEPARATOR to make sure we have a valid path.
+     * The meteor folder must contains data from one meteor only.
      * 
      * @param    string  $datefolder
      * @param    string  $meteorfolder
      * @param    int  $badMetorFlag When loading meteors already identified as bad, set this variable = 1 else 0
+     * 
+     * @return   boolean True if meteor was loaded, false if not 
      *
      */
     private function processMeteorFolder($baseFolder, $relativeMeteorPath, $tag, $badMeteorFlag)
     {
 
-        // replace all slashes with DIRECTORY_SEPARATOR, to make sure we have a valid path
+        // Replace all slashes with DIRECTORY_SEPARATOR, to make sure we have a valid path
         $baseFolder = str_replace('/', DIRECTORY_SEPARATOR, $baseFolder);
         $baseFolder = str_replace('\\', DIRECTORY_SEPARATOR, $baseFolder);
         $relativeMeteorPath = str_replace('/', DIRECTORY_SEPARATOR, $relativeMeteorPath);
         $relativeMeteorPath = str_replace('\\', DIRECTORY_SEPARATOR, $relativeMeteorPath);
 
-        // build the full path to the meteor folder
+        // Build the full path to the meteor folder
         $meteorPath = $baseFolder . DIRECTORY_SEPARATOR . $relativeMeteorPath;
 
-        //skip meteors that don't have files generated on it        
+        // Skip meteors that don't have files generated on it        
         if (!$this->hasFiles($meteorPath))
-            return;
-
-        $meteorImagePath = $meteorPath . DIRECTORY_SEPARATOR . 'image.jpg';
-
-        if (file_exists($meteorImagePath)) {
-            $newThumbnailPath = $meteorPath . DIRECTORY_SEPARATOR . 'thumbnail.jpg';
-            $this->createMeteorThumbnail($meteorImagePath, $newThumbnailPath);
-        }
+            return false;
 
         // Create new meteor with basic info
         $meteor = new Meteor();
-        $meteor->source_incorrect_detection = $badMeteorFlag;
+        $meteor->source_incorrect_detection = $badMeteorFlag;      
+        $meteor->source_basefolder = $baseFolder;  
         $meteor->source_folder = $relativeMeteorPath;
         $meteor->datetimetag = $tag; // set "tag" on meteor based on date and time - date and time from folder names              
 
@@ -429,21 +415,17 @@ class FileToObjectMapper
             $filename = $files[0];
             $filename = str_replace('/', DIRECTORY_SEPARATOR, $filename);
             $filename = rawurldecode($filename); // Decode percent-encoded characters (swithcing between linux and windows)
-            //print("Found obs file: " . $filename);
             preg_match('/obs_(\d{4}-\d{2}-\d{2}_\d{2}[:\d{2}]*?)\.txt/', $filename, $matches);
             if (count($matches) > 1) {
                 $datetimeString = $matches[1];
                 $datetime = DateTime::createFromFormat('Y-m-d_H:i:s', $datetimeString);
-                $meteor->date = $datetime;
-                //echo "Found obs file with datetime: " . $datetime->format('Y-m-d H:i:s.u');
-            } else {
-                //echo "Found obs file, but couldn't extract datetime from filename.";
+                $meteor->date = $datetime;             
             }
-        } else {
-            //echo "No obs files found in folder.";
-        }
+        } 
 
         array_push($this->meteors, $meteor);
+
+        return true;
     }
 
 
@@ -491,12 +473,16 @@ class FileToObjectMapper
 
     /**
      *
-     *  Lists out all folders that has been updated after the specified date
+     * Lists out all folders that has has content that are updated or created after the specified date
      *
-     * @return  array()
+     * param    string  $basePath  The base path to start the search from
+     * param    string  $cutoffDate  Don't compare files that are older than this date
+     * param    array   $filesToSkip  An array of file names to skip when checking for updates
+     * param    bool    $excludeFolders  The update or creation date of the folder itself should be ignored
+     * 
+     * @return  array() An array of relative folder paths
      *
      */
-
     public function getMeteorFoldersUpdatedAfterDate($basePath, $cutoffDate, $filesToSkip = array(), $excludeFolders = true)
     {
         $level2Folders = array();
@@ -514,6 +500,7 @@ class FileToObjectMapper
                         $level2Path = $level2Info->getPathname();
                         $foundUpdatedFile = false;
 
+                        // When finding level 2 folders, we need to check if any of the files in the folder has been updated wihtin the folder, and therefore done recusively        
                         $recursiveIterator = new RecursiveIteratorIterator(
                             new RecursiveDirectoryIterator($level2Path, RecursiveDirectoryIterator::SKIP_DOTS),
                             RecursiveIteratorIterator::SELF_FIRST
@@ -532,6 +519,7 @@ class FileToObjectMapper
                             }
                         }
                         if ($foundUpdatedFile) {
+                            $level2Path = str_replace("/", DIRECTORY_SEPARATOR, str_replace("\\", DIRECTORY_SEPARATOR, $level2Path));
                             $level2Folders[] = str_replace($basePath . DIRECTORY_SEPARATOR, '', $level2Path);
                         }
                     }
@@ -542,16 +530,6 @@ class FileToObjectMapper
         return $level2Folders;
 
     }
-
-
-
-
-
-
-
-
-
-
 
     /**
      * Reads files from folder structure and loads the data into objects. 
@@ -584,8 +562,6 @@ class FileToObjectMapper
         return $this->meteors;
     }
 
-
-
     /**
      * Takes a relative path to a meteor, strips is from slashes to make a tag
      * 
@@ -600,8 +576,7 @@ class FileToObjectMapper
         $tag = $noSlashes;
         return $tag;
     }
-
-
+    
     /**
      * Reads files from folder structure and loads the data into objects
      * 
@@ -621,6 +596,11 @@ class FileToObjectMapper
                 $badMeteorFlag = 1;
             }
             $baseFolder = $this->datadir;
+
+            if ($badMeteorFlag == 1) {
+                $baseFolder = realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . Config::data_wrong_folder;
+            }
+
             $this->processMeteorFolder($baseFolder, $relativeMeteorPath, $tag, $badMeteorFlag);
         }
         ;
