@@ -141,11 +141,11 @@
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "40777170-8050-46fc-ae63-cf36c3075b0c",
     "name": "Get meteor by id",
-    "url": "http://127.0.0.1:8081/api/meteor/1",
+    "url": "http://127.0.0.1:8081/api/meteor/2000",
     "method": "GET",
     "sortNum": 60000,
     "created": "2022-05-15T10:01:34.283Z",
-    "modified": "2022-05-22T13:21:37.106Z",
+    "modified": "2023-04-03T15:58:06.252Z",
     "headers": [],
     "params": [],
     "tests": [
@@ -441,11 +441,11 @@
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "30c48a92-bff4-4dae-a24d-68e60191bcf7",
     "name": "Get meteor station report data",
-    "url": "http://127.0.0.1:8081/api/insight/station",
+    "url": "{{hostname}}/api/insight/station",
     "method": "GET",
     "sortNum": 20000,
     "created": "2022-05-20T22:20:48.765Z",
-    "modified": "2022-05-22T13:22:02.663Z",
+    "modified": "2023-04-06T11:45:08.806Z",
     "headers": [],
     "params": [],
     "tests": [
@@ -985,18 +985,13 @@
     "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
     "containerId": "adc8a1f4-eda2-4606-b17e-ba2848632510",
     "name": "Sync meteors from files",
-    "url": "http://127.0.0.1:8081/api/meteorload",
+    "url": "{{hostname}}/api/meteorload",
     "method": "PUT",
     "sortNum": 20000,
     "created": "2023-03-28T19:40:27.231Z",
-    "modified": "2023-03-28T19:41:16.070Z",
+    "modified": "2023-04-02T16:07:18.238Z",
     "headers": [],
     "params": [],
-    "body": {
-      "type": "json",
-      "raw": "{\"date_from\":\"20230314\", \"date_to\":\"20230315\"}",
-      "form": []
-    },
     "auth": {
       "type": "basic",
       "basic": {
@@ -1022,6 +1017,105 @@
         "custom": "",
         "action": "isjson",
         "value": ""
+      }
+    ]
+  },
+  {
+    "_id": "5cb0a1d8-b0a1-4f7f-b0b5-76cac7c9396c",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "adc8a1f4-eda2-4606-b17e-ba2848632510",
+    "name": "Load image data and create thumbnails",
+    "url": "{{hostname}}/api/mediaload",
+    "method": "POST",
+    "sortNum": 15000,
+    "created": "2023-04-02T21:48:58.843Z",
+    "modified": "2023-04-03T14:21:08.233Z",
+    "headers": [],
+    "params": [],
+    "auth": {
+      "type": "basic",
+      "basic": {
+        "username": "sys_admin",
+        "password": "secretpassword"
+      }
+    },
+    "tests": [
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      },
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<=",
+        "value": "600000"
+      },
+      {
+        "type": "res-body",
+        "custom": "",
+        "action": "isjson",
+        "value": ""
+      }
+    ]
+  },
+  {
+    "_id": "3dc4124e-13f0-4012-8d4b-f45ec67b57fe",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "30c48a92-bff4-4dae-a24d-68e60191bcf7",
+    "name": "Get meteor coordinates",
+    "url": "{{hostname}}/api/insight/coordinates",
+    "method": "GET",
+    "sortNum": 30000,
+    "created": "2023-04-06T11:45:16.277Z",
+    "modified": "2023-04-07T23:24:59.731Z",
+    "headers": [],
+    "params": [],
+    "tests": [
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "500"
+      },
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
+      }
+    ]
+  },
+  {
+    "_id": "9b954082-64aa-46d4-ad1f-db8b70b1163a",
+    "colId": "b69646f6-2e28-4d82-ac0f-775582cd3d11",
+    "containerId": "30c48a92-bff4-4dae-a24d-68e60191bcf7",
+    "name": "Get meteor coordinates, filtered",
+    "url": "{{hostname}}/api/insight/coordinates",
+    "method": "POST",
+    "sortNum": 40000,
+    "created": "2023-04-09T19:08:12.751Z",
+    "modified": "2023-04-09T19:14:43.237Z",
+    "headers": [],
+    "params": [],
+    "body": {
+      "type": "json",
+      "raw": "{\r\n  \"from_date\": \"2022-02-05\",\r\n  \"to_date\": \"2023-04-21\",\r\n  \"stations\": [\"Gran\", \"Harestua\", \"Kristiansand\"]\r\n}\r\n",
+      "form": []
+    },
+    "tests": [
+      {
+        "type": "res-time",
+        "custom": "",
+        "action": "<",
+        "value": "500"
+      },
+      {
+        "type": "res-code",
+        "custom": "",
+        "action": "equal",
+        "value": "200"
       }
     ]
   }
