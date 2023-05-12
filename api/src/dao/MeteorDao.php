@@ -49,7 +49,10 @@ class MeteorDao implements DaoInterface
                 count(*) ratings 
                 from user_review 
                 group by user_review.meteor_id
-            ) as ratings on meteor.id  = ratings.meteor_id ";
+            ) as ratings on meteor.id  = ratings.meteor_id
+            where (user_confirmed is null or user_confirmed <> 0)
+            
+             ";
 
         $orderSQL = "order by ";
 
@@ -197,7 +200,7 @@ class MeteorDao implements DaoInterface
 
     public function findByID($id)
     {
-        $query = "SELECT * FROM meteor WHERE id = :id;";
+        $query = "SELECT * FROM meteor WHERE (user_confirmed is null or user_confirmed <> 0) and id = :id;";
         $stmt = $this->dbh->prepare($query);
         $stmt->bindParam(':id', $id);
         $stmt->setFetchMode(PDO::FETCH_INTO, new Meteor());
@@ -209,7 +212,7 @@ class MeteorDao implements DaoInterface
 
     public function search($search)
     {
-        $stmt = $this->dbh->prepare("SELECT * FROM meteor WHERE location like ? or datetimetag like ?  order by meteor.date desc");
+        $stmt = $this->dbh->prepare("SELECT * FROM meteor WHERE (user_confirmed is null or user_confirmed <> 0) and location like ? or datetimetag like ?  order by meteor.date desc");
         $stmt->execute(array('%' . $search . '%', '%' . $search . '%'));
         $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
         return $result;
@@ -221,7 +224,7 @@ class MeteorDao implements DaoInterface
         $yearFilterList = [];
         $meteorClassFilterList = [];
 
-        $query = "select meteor.* from meteor where 1=1";
+        $query = "select meteor.* from meteor where 1=1 and (user_confirmed is null or user_confirmed <> 0) ";
 
         $where = [];
 

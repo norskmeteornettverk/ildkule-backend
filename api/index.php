@@ -37,6 +37,8 @@ $frontController->get(	'/api/meteorboard'                      ,'/api/src/contro
 $frontController->post(	'/api/meteorload'	                      ,'/api/src/controllers/resourcecontrollers/FileLoadController.php'              ); # Post a loading request 
 $frontController->post(	'/api/reportmeteor'	                    ,'/api/src/controllers/resourcecontrollers/ReportMeteorController.php'          ); # Post a seen meteor
 $frontController->post(	'/api/contact'	                        ,'/api/src/controllers/resourcecontrollers/ContactController.php'               ); # Post a contact form
+$frontController->post(	'/api/stationlog'	                      ,'/api/src/controllers/resourcecontrollers/StationLogController.php'            ); # Post a log from a meteor station
+$frontController->get(	'/api/stationlog'	                      ,'/api/src/controllers/resourcecontrollers/StationLogController.php'            ); # List log
 // return 404 if the routing has not picked up the request
 http_response_code(404);
 header('Content-Type: application/json; charset=utf-8');
