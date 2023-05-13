@@ -23,6 +23,8 @@ require_once realpath($_SERVER["DOCUMENT_ROOT"]) . DIRECTORY_SEPARATOR . 'api' .
  * 
  */
 class MeteorService
+
+
 {
     public function loadMeteorsFromFiles($root_folder, $date_from, $date_to)
     {
@@ -257,9 +259,9 @@ class MeteorService
     {
         $dataAccess = new DataAccessHelper();
         $meteors = $dataAccess->getMeteorCoordinateData($fromDate, $toDate, $stations);
-                return $meteors;
+        return $meteors;
     }
-    
+
 
     public function getInsight($reportName)
     {

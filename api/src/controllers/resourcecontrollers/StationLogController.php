@@ -14,7 +14,7 @@ class StationLogController extends AbstractController
   protected function get()
   {
     $service = new LogService();
-    $result = $service->listLog();
+    $result = $service->lastSeen();
     echo json_encode($result);
   }
 

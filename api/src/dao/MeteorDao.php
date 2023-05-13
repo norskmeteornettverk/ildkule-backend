@@ -17,7 +17,7 @@ class MeteorDao implements DaoInterface
 
     public function getCount()
     {
-        $stmt = $this->dbh->query("SELECT count(id) as num FROM meteor");
+        $stmt = $this->dbh->query("SELECT count(id) as num FROM meteor WHERE EXISTS (SELECT 1 FROM observation_cam_data ocd WHERE meteor.id = ocd.meteor_id)   ");
         $stmt->execute();
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row['num'];
@@ -51,7 +51,9 @@ class MeteorDao implements DaoInterface
                 group by user_review.meteor_id
             ) as ratings on meteor.id  = ratings.meteor_id
             where (user_confirmed is null or user_confirmed <> 0)
-            
+            AND (meteor.source_removed = 0 or meteor.source_removed is null) 
+            AND (meteor.source_incorrect_detection = 0 or meteor.source_incorrect_detection is null)
+            AND EXISTS (SELECT 1 FROM observation_cam_data ocd WHERE meteor.id = ocd.meteor_id)             
              ";
 
         $orderSQL = "order by ";
@@ -210,7 +212,11 @@ class MeteorDao implements DaoInterface
 
     public function findByID($id)
     {
-        $query = "SELECT * FROM meteor WHERE (user_confirmed is null or user_confirmed <> 0) and id = :id;";
+        $query = "SELECT * FROM meteor WHERE  (user_confirmed is null or user_confirmed <> 0)  
+        AND (meteor.source_removed = 0 or meteor.source_removed is null)  
+        AND (meteor.source_incorrect_detection = 0 or meteor.source_incorrect_detection is null) 
+        AND EXISTS (SELECT 1 FROM observation_cam_data ocd WHERE meteor.id = ocd.meteor_id)  
+        AND id = :id;";
         $stmt = $this->dbh->prepare($query);
         $stmt->bindParam(':id', $id);
         $stmt->setFetchMode(PDO::FETCH_INTO, new Meteor());
@@ -222,7 +228,11 @@ class MeteorDao implements DaoInterface
 
     public function search($search)
     {
-        $stmt = $this->dbh->prepare("SELECT * FROM meteor WHERE (user_confirmed is null or user_confirmed <> 0) and location like ? or datetimetag like ?  order by meteor.date desc");
+        $stmt = $this->dbh->prepare("SELECT * FROM meteor WHERE 
+        (meteor.source_removed = 0 or meteor.source_removed is null)  
+        AND (meteor.source_incorrect_detection = 0 or meteor.source_incorrect_detection is null)
+        AND EXISTS (SELECT 1 FROM observation_cam_data ocd WHERE meteor.id = ocd.meteor_id)   
+        AND  (user_confirmed is null or user_confirmed <> 0) and location like ? or datetimetag like ?  order by meteor.date desc");
         $stmt->execute(array('%' . $search . '%', '%' . $search . '%'));
         $result = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Meteor');
         return $result;
@@ -234,7 +244,11 @@ class MeteorDao implements DaoInterface
         $yearFilterList = [];
         $meteorClassFilterList = [];
 
-        $query = "select meteor.* from meteor where 1=1 and (user_confirmed is null or user_confirmed <> 0) ";
+        $query = "SELECT meteor.* from meteor where 1=1  
+        AND (meteor.source_removed = 0 or meteor.source_removed is null)  
+        AND (meteor.source_incorrect_detection = 0 or meteor.source_incorrect_detection is null) 
+        AND EXISTS (SELECT 1 FROM observation_cam_data ocd WHERE meteor.id = ocd.meteor_id)    
+        AND (user_confirmed is null or user_confirmed <> 0) ";
 
         $where = [];
 
