@@ -6,3 +6,12 @@ phpmailer/mailer.php
 /vendor/
 .vscode/launch.json
 thunder-tests/thunderEnvironment.json
+fastapi_app/tests/test.db
+.venv/
+.pytest_tmp/
+.pytest_cache/
+fastapi_app/.env
+**/__pycache__/
+*.pyc
+AGENTS.md
+PORTING_PARITY_REPORT.md

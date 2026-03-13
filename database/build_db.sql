@@ -116,6 +116,11 @@ CREATE TABLE IF NOT EXISTS meteor (
   date DATETIME NULL DEFAULT NULL,
   camera_confirmed tinyint(1) default null,
   user_confirmed tinyint(1) default null,
+  first_seen_at DATETIME NOT NULL,
+  last_seen_at DATETIME NULL DEFAULT NULL,
+  deleted_at DATETIME NULL DEFAULT NULL,
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  deletion_reason VARCHAR(50) NULL DEFAULT NULL,
   PRIMARY KEY (id),
   CONSTRAINT unique_meteor_datetimetag UNIQUE(datetimetag)
   );
@@ -131,24 +136,32 @@ CREATE TABLE IF NOT EXISTS observation_cam_data (
   id INT(9) UNSIGNED NOT NULL AUTO_INCREMENT,
   meteor_id INT(6) UNSIGNED NOT NULL,
   cam_id INT(6) UNSIGNED NOT NULL,
+  observation_key VARCHAR(255) NOT NULL,
+  source_hash CHAR(64) NOT NULL,
+  event_start_utc DATETIME NULL DEFAULT NULL,
   created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
+  first_seen_at DATETIME NOT NULL,
+  last_seen_at DATETIME NULL DEFAULT NULL,
+  deleted_at DATETIME NULL DEFAULT NULL,
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  deletion_reason VARCHAR(50) NULL DEFAULT NULL,
   trail_frames INT(11) NULL DEFAULT NULL,
   trail_duration FLOAT NULL DEFAULT NULL,
   trail_slope FLOAT NULL DEFAULT NULL,
   trail_offset FLOAT NULL DEFAULT NULL,
   trail_speed FLOAT NULL DEFAULT NULL,
   trail_correlation FLOAT NULL DEFAULT NULL,
-  trail_positions VARCHAR(1000) NULL DEFAULT NULL,
-  trail_timestamps VARCHAR(1000) NULL DEFAULT NULL,
-  trail_coordinates VARCHAR(1000) NULL DEFAULT NULL,
-  trail_gnomonic VARCHAR(1000) NULL DEFAULT NULL,
+  trail_positions TEXT NULL DEFAULT NULL,
+  trail_timestamps TEXT NULL DEFAULT NULL,
+  trail_coordinates TEXT NULL DEFAULT NULL,
+  trail_gnomonic TEXT NULL DEFAULT NULL,
   trail_midpoint VARCHAR(1000) NULL DEFAULT NULL,
   trail_arc FLOAT NULL DEFAULT NULL,
-  trail_brightness VARCHAR(1000) NULL DEFAULT NULL,
+  trail_brightness TEXT NULL DEFAULT NULL,
   trail_dct_midpoint INT(9) NULL DEFAULT NULL,
-  trail_dct VARCHAR(1000) NULL DEFAULT NULL,
-  trail_size VARCHAR(1000) NULL DEFAULT NULL,
-  trail_frame_brightness VARCHAR(1000) NULL DEFAULT NULL,
+  trail_dct TEXT NULL DEFAULT NULL,
+  trail_size TEXT NULL DEFAULT NULL,
+  trail_frame_brightness TEXT NULL DEFAULT NULL,
   video_start DATETIME NULL DEFAULT NULL,
   video_end DATETIME NULL DEFAULT NULL,
   video_wallclock DATETIME NULL DEFAULT NULL,
@@ -208,13 +221,91 @@ CREATE TABLE IF NOT EXISTS observation_cam_data (
   PRIMARY KEY (id),
   INDEX meteor_id (meteor_id ASC) ,
   INDEX cam_id (cam_id ASC) ,
-   CONSTRAINT observation_cam_data_ UNIQUE(meteor_id, cam_id)  ,
+  INDEX observation_cam_data_observation_key_idx (observation_key ASC),
+  CONSTRAINT uq_observation_key UNIQUE(observation_key),
   CONSTRAINT observation_cam_data_ibfk_1
     FOREIGN KEY (meteor_id)
     REFERENCES meteor (id),
   CONSTRAINT observation_cam_data_ibfk_2
     FOREIGN KEY (cam_id)
     REFERENCES cam (id))
+;
+
+
+-- -----------------------------------------------------
+-- Table meteor_res_entry
+-- -----------------------------------------------------
+SET FOREIGN_KEY_CHECKS=0;
+DROP TABLE IF EXISTS meteor_res_entry ;
+
+CREATE TABLE IF NOT EXISTS meteor_res_entry (
+  id INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
+  meteor_id INT(9) UNSIGNED NOT NULL,
+  line_no INT(11) NOT NULL,
+  entry_type VARCHAR(20) NOT NULL,
+  label VARCHAR(20) NULL DEFAULT NULL,
+  long1 FLOAT NULL DEFAULT NULL,
+  lat1 FLOAT NULL DEFAULT NULL,
+  long2 FLOAT NULL DEFAULT NULL,
+  lat2 FLOAT NULL DEFAULT NULL,
+  height FLOAT NULL DEFAULT NULL,
+  raw_line VARCHAR(500) NOT NULL,
+  PRIMARY KEY (id),
+  INDEX meteor_res_entry_meteor_id_idx (meteor_id ASC),
+  CONSTRAINT uq_meteor_res_entry_line UNIQUE(meteor_id, line_no),
+  CONSTRAINT meteor_res_entry_ibfk_1
+    FOREIGN KEY (meteor_id)
+    REFERENCES meteor (id)
+    ON DELETE CASCADE
+    ON UPDATE NO ACTION)
+;
+
+
+-- -----------------------------------------------------
+-- Table observation_trail_point
+-- -----------------------------------------------------
+SET FOREIGN_KEY_CHECKS=0;
+DROP TABLE IF EXISTS observation_trail_point ;
+
+CREATE TABLE IF NOT EXISTS observation_trail_point (
+  id INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
+  observation_id INT(9) UNSIGNED NOT NULL,
+  frame_index INT(11) NOT NULL,
+  pixel_x FLOAT NULL DEFAULT NULL,
+  pixel_y FLOAT NULL DEFAULT NULL,
+  event_timestamp FLOAT NULL DEFAULT NULL,
+  coord_long FLOAT NULL DEFAULT NULL,
+  coord_lat FLOAT NULL DEFAULT NULL,
+  gnomonic_x FLOAT NULL DEFAULT NULL,
+  gnomonic_y FLOAT NULL DEFAULT NULL,
+  brightness FLOAT NULL DEFAULT NULL,
+  dct FLOAT NULL DEFAULT NULL,
+  size FLOAT NULL DEFAULT NULL,
+  frame_brightness FLOAT NULL DEFAULT NULL,
+  PRIMARY KEY (id),
+  INDEX observation_trail_point_observation_id_idx (observation_id ASC),
+  CONSTRAINT uq_observation_trail_point_frame UNIQUE(observation_id, frame_index),
+  CONSTRAINT observation_trail_point_ibfk_1
+    FOREIGN KEY (observation_id)
+    REFERENCES observation_cam_data (id)
+    ON DELETE CASCADE
+    ON UPDATE NO ACTION)
+;
+
+
+-- -----------------------------------------------------
+-- Table log_station
+-- -----------------------------------------------------
+SET FOREIGN_KEY_CHECKS=0;
+DROP TABLE IF EXISTS log_station ;
+
+CREATE TABLE IF NOT EXISTS log_station (
+  id INT(11) NOT NULL AUTO_INCREMENT,
+  station_name VARCHAR(255) NOT NULL,
+  code VARCHAR(255) NOT NULL,
+  log_time DATETIME NOT NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY (id))
 ;
 
 

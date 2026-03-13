@@ -1,0 +1,573 @@
+from pathlib import Path
+import shutil
+
+import pytest
+from PIL import Image
+from sqlalchemy import select
+
+from fastapi_app.app.config import get_settings
+from fastapi_app.app.models import (
+    Cam,
+    Meteor,
+    MeteorResEntry,
+    ObservationCamData,
+    ObservationTrailPoint,
+    Station,
+)
+from fastapi_app.app.services.file_mapper import FileToObjectMapper
+
+
+@pytest.fixture(scope="function")
+def sample_data_dir(tmp_path_factory):
+    base = tmp_path_factory.mktemp("meteor_data")
+    date_dir = base / "20230101"
+    meteor_dir = date_dir / "010101"
+    cam_dir = meteor_dir / "StationAlpha" / "Cam01"
+    cam_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create sample files
+    Image.new("RGB", (800, 600), "white").save(meteor_dir / "image.jpg")
+    (meteor_dir / "location.txt").write_text("Oslo, Norway\n", encoding="utf-8")
+    (meteor_dir / "meteor.stat").write_text(
+        "startheight = 110\nendheight = 90\nshower = Geminids Meteor Shower\n",
+        encoding="utf-8",
+    )
+    (meteor_dir / "meteor.res").write_text(
+        "10.1  20.2  10.1  20.2  110.0 Start\n30.3  40.4  30.3  40.4  90.0 End\n",
+        encoding="utf-8",
+    )
+    (cam_dir / "event.txt").write_text(
+        "\n".join(
+            [
+                "[trail]",
+                "frames=3",
+                "duration=2.5",
+                "positions=10,20 11,21 12,22",
+                "timestamps=1715471644.000 1715471644.040 1715471644.080",
+                "coordinates=60.1,10.2 60.2,10.3 60.3,10.4",
+                "gnomonic=1.1,2.1 1.2,2.2 1.3,2.3",
+                "brightness=5 6 7",
+                "dct=8 9 10",
+                "size=11 12 13",
+                "frame_brightness=14 15 16",
+                "[video]",
+                "start=2024-05-12 23:54:04.000 UTC",
+                "[summary]",
+                "latitude=60.1",
+                "longitude=10.2",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = get_settings()
+    settings.data_directory = str(base)
+    return str(base)
+
+
+def test_file_mapper_reads_meteor(sample_data_dir):
+    mapper = FileToObjectMapper(sample_data_dir, "20230101", "20230102")
+    records = mapper.map()
+    assert len(records) == 1
+    record = records[0]
+
+    assert record.meteor["camera_confirmed"] == 1
+    assert record.meteor["location"] == "Oslo, Norway"
+    assert record.meteor["track_endlat"] == 40.4
+    assert len(record.res_entries) == 2
+    assert len(record.observations) == 1
+    observation = record.observations[0]
+    assert observation.values["trail_frames"] == "3"
+    assert observation.observation_key == "stationalpha:cam01:2024-05-12T23:54:04.000"
+    assert len(observation.trail_points) == 3
+
+    thumb = Path(sample_data_dir) / "20230101" / "010101" / "thumbnail.jpg"
+    assert thumb.exists(), "Thumbnail should be generated for each meteor"
+
+
+def test_file_mapper_reads_realistic_non_crossbearing_sample(tmp_path_factory):
+    base = tmp_path_factory.mktemp("meteor_data_realistic_single")
+    meteor_dir = base / "20220511" / "214208"
+    cam2_dir = meteor_dir / "larvik" / "cam2"
+    cam3_dir = meteor_dir / "larvik" / "cam3"
+    cam2_dir.mkdir(parents=True, exist_ok=True)
+    cam3_dir.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (800, 600), "white").save(meteor_dir / "image.jpg")
+    (cam2_dir / "event.txt").write_text(
+        "\n".join(
+            [
+                "[trail]",
+                "frames = 30",
+                "duration = 1.94",
+                "brightness = 47 44 97",
+                "dct midpoint = 3",
+                "[video]",
+                "height = 1536",
+                "[config]",
+                "minspeedkms = 2.000000",
+                "maxspeedkms = 50.000000",
+                "spacing correlation = 0.900000",
+                "gnomonic correlation = 0.998500",
+                "logfile = /meteor/cam2/metdetect.log",
+                "eventdir = /meteor/cam2/events",
+                "brightness = 6",
+                "[summary]",
+                "latitude = 59.090854",
+                "longitude = 10.098182",
+                "duration = 1.97",
+                "meteor_probability = 0.90302",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (cam3_dir / "event.txt").write_text(
+        "\n".join(
+            [
+                "[trail]",
+                "frames = 28",
+                "duration = 1.80",
+                "[summary]",
+                "latitude = 59.090854",
+                "longitude = 10.098182",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    mapper = FileToObjectMapper(base, "20220511", "20220512")
+    records = mapper.map()
+    assert len(records) == 1
+    record = records[0]
+
+    assert record.meteor["camera_confirmed"] == 0
+    assert "location" not in record.meteor or record.meteor["location"] is None
+    assert len(record.observations) == 2
+
+    first = record.observations[0]
+    assert first.station_name == "larvik"
+    assert first.cam_name == "cam2"
+    assert first.values["trail_frames"] == "30"
+    assert first.values["trail_dct_midpoint"] == "3"
+    assert first.values["video_heigth"] == "1536"
+    assert first.values["config_minspeed_kms"] == "2.000000"
+    assert first.values["config_spacing_correlation"] == "0.900000"
+    assert first.values["config_log_file"] == "/meteor/cam2/metdetect.log"
+    assert first.values["config_brightness"] == "6"
+    assert first.values["summary_duration"] == "1.97"
+
+
+def test_file_mapper_reads_realistic_crossbearing_sample(tmp_path_factory):
+    base = tmp_path_factory.mktemp("meteor_data_realistic_cross")
+    meteor_dir = base / "20220103" / "181852"
+    larvik_dir = meteor_dir / "larvik" / "cam4"
+    kristiansand_dir = meteor_dir / "kristiansand" / "cam4"
+    larvik_dir.mkdir(parents=True, exist_ok=True)
+    kristiansand_dir.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (800, 600), "white").save(meteor_dir / "image.jpg")
+    (meteor_dir / "location.txt").write_text("Agder\n", encoding="utf-8")
+    (meteor_dir / "obs_2022-01-03_18_18_52.stat").write_text(
+        "\n".join(
+            [
+                "[track]",
+                "startheight = 96.1 km",
+                "endheight = 86.7 km",
+                "groundtrack = 24.3 km",
+                "course = 162.1 deg",
+                "incidence = 20.8 deg",
+                "speed = 41.3 km/s",
+                "speed_source = average",
+                "",
+                "[fit]",
+                "error = 0.0",
+                "quality = 0.31",
+                "",
+                "[radiant]",
+                "ra = 230.92 deg",
+                "dec = 50.30 deg",
+                "ecl_long = 200.28 deg",
+                "ecl_lat = 64.57 deg",
+                "shower = kvadrantidene",
+                "zenith_attractor = uncorrected",
+                "",
+                "[date]",
+                "timestamp = 1641233933.415000",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (meteor_dir / "obs_2022-01-03_18_18_52.res").write_text(
+        "\n".join(
+            [
+                "  6.3858  58.415143   6.3858  58.4151   96.1 Start",
+                "  6.5127  58.207204   6.5127  58.2072   86.7 End",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    event_payload = "\n".join(
+        [
+            "[trail]",
+            "frames = 12",
+            "duration = 0.74",
+            "dct midpoint = 3",
+            "[video]",
+            "height = 1536",
+            "[config]",
+            "minspeedkms = 2.000000",
+            "logfile = /meteor/cam4/metdetect.log",
+            "[summary]",
+            "latitude = 59.090854",
+            "longitude = 10.098182",
+            "duration = 0.62",
+        ]
+    )
+    (larvik_dir / "event.txt").write_text(event_payload, encoding="utf-8")
+    (kristiansand_dir / "event.txt").write_text(event_payload, encoding="utf-8")
+
+    mapper = FileToObjectMapper(base, "20220103", "20220104")
+    records = mapper.map()
+    assert len(records) == 1
+    record = records[0]
+
+    assert record.meteor["camera_confirmed"] == 1
+    assert record.meteor["location"] == "Agder"
+    assert record.meteor["track_startlat"] == 58.415143
+    assert record.meteor["track_endlat"] == 58.207204
+    assert record.meteor["track_startheight"] == "96.1 km"
+    assert record.meteor["radiant_shower"] == "kvadrantidene"
+    assert len(record.observations) == 2
+
+
+def test_file_mapper_marks_crossbearing_when_res_or_stat_exist_without_location(tmp_path_factory):
+    base = tmp_path_factory.mktemp("meteor_data_crossbearing_without_location")
+    meteor_dir = base / "20220511" / "000559"
+    cam_dir = meteor_dir / "voksenlia" / "cam1"
+    cam_dir.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (800, 600), "white").save(meteor_dir / "image.jpg")
+    (meteor_dir / "obs_2022-05-11_00_05_59.stat").write_text(
+        "startheight = 79.6 km\nendheight = 50.4 km\n",
+        encoding="utf-8",
+    )
+    (meteor_dir / "obs_2022-05-11_00_05_59.res").write_text(
+        "\n".join(
+            [
+                "9.3920  56.254205   9.3920  56.2542   79.6 Start",
+                "9.6251  56.902673   9.6251  56.9027   50.4 End",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (cam_dir / "event.txt").write_text(
+        "\n".join(
+            [
+                "[trail]",
+                "frames = 2",
+                "positions = 10,20 11,21",
+                "timestamps = 1652227559.370 1652227559.410",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    mapper = FileToObjectMapper(base, "20220511", "20220512")
+    records = mapper.map()
+
+    assert len(records) == 1
+    assert records[0].meteor["camera_confirmed"] == 1
+    assert records[0].meteor.get("location") is None
+    assert len(records[0].res_entries) == 2
+
+
+def test_file_mapper_supports_sectioned_event_aliases(tmp_path_factory):
+    base = tmp_path_factory.mktemp("meteor_data_aliases")
+    meteor_dir = base / "20220511" / "214208"
+    cam_dir = meteor_dir / "larvik" / "cam2"
+    cam_dir.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (800, 600), "white").save(meteor_dir / "image.jpg")
+    (cam_dir / "event.txt").write_text(
+        "\n".join(
+            [
+                "[trail]",
+                "frames = 30",
+                "brightness = 47 44 97",
+                "dct midpoint = 3",
+                "[video]",
+                "height = 1536",
+                "[config]",
+                "minspeedkms = 2.000000",
+                "spacing correlation = 0.900000",
+                "gnomonic correlation = 0.998500",
+                "logfile = /meteor/cam2/metdetect.log",
+                "eventdir = /meteor/cam2/events",
+                "brightness = 6",
+                "[summary]",
+                "latitude = 59.090854",
+                "longitude = 10.098182",
+                "duration = 1.97",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    mapper = FileToObjectMapper(base, "20220511", "20220512")
+    records = mapper.map()
+    assert len(records) == 1
+
+    observation = records[0].observations[0]
+    assert observation.values["trail_frames"] == "30"
+    assert observation.values["trail_brightness"] == "47 44 97"
+    assert observation.values["trail_dct_midpoint"] == "3"
+    assert observation.values["video_heigth"] == "1536"
+    assert observation.values["config_minspeed_kms"] == "2.000000"
+    assert observation.values["config_spacing_correlation"] == "0.900000"
+    assert observation.values["config_gnomonic_correlation"] == "0.998500"
+    assert observation.values["config_log_file"] == "/meteor/cam2/metdetect.log"
+    assert observation.values["config_event_dir"] == "/meteor/cam2/events"
+    assert observation.values["config_brightness"] == "6"
+    assert observation.values["summary_latitude"] == "59.090854"
+    assert observation.values["summary_duration"] == "1.97"
+
+
+def test_meteorload_endpoint_ingests_data(client, db_session, sample_data_dir):
+    response = client.post(
+        "/api/meteorload",
+        auth=("sys_admin", "secretpassword"),
+        json={"date_from": "20230101", "date_to": "20230102"},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert "Innlasting av data" in payload["message"]
+
+    db_session.expire_all()
+    meteor = db_session.scalars(select(Meteor)).first()
+    assert meteor is not None
+    assert meteor.datetimetag == "20230101010101"
+    assert meteor.camera_confirmed == 1
+
+    station = db_session.scalars(select(Station)).first()
+    cam = db_session.scalars(select(Cam)).first()
+    observation = db_session.scalars(select(ObservationCamData)).first()
+    res_entries = db_session.scalars(
+        select(MeteorResEntry).order_by(MeteorResEntry.line_no.asc())
+    ).all()
+    trail_points = db_session.scalars(
+        select(ObservationTrailPoint).order_by(ObservationTrailPoint.frame_index.asc())
+    ).all()
+
+    assert station is not None and station.station_name == "StationAlpha"
+    assert cam is not None and cam.cam_name == "Cam01"
+    assert observation is not None
+    assert observation.observation_key == "stationalpha:cam01:2024-05-12T23:54:04.000"
+    assert observation.source_hash
+    assert str(observation.trail_frames) == "3"
+    assert len(res_entries) == 2
+    assert res_entries[0].entry_type == "start"
+    assert len(trail_points) == 3
+    assert trail_points[0].pixel_x == 10.0
+
+    res_response = client.get(f"/api/meteor/{meteor.id}/res?limit=10&offset=0")
+    assert res_response.status_code == 200
+    assert res_response.json()["totalItems"] == 2
+    assert res_response.json()["resEntries"][0]["entry_type"] == "start"
+
+    trail_response = client.get(
+        f"/api/observation/{observation.id}/trail?limit=10&offset=0"
+    )
+    assert trail_response.status_code == 200
+    assert trail_response.json()["totalItems"] == 3
+    assert trail_response.json()["trailPoints"][0]["frame_index"] == 0
+
+
+def test_meteorload_reloads_same_observation_without_duplicates(client, db_session, tmp_path_factory):
+    base = tmp_path_factory.mktemp("meteor_data_reload")
+    date_dir = base / "20230101"
+    first_meteor_dir = date_dir / "010101"
+    second_meteor_dir = date_dir / "010202"
+    first_cam_dir = first_meteor_dir / "Gaustatoppen" / "cam3"
+    second_cam_dir = second_meteor_dir / "Gaustatoppen" / "cam3"
+    first_cam_dir.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (800, 600), "white").save(first_meteor_dir / "image.jpg")
+    (first_cam_dir / "event.txt").write_text(
+        "\n".join(
+            [
+                "[trail]",
+                "frames=2",
+                "positions=100,200 110,210",
+                "timestamps=1715550000.000 1715550000.040",
+                "[video]",
+                "start=2024-05-12 23:54:04.000 UTC",
+                "[summary]",
+                "latitude=59.8",
+                "longitude=8.6",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = get_settings()
+    settings.data_directory = str(base)
+
+    first_response = client.post(
+        "/api/meteorload",
+        auth=("sys_admin", "secretpassword"),
+        json={"date_from": "20230101", "date_to": "20230102"},
+    )
+    assert first_response.status_code == 200
+
+    original_observation = db_session.scalars(select(ObservationCamData)).one()
+    original_meteor = db_session.scalars(select(Meteor)).one()
+
+    shutil.rmtree(first_meteor_dir)
+    second_cam_dir.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (800, 600), "white").save(second_meteor_dir / "image.jpg")
+    (second_cam_dir / "event.txt").write_text(
+        "\n".join(
+            [
+                "[trail]",
+                "frames=3",
+                "positions=100,200 110,210 120,220",
+                "timestamps=1715550000.000 1715550000.040 1715550000.080",
+                "[video]",
+                "start=2024-05-12 23:54:04.000 UTC",
+                "[summary]",
+                "latitude=59.8",
+                "longitude=8.6",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    second_response = client.post(
+        "/api/meteorload",
+        auth=("sys_admin", "secretpassword"),
+        json={"date_from": "20230101", "date_to": "20230102"},
+    )
+    assert second_response.status_code == 200
+
+    db_session.expire_all()
+    observations = db_session.scalars(select(ObservationCamData)).all()
+    meteors = db_session.scalars(select(Meteor).order_by(Meteor.id.asc())).all()
+    trail_points = db_session.scalars(
+        select(ObservationTrailPoint).order_by(ObservationTrailPoint.frame_index.asc())
+    ).all()
+
+    assert len(observations) == 1
+    assert observations[0].id == original_observation.id
+    assert len(meteors) == 2
+    assert observations[0].meteor_id != original_meteor.id
+    assert observations[0].meteor.datetimetag == "20230101010202"
+    deleted_meteor = next(meteor for meteor in meteors if meteor.id == original_meteor.id)
+    active_meteor = next(meteor for meteor in meteors if meteor.id != original_meteor.id)
+    assert deleted_meteor.is_deleted is True
+    assert deleted_meteor.deleted_at is not None
+    assert deleted_meteor.deletion_reason == "missing_from_import"
+    assert active_meteor.is_deleted is False
+    assert active_meteor.deletion_reason is None
+    assert observations[0].is_deleted is False
+    assert observations[0].deletion_reason is None
+    assert len(trail_points) == 3
+
+    visible_listing = client.get("/api/meteors")
+    assert visible_listing.status_code == 200
+    returned_ids = [item["id"] for item in visible_listing.json()["meteors"]]
+    assert active_meteor.id in returned_ids
+    assert deleted_meteor.id not in returned_ids
+
+    deleted_listing = client.get("/api/meteors?includeDeleted=true")
+    assert deleted_listing.status_code == 200
+    returned_ids = [item["id"] for item in deleted_listing.json()["meteors"]]
+    assert active_meteor.id in returned_ids
+    assert deleted_meteor.id in returned_ids
+
+
+def test_meteorload_marks_missing_observation_deleted(client, db_session, tmp_path_factory):
+    base = tmp_path_factory.mktemp("meteor_data_missing_observation")
+    meteor_dir = base / "20230101" / "010101"
+    first_cam_dir = meteor_dir / "Gaustatoppen" / "cam3"
+    second_cam_dir = meteor_dir / "Gaustatoppen" / "cam4"
+    first_cam_dir.mkdir(parents=True, exist_ok=True)
+    second_cam_dir.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (800, 600), "white").save(meteor_dir / "image.jpg")
+    event_payload = "\n".join(
+        [
+            "[trail]",
+            "frames=2",
+            "positions=100,200 110,210",
+            "timestamps=1715550000.000 1715550000.040",
+            "[video]",
+            "start=2024-05-12 23:54:04.000 UTC",
+            "[summary]",
+            "latitude=59.8",
+            "longitude=8.6",
+        ]
+    )
+    (first_cam_dir / "event.txt").write_text(event_payload, encoding="utf-8")
+    (second_cam_dir / "event.txt").write_text(
+        event_payload.replace("23:54:04.000", "23:54:05.000"),
+        encoding="utf-8",
+    )
+
+    settings = get_settings()
+    settings.data_directory = str(base)
+
+    first_response = client.post(
+        "/api/meteorload",
+        auth=("sys_admin", "secretpassword"),
+        json={"date_from": "20230101", "date_to": "20230102"},
+    )
+    assert first_response.status_code == 200
+
+    observations = db_session.scalars(
+        select(ObservationCamData).order_by(ObservationCamData.id.asc())
+    ).all()
+    assert len(observations) == 2
+
+    shutil.rmtree(second_cam_dir)
+
+    second_response = client.post(
+        "/api/meteorload",
+        auth=("sys_admin", "secretpassword"),
+        json={"date_from": "20230101", "date_to": "20230102"},
+    )
+    assert second_response.status_code == 200
+
+    db_session.expire_all()
+    observations = db_session.scalars(
+        select(ObservationCamData).order_by(ObservationCamData.id.asc())
+    ).all()
+    deleted_observation = next(
+        observation for observation in observations if observation.cam.cam_name == "cam4"
+    )
+    active_observation = next(
+        observation for observation in observations if observation.cam.cam_name == "cam3"
+    )
+    assert deleted_observation.is_deleted is True
+    assert deleted_observation.deleted_at is not None
+    assert deleted_observation.deletion_reason == "missing_from_import"
+    assert active_observation.is_deleted is False
+    assert active_observation.deletion_reason is None
+
+    meteor_response = client.get(f"/api/meteor/{active_observation.meteor_id}")
+    assert meteor_response.status_code == 200
+    returned_cam_names = [
+        item["cam"]["cam_name"] for item in meteor_response.json()["observation_cam_data"]
+    ]
+    assert "cam3" in returned_cam_names
+    assert "cam4" not in returned_cam_names
+
+    meteor_response_with_deleted = client.get(
+        f"/api/meteor/{active_observation.meteor_id}?includeDeleted=true"
+    )
+    assert meteor_response_with_deleted.status_code == 200
+    returned_cam_names = [
+        item["cam"]["cam_name"]
+        for item in meteor_response_with_deleted.json()["observation_cam_data"]
+    ]
+    assert "cam3" in returned_cam_names
+    assert "cam4" in returned_cam_names
