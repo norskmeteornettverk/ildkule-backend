@@ -1,7 +1,7 @@
 from fastapi import HTTPException, status
 
 from ..config import get_settings
-from ..schemas.contact import ContactRequest, ReportMeteorRequest
+from ..schemas.contact import ContactRequest, ReportEventRequest
 from ..utils.emailer import send_mail
 from ..utils.recaptcha import verify_recaptcha
 
@@ -45,7 +45,7 @@ class ContactService:
             body,
         )
 
-    def handle_report(self, payload: ReportMeteorRequest) -> None:
+    def handle_report(self, payload: ReportEventRequest) -> None:
         if not verify_recaptcha(payload.rcToken):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

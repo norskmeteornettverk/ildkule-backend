@@ -1,4 +1,11 @@
 -- -----------------------------------------------------
+-- Drop legacy tables after the event rename
+-- -----------------------------------------------------
+SET FOREIGN_KEY_CHECKS=0;
+DROP TABLE IF EXISTS meteor_res_entry ;
+DROP TABLE IF EXISTS meteor ;
+
+-- -----------------------------------------------------
 -- Table user
 -- -----------------------------------------------------
 SET FOREIGN_KEY_CHECKS=0;
@@ -83,12 +90,12 @@ CREATE TABLE IF NOT EXISTS cam (
 
 
 -- -----------------------------------------------------
--- Table meteor
+-- Table event
 -- -----------------------------------------------------    
 SET FOREIGN_KEY_CHECKS=0;
-DROP TABLE IF EXISTS meteor ;
+DROP TABLE IF EXISTS event ;
 
-CREATE TABLE IF NOT EXISTS meteor (
+CREATE TABLE IF NOT EXISTS event (
   id INT(9) UNSIGNED NOT NULL AUTO_INCREMENT,
   datetimetag CHAR(14) NOT NULL,
   location VARCHAR(100) NULL DEFAULT NULL,
@@ -122,7 +129,7 @@ CREATE TABLE IF NOT EXISTS meteor (
   is_deleted BOOLEAN NOT NULL DEFAULT false,
   deletion_reason VARCHAR(50) NULL DEFAULT NULL,
   PRIMARY KEY (id),
-  CONSTRAINT unique_meteor_datetimetag UNIQUE(datetimetag)
+  CONSTRAINT unique_event_datetimetag UNIQUE(datetimetag)
   );
 
 
@@ -134,7 +141,7 @@ DROP TABLE IF EXISTS observation_cam_data ;
 
 CREATE TABLE IF NOT EXISTS observation_cam_data (
   id INT(9) UNSIGNED NOT NULL AUTO_INCREMENT,
-  meteor_id INT(6) UNSIGNED NOT NULL,
+  event_id INT(6) UNSIGNED NOT NULL,
   cam_id INT(6) UNSIGNED NOT NULL,
   observation_key VARCHAR(255) NOT NULL,
   source_hash CHAR(64) NOT NULL,
@@ -219,13 +226,13 @@ CREATE TABLE IF NOT EXISTS observation_cam_data (
   summary_recalibrated INT(11) NULL DEFAULT NULL,
   summary_meteor_probability FLOAT NULL DEFAULT NULL,
   PRIMARY KEY (id),
-  INDEX meteor_id (meteor_id ASC) ,
+  INDEX event_id (event_id ASC) ,
   INDEX cam_id (cam_id ASC) ,
   INDEX observation_cam_data_observation_key_idx (observation_key ASC),
   CONSTRAINT uq_observation_key UNIQUE(observation_key),
   CONSTRAINT observation_cam_data_ibfk_1
-    FOREIGN KEY (meteor_id)
-    REFERENCES meteor (id),
+    FOREIGN KEY (event_id)
+    REFERENCES event (id),
   CONSTRAINT observation_cam_data_ibfk_2
     FOREIGN KEY (cam_id)
     REFERENCES cam (id))
@@ -233,14 +240,14 @@ CREATE TABLE IF NOT EXISTS observation_cam_data (
 
 
 -- -----------------------------------------------------
--- Table meteor_res_entry
+-- Table event_res_entry
 -- -----------------------------------------------------
 SET FOREIGN_KEY_CHECKS=0;
-DROP TABLE IF EXISTS meteor_res_entry ;
+DROP TABLE IF EXISTS event_res_entry ;
 
-CREATE TABLE IF NOT EXISTS meteor_res_entry (
+CREATE TABLE IF NOT EXISTS event_res_entry (
   id INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
-  meteor_id INT(9) UNSIGNED NOT NULL,
+  event_id INT(9) UNSIGNED NOT NULL,
   line_no INT(11) NOT NULL,
   entry_type VARCHAR(20) NOT NULL,
   label VARCHAR(20) NULL DEFAULT NULL,
@@ -251,11 +258,11 @@ CREATE TABLE IF NOT EXISTS meteor_res_entry (
   height FLOAT NULL DEFAULT NULL,
   raw_line VARCHAR(500) NOT NULL,
   PRIMARY KEY (id),
-  INDEX meteor_res_entry_meteor_id_idx (meteor_id ASC),
-  CONSTRAINT uq_meteor_res_entry_line UNIQUE(meteor_id, line_no),
-  CONSTRAINT meteor_res_entry_ibfk_1
-    FOREIGN KEY (meteor_id)
-    REFERENCES meteor (id)
+  INDEX event_res_entry_event_id_idx (event_id ASC),
+  CONSTRAINT uq_event_res_entry_line UNIQUE(event_id, line_no),
+  CONSTRAINT event_res_entry_ibfk_1
+    FOREIGN KEY (event_id)
+    REFERENCES event (id)
     ON DELETE CASCADE
     ON UPDATE NO ACTION)
 ;
@@ -317,19 +324,19 @@ DROP TABLE IF EXISTS user_review ;
 CREATE TABLE IF NOT EXISTS user_review (
   user_id INT(11) NOT NULL,
   confirmed TINYINT NULL,
-  meteor_id INT(9) UNSIGNED NOT NULL,
-  PRIMARY KEY (user_id, meteor_id),
+  event_id INT(9) UNSIGNED NOT NULL,
+  PRIMARY KEY (user_id, event_id),
   INDEX fk_users_has_observation_cam_data_users1_idx (user_id ASC),
-  INDEX fk_user_review_meteor1_idx (meteor_id ASC),
+  INDEX fk_user_review_event1_idx (event_id ASC),
   
   CONSTRAINT fk_users_has_observation_cam_data_users1
     FOREIGN KEY (user_id)
     REFERENCES user (id)
     ON DELETE NO ACTION
     ON UPDATE NO ACTION,
-  CONSTRAINT fk_user_review_meteor1
-    FOREIGN KEY (meteor_id)
-    REFERENCES meteor (id)
+  CONSTRAINT fk_user_review_event1
+    FOREIGN KEY (event_id)
+    REFERENCES event (id)
     ON DELETE NO ACTION
     ON UPDATE NO ACTION);
     

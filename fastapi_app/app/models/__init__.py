@@ -1,7 +1,7 @@
 from .cam import Cam
 from .log_station import LogStation
-from .meteor import Meteor
-from .meteor_res_entry import MeteorResEntry
+from .event import Event
+from .event_res_entry import EventResEntry
 from .observation_cam_data import ObservationCamData
 from .observation_trail_point import ObservationTrailPoint
 from .station import Station
@@ -10,8 +10,8 @@ from .user_review import UserReview
 
 __all__ = [
     "User",
-    "Meteor",
-    "MeteorResEntry",
+    "Event",
+    "EventResEntry",
     "ObservationCamData",
     "ObservationTrailPoint",
     "Cam",

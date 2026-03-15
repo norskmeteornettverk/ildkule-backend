@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi_app.app.services import contact_service
-from fastapi_app.app.models import Meteor, User, UserReview
+from fastapi_app.app.models import Event, User, UserReview
 from fastapi_app.app.security import create_access_token
 
 
@@ -17,7 +17,7 @@ def _auth_header(user_id: int, role: str = "ROLE_USER", user_level: str = "1") -
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_meteor_review_accepts_legacy_and_modern_payload(client, db_session):
+def test_event_review_accepts_legacy_and_modern_payload(client, db_session):
     user = User(
         username="reviewer@example.com",
         password="not-used-in-this-test",
@@ -25,31 +25,31 @@ def test_meteor_review_accepts_legacy_and_modern_payload(client, db_session):
         user_level="1",
         confirmed=True,
     )
-    meteor = Meteor(datetimetag="20240101010101", date=datetime.utcnow())
-    db_session.add_all([user, meteor])
+    event = Event(datetimetag="20240101010101", date=datetime.utcnow())
+    db_session.add_all([user, event])
     db_session.commit()
 
     response = client.post(
-        f"/api/meteor/{meteor.id}/review",
+        f"/api/event/{event.id}/review",
         headers=_auth_header(user.id),
         json={"confirmed": "Positive"},
     )
     assert response.status_code == 200
     assert response.json()["msg"] == "Takk for din anbefaling (Ja)"
 
-    review = db_session.get(UserReview, (user.id, meteor.id))
+    review = db_session.get(UserReview, (user.id, event.id))
     assert review is not None
     assert review.confirmed == 1
 
     mismatch = client.post(
-        f"/api/meteor/{meteor.id}/review",
+        f"/api/event/{event.id}/review",
         headers=_auth_header(user.id),
-        json={"meteorID": meteor.id + 1, "userID": user.id, "confirmed": "Positive"},
+        json={"eventID": event.id + 1, "userID": user.id, "confirmed": "Positive"},
     )
     assert mismatch.status_code == 400
 
 
-def test_meteorboard_accepts_pagination_params(client, db_session):
+def test_eventboard_accepts_pagination_params(client, db_session):
     admin = User(
         username="admin@example.com",
         password="not-used-in-this-test",
@@ -57,22 +57,22 @@ def test_meteorboard_accepts_pagination_params(client, db_session):
         user_level="10",
         confirmed=True,
     )
-    meteors = [
-        Meteor(datetimetag=f"2024010101010{i}", date=datetime.utcnow())
+    events = [
+        Event(datetimetag=f"2024010101010{i}", date=datetime.utcnow())
         for i in range(1, 4)
     ]
     db_session.add(admin)
-    db_session.add_all(meteors)
+    db_session.add_all(events)
     db_session.commit()
 
     response = client.get(
-        "/api/meteorboard?page=1&limit=2&orderby=date&order=desc",
+        "/api/eventboard?page=1&limit=2&orderby=date&order=desc",
         headers=_auth_header(admin.id, role="ROLE_ADMIN", user_level="10"),
     )
     assert response.status_code == 200
     payload = response.json()
     assert payload["currentPage"] == 1
-    assert len(payload["meteors"]) == 2
+    assert len(payload["events"]) == 2
 
 
 def test_forms_recaptcha_failure_has_legacy_message_shape(client, monkeypatch):

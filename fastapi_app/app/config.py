@@ -40,14 +40,14 @@ class Settings(BaseSettings):
 
     data_directory: Optional[str] = Field(
         default=None,
-        description="Root folder where meteor data files are stored",
+        description="Root folder where event data files are stored",
     )
     station_log_token: Optional[str] = Field(
         default=None,
-        description="Bearer token shared with meteor stations when pushing logs",
+        description="Bearer token shared with event stations when pushing logs",
     )
-    meteorload_username: Optional[str] = "sys_admin"
-    meteorload_password: Optional[str] = "secretpassword"
+    eventload_username: Optional[str] = "sys_admin"
+    eventload_password: Optional[str] = "secretpassword"
 
     cors_allow_origins: List[str] = Field(
         default_factory=lambda: ["*"],

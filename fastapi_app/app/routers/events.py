@@ -5,15 +5,15 @@ from sqlalchemy.orm import Session
 
 from ..db import get_session
 from ..models import User
-from ..schemas.meteor import (
-    MeteorClassificationUpdate,
-    MeteorReviewRequest,
+from ..schemas.event import (
+    EventClassificationUpdate,
+    EventReviewRequest,
 )
 from ..security import enforce_role, get_current_user
-from ..services.meteor_service import MeteorService
+from ..services.event_service import EventService
 
-router = APIRouter(tags=["meteors"])
-meteor_service = MeteorService()
+router = APIRouter(tags=["events"])
+event_service = EventService()
 
 
 def _parse_csv(value: Optional[str]) -> Optional[List[str]]:
@@ -22,12 +22,12 @@ def _parse_csv(value: Optional[str]) -> Optional[List[str]]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-@router.get("/meteors")
-def get_meteors(
+@router.get("/events")
+def get_events(
     searchTerm: Optional[str] = Query(None),
     stationName: Optional[str] = Query(None),
     year: Optional[str] = Query(None),
-    meteorClass: Optional[str] = Query(None),
+    eventType: Optional[str] = Query(None),
     includeDeleted: bool = Query(False),
     page: int = Query(1),
     limit: int = Query(20),
@@ -36,19 +36,19 @@ def get_meteors(
     session: Session = Depends(get_session),
 ):
     if searchTerm:
-        return meteor_service.search(session, searchTerm, include_deleted=includeDeleted)
-    if stationName or year or meteorClass:
+        return event_service.search(session, searchTerm, include_deleted=includeDeleted)
+    if stationName or year or eventType:
         years = [int(y) for y in _parse_csv(year) or []]
-        classes = _parse_csv(meteorClass)
+        classes = _parse_csv(eventType)
         stations = _parse_csv(stationName)
-        return meteor_service.filter(
+        return event_service.filter(
             session,
             stations,
             years,
             classes,
             include_deleted=includeDeleted,
         )
-    return meteor_service.list_meteors(
+    return event_service.list_events(
         session,
         page,
         limit,
@@ -58,30 +58,30 @@ def get_meteors(
     )
 
 
-@router.get("/meteor/{meteor_id}")
-def get_meteor(
-    meteor_id: int,
+@router.get("/event/{event_id}")
+def get_event(
+    event_id: int,
     includeDeleted: bool = Query(False),
     session: Session = Depends(get_session),
 ):
-    return meteor_service.get_meteor(
+    return event_service.get_event(
         session,
-        meteor_id,
+        event_id,
         include_deleted=includeDeleted,
     )
 
 
-@router.get("/meteor/{meteor_id}/res")
-def get_meteor_res_entries(
-    meteor_id: int,
+@router.get("/event/{event_id}/res")
+def get_event_res_entries(
+    event_id: int,
     includeDeleted: bool = Query(False),
     limit: int = Query(500, ge=1, le=5000),
     offset: int = Query(0, ge=0),
     session: Session = Depends(get_session),
 ):
-    return meteor_service.get_meteor_res_entries(
+    return event_service.get_event_res_entries(
         session,
-        meteor_id,
+        event_id,
         limit,
         offset,
         include_deleted=includeDeleted,
@@ -96,7 +96,7 @@ def get_observation_trail_points(
     offset: int = Query(0, ge=0),
     session: Session = Depends(get_session),
 ):
-    return meteor_service.get_observation_trail_points(
+    return event_service.get_observation_trail_points(
         session,
         observation_id,
         limit,
@@ -105,15 +105,15 @@ def get_observation_trail_points(
     )
 
 
-@router.post("/meteor/{meteor_id}/review")
-def review_meteor(
-    meteor_id: int,
-    payload: MeteorReviewRequest,
+@router.post("/event/{event_id}/review")
+def review_event(
+    event_id: int,
+    payload: EventReviewRequest,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    if payload.meteorID is not None and payload.meteorID != meteor_id:
-        raise HTTPException(status_code=400, detail="meteorID does not match URL id")
+    if payload.eventID is not None and payload.eventID != event_id:
+        raise HTTPException(status_code=400, detail="eventID does not match URL id")
     if payload.userID is not None and payload.userID != current_user.id:
         raise HTTPException(status_code=400, detail="userID does not match token user")
 
@@ -123,7 +123,7 @@ def review_meteor(
         rating = 1
     elif classification in {"Negative", "0"}:
         rating = 0
-    meteor_service.review_meteor(session, meteor_id, current_user.id, rating)
+    event_service.review_event(session, event_id, current_user.id, rating)
     if rating == 1:
         message = "Takk for din anbefaling (Ja)"
     elif rating == 0:
@@ -133,39 +133,52 @@ def review_meteor(
     return {"msg": message}
 
 
-@router.put("/meteor/{meteor_id}")
-def update_meteor_classification(
-    meteor_id: int,
-    payload: MeteorClassificationUpdate,
+@router.put("/event/{event_id}")
+def update_event_classification(
+    event_id: int,
+    payload: EventClassificationUpdate,
     session: Session = Depends(get_session),
     __: User = Depends(get_current_user),
 ):
-    meteor_service.update_user_confirmation(
-        session, meteor_id, payload.user_confirmed
+    event_service.update_user_confirmation(
+        session, event_id, payload.user_confirmed
     )
     return {"msg": "Success!"}
 
 
-@router.put("/meteor/{meteor_id}/classification")
-def admin_classification(
-    meteor_id: int,
-    payload: MeteorClassificationUpdate,
+@router.put("/event/{event_id}/classification")
+def admin_event_classification(
+    event_id: int,
+    payload: EventClassificationUpdate,
     session: Session = Depends(get_session),
     __: User = Depends(enforce_role(["ROLE_ADMIN"])),
 ):
-    meteor_service.update_user_confirmation(
-        session, meteor_id, payload.user_confirmed
+    event_service.update_user_confirmation(
+        session, event_id, payload.user_confirmed
     )
     return {"msg": "Success!"}
 
 
 @router.get("/insight/{report_name}")
 def insight(report_name: str, session: Session = Depends(get_session)):
-    return meteor_service.get_insight(session, report_name)
+    return event_service.get_insight(session, report_name)
 
 
-@router.get("/meteorboard")
-def meteor_board(
+@router.get("/report/coordinates")
+def report_coordinates(session: Session = Depends(get_session)):
+    return event_service.get_insight(session, "coordinates")
+
+
+@router.get("/events/filters")
+def get_event_filter_options(
+    includeDeleted: bool = Query(False),
+    session: Session = Depends(get_session),
+):
+    return event_service.get_filter_options(session, include_deleted=includeDeleted)
+
+
+@router.get("/eventboard")
+def event_board(
     includeDeleted: bool = Query(False),
     page: int = Query(1),
     limit: int = Query(50),
@@ -174,11 +187,26 @@ def meteor_board(
     session: Session = Depends(get_session),
     __: User = Depends(enforce_role(["ROLE_ADMIN"])),
 ):
-    return meteor_service.list_meteors(
+    return event_service.list_events(
         session,
         page=page,
         limit=limit,
         order_by=orderby,
         order=order,
+        include_deleted=includeDeleted,
+    )
+
+
+@router.get("/event/{date_tag}/{time_tag}")
+def get_event_by_tag(
+    date_tag: str,
+    time_tag: str,
+    includeDeleted: bool = Query(False),
+    session: Session = Depends(get_session),
+):
+    return event_service.get_event_by_datetimetag(
+        session,
+        date_tag,
+        time_tag,
         include_deleted=includeDeleted,
     )

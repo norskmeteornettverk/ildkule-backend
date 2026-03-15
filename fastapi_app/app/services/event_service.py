@@ -24,34 +24,34 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..models import (
     Cam,
-    Meteor,
-    MeteorResEntry,
+    Event,
+    EventResEntry,
     ObservationCamData,
     ObservationTrailPoint,
     Station,
     UserReview,
 )
-from .file_mapper import FileToObjectMapper, MeteorRecord, ObservationRecord
+from .file_mapper import FileToObjectMapper, EventRecord, ObservationRecord
 from ..utils.serialization import (
-    serialize_meteor,
-    serialize_meteor_list,
+    serialize_event,
+    serialize_event_list,
     serialize_res_entry,
     serialize_trail_point,
 )
 
 
-class MeteorService:
+class EventService:
     MISSING_FROM_IMPORT = "missing_from_import"
 
     def _visibility_filter(self, include_deleted: bool):
         if include_deleted:
             return None
-        return Meteor.is_deleted.is_(False)
+        return Event.is_deleted.is_(False)
 
     def _ratings_subquery(self):
         return (
             select(
-                UserReview.meteor_id.label("meteor_id"),
+                UserReview.event_id.label("event_id"),
                 func.sum(case((UserReview.confirmed == 1, 1), else_=0)).label(
                     "positive_ratings"
                 ),
@@ -60,18 +60,34 @@ class MeteorService:
                 ),
                 func.count().label("ratings"),
             )
-            .group_by(UserReview.meteor_id)
+            .group_by(UserReview.event_id)
             .subquery()
         )
 
     def _base_filter(self, include_deleted: bool = False):
-        filters = [or_(Meteor.user_confirmed.is_(None), Meteor.user_confirmed != 0)]
+        filters = [or_(Event.user_confirmed.is_(None), Event.user_confirmed != 0)]
         visibility_filter = self._visibility_filter(include_deleted)
         if visibility_filter is not None:
             filters.append(visibility_filter)
         return and_(*filters)
 
-    def list_meteors(
+    def _event_type_case(self):
+        return case(
+            (
+                and_(
+                    Event.track_endheight.isnot(None),
+                    Event.track_endheight < 40,
+                ),
+                "Meteorittkandidat",
+            ),
+            (
+                Event.camera_confirmed == 1,
+                "Krysspeilet",
+            ),
+            else_="Upeilet",
+        )
+
+    def list_events(
         self,
         session: Session,
         page: int,
@@ -82,22 +98,22 @@ class MeteorService:
     ) -> dict:
         ratings_subquery = self._ratings_subquery()
         sortable_columns = {
-            "date": Meteor.date,
-            "crossbearing": Meteor.camera_confirmed,
+            "date": Event.date,
+            "crossbearing": Event.camera_confirmed,
             "ratings": ratings_subquery.c.ratings,
         }
-        column = sortable_columns.get(order_by, Meteor.date)
+        column = sortable_columns.get(order_by, Event.date)
         direction = column.desc() if order.lower() == "desc" else column.asc()
 
         offset = max(page - 1, 0) * limit
         stmt = (
             select(
-                Meteor,
+                Event,
                 ratings_subquery.c.ratings,
                 ratings_subquery.c.positive_ratings,
                 ratings_subquery.c.negative_ratings,
             )
-            .outerjoin(ratings_subquery, Meteor.id == ratings_subquery.c.meteor_id)
+            .outerjoin(ratings_subquery, Event.id == ratings_subquery.c.event_id)
             .where(self._base_filter(include_deleted))
             .order_by(direction)
             .limit(limit)
@@ -105,22 +121,22 @@ class MeteorService:
         )
         results = session.execute(stmt).all()
 
-        meteors = []
-        for meteor, ratings, positive_ratings, negative_ratings in results:
-            payload = serialize_meteor(meteor)
+        events = []
+        for event, ratings, positive_ratings, negative_ratings in results:
+            payload = serialize_event(event)
             payload["ratings"] = ratings or 0
             payload["positive_ratings"] = positive_ratings or 0
             payload["negative_ratings"] = negative_ratings or 0
-            meteors.append(payload)
+            events.append(payload)
 
         total_items = session.scalar(
-            select(func.count()).select_from(Meteor).where(self._base_filter(include_deleted))
+            select(func.count()).select_from(Event).where(self._base_filter(include_deleted))
         )
         total_pages = ceil(total_items / limit) if limit else 1
         current_page = page if page > 0 else 1
         return {
             "totalItems": total_items,
-            "meteors": meteors,
+            "events": events,
             "totalPages": total_pages,
             "currentPage": current_page,
         }
@@ -133,21 +149,21 @@ class MeteorService:
         include_deleted: bool = False,
     ) -> dict:
         stmt = (
-            select(Meteor)
+            select(Event)
             .where(
                 self._base_filter(include_deleted),
                 or_(
-                    Meteor.location.ilike(f"%{search_term}%"),
-                    Meteor.datetimetag.ilike(f"%{search_term}%"),
+                    Event.location.ilike(f"%{search_term}%"),
+                    Event.datetimetag.ilike(f"%{search_term}%"),
                 ),
             )
-            .order_by(Meteor.date.desc())
+            .order_by(Event.date.desc())
             .limit(limit)
         )
-        meteors = session.scalars(stmt).all()
+        events = session.scalars(stmt).all()
         return {
-            "totalItems": len(meteors),
-            "meteors": serialize_meteor_list(meteors),
+            "totalItems": len(events),
+            "events": serialize_event_list(events),
             "totalPages": 1,
             "currentPage": 1,
         }
@@ -159,14 +175,15 @@ class MeteorService:
         years: Optional[List[int]],
         classes: Optional[List[str]],
         include_deleted: bool = False,
-    ) -> List[dict]:
-        stmt = select(Meteor).where(self._base_filter(include_deleted))
+        limit: int = 100,
+    ) -> dict:
+        stmt = select(Event).where(self._base_filter(include_deleted))
 
         if station_names:
             stmt = (
                 stmt.join(
                     ObservationCamData,
-                    Meteor.id == ObservationCamData.meteor_id,
+                    Event.id == ObservationCamData.event_id,
                 )
                 .join(Cam, ObservationCamData.cam_id == Cam.id)
                 .join(Station, Cam.station_id == Station.id)
@@ -174,74 +191,99 @@ class MeteorService:
             )
 
         if years:
-            stmt = stmt.where(func.extract("year", Meteor.date).in_(years))
+            stmt = stmt.where(func.extract("year", Event.date).in_(years))
 
         if classes:
-            meteor_class_case = case(
-                (
-                    func.coalesce(Meteor.track_endheight, 0) < 40,
-                    "Meteorittkandidat",
-                ),
-                (
-                    Meteor.track_endheight.isnot(None),
-                    "Krysspeilet",
-                ),
-                else_="Upeilet",
-            )
-            stmt = stmt.where(meteor_class_case.in_(classes))
+            event_class_case = self._event_type_case()
+            stmt = stmt.where(event_class_case.in_(classes))
 
-        stmt = stmt.order_by(Meteor.datetimetag.desc()).limit(100)
-        meteors = session.scalars(stmt).unique().all()
-        return serialize_meteor_list(meteors)
+        stmt = stmt.order_by(Event.datetimetag.desc()).limit(limit)
+        events = session.scalars(stmt).unique().all()
+        return {
+            "totalItems": len(events),
+            "events": serialize_event_list(events),
+            "totalPages": 1,
+            "currentPage": 1,
+        }
 
-    def get_meteor(
-        self, session: Session, meteor_id: int, include_deleted: bool = False
+    def get_event(
+        self, session: Session, event_id: int, include_deleted: bool = False
     ) -> dict:
         stmt = (
-            select(Meteor)
+            select(Event)
             .options(
-                selectinload(Meteor.observation_data)
+                selectinload(Event.observation_data)
                 .selectinload(ObservationCamData.trail_points),
-                selectinload(Meteor.observation_data)
+                selectinload(Event.observation_data)
                 .selectinload(ObservationCamData.cam)
                 .selectinload(Cam.station),
-                selectinload(Meteor.res_entries),
-                selectinload(Meteor.reviews),
+                selectinload(Event.res_entries),
+                selectinload(Event.reviews),
             )
-            .where(Meteor.id == meteor_id, self._base_filter(include_deleted))
+            .where(Event.id == event_id, self._base_filter(include_deleted))
         )
-        meteor = session.scalars(stmt).first()
-        if not meteor:
-            raise HTTPException(status_code=404, detail="Meteor not found")
-        return serialize_meteor(
-            meteor,
+        event = session.scalars(stmt).first()
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+        return serialize_event(
+            event,
             include_relationships=True,
             include_deleted=include_deleted,
         )
 
-    def get_meteor_res_entries(
+    def get_event_by_datetimetag(
         self,
         session: Session,
-        meteor_id: int,
+        date_tag: str,
+        time_tag: str,
+        include_deleted: bool = False,
+    ) -> dict:
+        datetimetag = f"{date_tag}{time_tag}"
+        stmt = (
+            select(Event)
+            .options(
+                selectinload(Event.observation_data)
+                .selectinload(ObservationCamData.trail_points),
+                selectinload(Event.observation_data)
+                .selectinload(ObservationCamData.cam)
+                .selectinload(Cam.station),
+                selectinload(Event.res_entries),
+                selectinload(Event.reviews),
+            )
+            .where(Event.datetimetag == datetimetag, self._base_filter(include_deleted))
+        )
+        event = session.scalars(stmt).first()
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+        return serialize_event(
+            event,
+            include_relationships=True,
+            include_deleted=include_deleted,
+        )
+
+    def get_event_res_entries(
+        self,
+        session: Session,
+        event_id: int,
         limit: int = 500,
         offset: int = 0,
         include_deleted: bool = False,
     ) -> dict:
-        """Return paginated raw .res rows for one meteor."""
+        """Return paginated raw .res rows for one event."""
 
-        meteor = session.get(Meteor, meteor_id)
-        if not meteor or (meteor.is_deleted and not include_deleted):
-            raise HTTPException(status_code=404, detail="Meteor not found")
+        event = session.get(Event, event_id)
+        if not event or (event.is_deleted and not include_deleted):
+            raise HTTPException(status_code=404, detail="Event not found")
 
         total_items = session.scalar(
             select(func.count())
-            .select_from(MeteorResEntry)
-            .where(MeteorResEntry.meteor_id == meteor_id)
+            .select_from(EventResEntry)
+            .where(EventResEntry.event_id == event_id)
         ) or 0
         stmt = (
-            select(MeteorResEntry)
-            .where(MeteorResEntry.meteor_id == meteor_id)
-            .order_by(MeteorResEntry.line_no.asc())
+            select(EventResEntry)
+            .where(EventResEntry.event_id == event_id)
+            .order_by(EventResEntry.line_no.asc())
             .offset(max(offset, 0))
             .limit(max(limit, 1))
         )
@@ -287,33 +329,33 @@ class MeteorService:
             "trailPoints": [serialize_trail_point(point) for point in points],
         }
 
-    def review_meteor(
-        self, session: Session, meteor_id: int, user_id: int, rating: int
+    def review_event(
+        self, session: Session, event_id: int, user_id: int, rating: int
     ) -> bool:
-        meteor = session.get(Meteor, meteor_id)
-        if not meteor:
-            raise HTTPException(status_code=404, detail="Meteor not found")
-        review = session.get(UserReview, (user_id, meteor_id))
+        event = session.get(Event, event_id)
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+        review = session.get(UserReview, (user_id, event_id))
         if not review:
-            review = UserReview(user_id=user_id, meteor_id=meteor_id)
+            review = UserReview(user_id=user_id, event_id=event_id)
         review.confirmed = rating
         session.add(review)
         return True
 
     def update_user_confirmation(
-        self, session: Session, meteor_id: int, classification: Optional[str]
-    ) -> Meteor:
-        meteor = session.get(Meteor, meteor_id)
-        if not meteor:
-            raise HTTPException(status_code=404, detail="Meteor not found")
+        self, session: Session, event_id: int, classification: Optional[str]
+    ) -> Event:
+        event = session.get(Event, event_id)
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
         confirmed = -1
         if classification in {"1", "Positive"}:
             confirmed = 1
         elif classification in {"0", "Negative"}:
             confirmed = 0
-        meteor.user_confirmed = confirmed
-        session.add(meteor)
-        return meteor
+        event.user_confirmed = confirmed
+        session.add(event)
+        return event
 
     def get_insight(self, session: Session, report_name: str) -> list[dict]:
         dialect = session.bind.dialect.name if session.bind else ""
@@ -333,13 +375,13 @@ class MeteorService:
             count(distinct date(m.date)) DagerMedObservasjoner,
             {days_since_expr} as DagerSidenSisteObservasjon,
             count(*) as Kameraopptak,
-            count(distinct m.id) as Meteorer,
+            count(distinct m.id) as Hendelser,
             count(distinct case when m.track_startheight is not null then m.id end) Krysspeilede,
             COUNT(DISTINCT CASE WHEN m.track_startheight is not null and m.track_startheight < 40 THEN m.id END) Meteorittkandidater
             from station as s
             left outer join cam as c on s.id = c.station_id
             left outer join observation_cam_data as d on c.id = d.cam_id
-            left outer join meteor as m on d.meteor_id = m.id
+            left outer join event as m on d.event_id = m.id
             group by {station_name_expr}, c.cam_name
             order by {station_name_expr},c.cam_name
             """
@@ -351,13 +393,13 @@ class MeteorService:
             count(distinct date(m.date)) DagerMedObservasjoner,
             {days_since_expr} as DagerSidenSisteObservasjon,
             count(*) as Kameraopptak,
-            count(distinct m.id) as Meteorer,
+            count(distinct m.id) as Hendelser,
             count(distinct case when m.track_startheight is not null then m.id end) Krysspeilede,
             COUNT(DISTINCT CASE WHEN m.track_startheight is not null and m.track_startheight < 40 THEN m.id END) Meteorittkandidater
             from station as s
             left outer join cam as c on s.id = c.station_id
             left outer join observation_cam_data as d on c.id = d.cam_id
-            left outer join meteor as m on d.meteor_id = m.id
+            left outer join event as m on d.event_id = m.id
             group by {station_name_expr}
             order by {station_name_expr}
             """
@@ -368,18 +410,18 @@ class MeteorService:
             count(distinct date(m.date)) DagerMedObservasjoner,
             {days_since_expr} as DagerSidenSisteObservasjon,
             count(*) as Kameraopptak,
-            count(distinct m.id) as Meteorer,
+            count(distinct m.id) as Hendelser,
             count(distinct case when m.track_startheight is not null then m.id end) Krysspeilede,
             COUNT(DISTINCT CASE WHEN m.track_startheight is not null and m.track_startheight < 40 THEN m.id END) Meteorittkandidater
             from station as s
             left outer join cam as c on s.id = c.station_id
             left outer join observation_cam_data as d on c.id = d.cam_id
-            left outer join meteor as m on d.meteor_id = m.id
+            left outer join event as m on d.event_id = m.id
             """
         elif report_name == "coordinates":
             sql = """
             SELECT track_endlat as lat, track_endlong as lng
-            FROM meteor
+            FROM event
             WHERE track_endlat IS NOT NULL
             """
         else:
@@ -389,6 +431,38 @@ class MeteorService:
         if report_name == "total" and records:
             return [dict(records[0])]
         return [dict(row) for row in records]
+
+    def get_filter_options(
+        self, session: Session, include_deleted: bool = False
+    ) -> dict:
+        years_query = (
+            select(func.extract("year", Event.date))
+            .where(self._base_filter(include_deleted), Event.date.isnot(None))
+            .distinct()
+            .order_by(func.extract("year", Event.date).desc())
+        )
+        station_query = (
+            select(Station.station_name)
+            .join(Cam, Cam.station_id == Station.id)
+            .join(ObservationCamData, ObservationCamData.cam_id == Cam.id)
+            .join(Event, ObservationCamData.event_id == Event.id)
+            .where(self._base_filter(include_deleted))
+            .distinct()
+            .order_by(Station.station_name.asc())
+        )
+        type_query = (
+            select(self._event_type_case().label("event_type"))
+            .where(self._base_filter(include_deleted))
+            .distinct()
+        )
+        years = [str(int(year)) for year in session.scalars(years_query).all() if year]
+        stations = session.scalars(station_query).all()
+        event_types = sorted(session.scalars(type_query).all())
+        return {
+            "years": years,
+            "stations": stations,
+            "eventTypes": event_types,
+        }
 
     def load_from_files(
         self,
@@ -405,28 +479,28 @@ class MeteorService:
         station_cache: dict[str, int] = {}
         cam_cache: dict[tuple[int, str], int] = {}
         processed = 0
-        seen_meteor_tags: set[str] = set()
+        seen_event_tags: set[str] = set()
         seen_observation_keys: set[str] = set()
         for record in records:
-            meteor_obj = self._upsert_meteor(session, record, import_started_at)
-            self._replace_res_entries(session, meteor_obj.id, record)
+            event_obj = self._upsert_event(session, record, import_started_at)
+            self._replace_res_entries(session, event_obj.id, record)
             processed += 1
-            seen_meteor_tags.add(meteor_obj.datetimetag)
+            seen_event_tags.add(event_obj.datetimetag)
             for observation in record.observations:
                 station_id = self._get_station_id(session, observation, station_cache)
                 cam_id = self._get_cam_id(session, observation, station_id, cam_cache)
                 self._upsert_observation(
                     session,
-                    meteor_obj.id,
+                    event_obj.id,
                     cam_id,
                     observation,
                     import_started_at,
                 )
                 seen_observation_keys.add(observation.observation_key)
-        self._mark_missing_meteors_deleted(
+        self._mark_missing_events_deleted(
             session,
             mapper.date_strings,
-            seen_meteor_tags,
+            seen_event_tags,
             import_started_at,
         )
         self._mark_missing_observations_deleted(
@@ -446,35 +520,35 @@ class MeteorService:
                 detail=f"Provided dates are not valid: {date_value}",
             ) from exc
 
-    def _upsert_meteor(
+    def _upsert_event(
         self,
         session: Session,
-        record: MeteorRecord,
+        record: EventRecord,
         import_started_at: datetime,
-    ) -> Meteor:
-        datetimetag = record.meteor.get("datetimetag")
-        stmt = select(Meteor).where(Meteor.datetimetag == datetimetag)
-        meteor = session.scalars(stmt).first()
-        meteor_columns = {column.name: column for column in Meteor.__table__.columns}
+    ) -> Event:
+        datetimetag = record.event.get("datetimetag")
+        stmt = select(Event).where(Event.datetimetag == datetimetag)
+        event = session.scalars(stmt).first()
+        event_columns = {column.name: column for column in Event.__table__.columns}
 
         payload = {
-            key: self._coerce_column_value(meteor_columns[key], value)
-            for key, value in record.meteor.items()
-            if key in meteor_columns
+            key: self._coerce_column_value(event_columns[key], value)
+            for key, value in record.event.items()
+            if key in event_columns
         }
-        if meteor:
+        if event:
             for key, value in payload.items():
-                setattr(meteor, key, value)
+                setattr(event, key, value)
         else:
-            meteor = Meteor(**payload)
-            meteor.first_seen_at = import_started_at
-        meteor.last_seen_at = import_started_at
-        meteor.deleted_at = None
-        meteor.is_deleted = False
-        meteor.deletion_reason = None
-        session.add(meteor)
+            event = Event(**payload)
+            event.first_seen_at = import_started_at
+        event.last_seen_at = import_started_at
+        event.deleted_at = None
+        event.is_deleted = False
+        event.deletion_reason = None
+        session.add(event)
         session.flush()
-        return meteor
+        return event
 
     def _get_station_id(
         self,
@@ -518,12 +592,12 @@ class MeteorService:
     def _upsert_observation(
         self,
         session: Session,
-        meteor_id: int,
+        event_id: int,
         cam_id: int,
         observation: ObservationRecord,
         import_started_at: datetime,
     ) -> None:
-        """Upsert by stable observation key so regrouped meteors do not duplicate data."""
+        """Upsert by stable observation key so regrouped events do not duplicate data."""
 
         stmt = select(ObservationCamData).where(
             ObservationCamData.observation_key == observation.observation_key
@@ -536,7 +610,7 @@ class MeteorService:
             for key, value in observation.values.items()
             if key in columns
         }
-        payload["meteor_id"] = meteor_id
+        payload["event_id"] = event_id
         payload["cam_id"] = cam_id
         payload["observation_key"] = observation.observation_key
         payload["source_hash"] = observation.source_hash
@@ -556,27 +630,27 @@ class MeteorService:
         session.flush()
         self._replace_trail_points(session, existing.id, observation)
 
-    def _mark_missing_meteors_deleted(
+    def _mark_missing_events_deleted(
         self,
         session: Session,
         imported_dates: List[str],
-        seen_meteor_tags: set[str],
+        seen_event_tags: set[str],
         import_started_at: datetime,
     ) -> None:
-        """Soft-delete meteors in the imported date window that were not seen this run."""
+        """Soft-delete events in the imported date window that were not seen this run."""
 
         if not imported_dates:
             return
 
-        stmt = select(Meteor).where(func.substr(Meteor.datetimetag, 1, 8).in_(imported_dates))
-        if seen_meteor_tags:
-            stmt = stmt.where(Meteor.datetimetag.not_in(seen_meteor_tags))
+        stmt = select(Event).where(func.substr(Event.datetimetag, 1, 8).in_(imported_dates))
+        if seen_event_tags:
+            stmt = stmt.where(Event.datetimetag.not_in(seen_event_tags))
         missing = session.scalars(stmt).all()
-        for meteor in missing:
-            meteor.is_deleted = True
-            meteor.deleted_at = import_started_at
-            meteor.deletion_reason = self.MISSING_FROM_IMPORT
-            session.add(meteor)
+        for event in missing:
+            event.is_deleted = True
+            event.deleted_at = import_started_at
+            event.deletion_reason = self.MISSING_FROM_IMPORT
+            session.add(event)
 
     def _mark_missing_observations_deleted(
         self,
@@ -585,15 +659,15 @@ class MeteorService:
         seen_observation_keys: set[str],
         import_started_at: datetime,
     ) -> None:
-        """Soft-delete observations linked to imported-date meteors when they disappear."""
+        """Soft-delete observations linked to imported-date events when they disappear."""
 
         if not imported_dates:
             return
 
         stmt = (
             select(ObservationCamData)
-            .join(Meteor, ObservationCamData.meteor_id == Meteor.id)
-            .where(func.substr(Meteor.datetimetag, 1, 8).in_(imported_dates))
+            .join(Event, ObservationCamData.event_id == Event.id)
+            .where(func.substr(Event.datetimetag, 1, 8).in_(imported_dates))
         )
         if seen_observation_keys:
             stmt = stmt.where(ObservationCamData.observation_key.not_in(seen_observation_keys))
@@ -607,20 +681,20 @@ class MeteorService:
     def _replace_res_entries(
         self,
         session: Session,
-        meteor_id: int,
-        record: MeteorRecord,
+        event_id: int,
+        record: EventRecord,
     ) -> None:
-        """Replace all persisted .res rows for one meteor during reload."""
+        """Replace all persisted .res rows for one event during reload."""
 
         session.execute(
-            delete(MeteorResEntry).where(MeteorResEntry.meteor_id == meteor_id)
+            delete(EventResEntry).where(EventResEntry.event_id == event_id)
         )
         if not record.res_entries:
             return
         session.add_all(
             [
-                MeteorResEntry(
-                    meteor_id=meteor_id,
+                EventResEntry(
+                    event_id=event_id,
                     line_no=entry.line_no,
                     entry_type=entry.entry_type,
                     label=entry.label,

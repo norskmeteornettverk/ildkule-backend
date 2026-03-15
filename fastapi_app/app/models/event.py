@@ -7,10 +7,10 @@ from ..db import Base
 from .types import unsigned_int
 
 
-class Meteor(Base):
-    """Represents one meteor event and its import lifecycle state."""
+class Event(Base):
+    """Represents one event event and its import lifecycle state."""
 
-    __tablename__ = "meteor"
+    __tablename__ = "event"
 
     id = Column(unsigned_int(), primary_key=True, autoincrement=True)
     datetimetag = Column(String(14), unique=True, nullable=False)
@@ -46,11 +46,11 @@ class Meteor(Base):
     deletion_reason = Column(String(50), nullable=True)
 
     observation_data = relationship(
-        "ObservationCamData", back_populates="meteor", cascade="all,delete-orphan"
+        "ObservationCamData", back_populates="event", cascade="all,delete-orphan"
     )
     res_entries = relationship(
-        "MeteorResEntry", back_populates="meteor", cascade="all,delete-orphan"
+        "EventResEntry", back_populates="event", cascade="all,delete-orphan"
     )
     reviews = relationship(
-        "UserReview", back_populates="meteor", cascade="all,delete-orphan"
+        "UserReview", back_populates="event", cascade="all,delete-orphan"
     )

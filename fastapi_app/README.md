@@ -2,7 +2,7 @@
 
 The PHP API located in `api/` has been ported to Python using FastAPI.  The new
 code lives under `fastapi_app/` and exposes the same HTTP resources
-(`/api/login`, `/api/user`, `/api/meteors`, etc.).
+(`/api/login`, `/api/user`, `/api/events`, etc.).
 
 ## Getting started
 
@@ -33,7 +33,7 @@ log endpoint validates a bearer token configured via `STATION_LOG_TOKEN`.
 
 ## Notes
 
-- `/api/meteorload` now uses the Python port of the legacy file mapper to
+- `/api/eventload` now uses the Python port of the legacy file mapper to
   ingest meteor observations directly from the data directory configured via
   `DATA_DIRECTORY`.
 - `PyMySQL` needs `cryptography` when MySQL uses `caching_sha2_password`, so it

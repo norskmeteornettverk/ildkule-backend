@@ -4,10 +4,10 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
-class MeteorFilterParams(BaseModel):
+class EventFilterParams(BaseModel):
     stationName: Optional[str] = None
     year: Optional[str] = None
-    meteorClass: Optional[str] = None
+    eventType: Optional[str] = None
     searchTerm: Optional[str] = None
     page: int = 1
     limit: int = 20
@@ -15,19 +15,19 @@ class MeteorFilterParams(BaseModel):
     order: str = "desc"
 
 
-class MeteorReviewRequest(BaseModel):
-    meteorID: Optional[int] = Field(default=None, alias="meteorID")
+class EventReviewRequest(BaseModel):
+    eventID: Optional[int] = Field(default=None, alias="eventID")
     userID: Optional[int] = Field(default=None, alias="userID")
     confirmed: str
 
 
-class MeteorClassificationUpdate(BaseModel):
+class EventClassificationUpdate(BaseModel):
     id: int
     user_confirmed: Optional[str] = None
 
 
-class MeteorListResponse(BaseModel):
+class EventListResponse(BaseModel):
     totalItems: int
-    meteors: List[dict]
+    events: List[dict]
     totalPages: int
     currentPage: int

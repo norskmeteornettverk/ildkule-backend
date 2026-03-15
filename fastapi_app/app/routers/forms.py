@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
-from ..schemas.contact import ContactRequest, ReportMeteorRequest
+from ..schemas.contact import ContactRequest, ReportEventRequest
 from ..services.contact_service import ContactService
 
 router = APIRouter(tags=["forms"])
@@ -27,7 +27,7 @@ def contact(payload: ContactRequest):
 
 
 @router.post("/reportmeteor")
-def report_meteor(payload: ReportMeteorRequest):
+def report_meteor(payload: ReportEventRequest):
     try:
         service.handle_report(payload)
     except HTTPException as exc:

@@ -31,7 +31,7 @@ class TrailPointRecord:
 
 @dataclass
 class ResEntryRecord:
-    """Represents one parsed row from a meteor .res file."""
+    """Represents one parsed row from a event .res file."""
 
     line_no: int
     entry_type: str
@@ -58,18 +58,18 @@ class ObservationRecord:
 
 
 @dataclass
-class MeteorRecord:
-    """Represents one meteor folder before persistence."""
+class EventRecord:
+    """Represents one event folder before persistence."""
 
-    meteor: Dict[str, object]
+    event: Dict[str, object]
     observations: List[ObservationRecord] = field(default_factory=list)
     res_entries: List[ResEntryRecord] = field(default_factory=list)
 
 
 class FileToObjectMapper:
-    """Port of the legacy PHP mapper that reads meteor data files."""
+    """Read event folders from disk and map them into persistence-ready records."""
 
-    meteor_file_map = {
+    stat_file_map = {
         "startheight": "track_startheight",
         "endheight": "track_endheight",
         "groundtrack": "track_groundtrack",
@@ -190,7 +190,7 @@ class FileToObjectMapper:
         if not self.data_dir.exists():
             raise FileNotFoundError(f"Data directory not found: {self.data_dir}")
         self.date_strings = self._build_date_strings(date_from, date_to)
-        self.records: List[MeteorRecord] = []
+        self.records: List[EventRecord] = []
 
     @staticmethod
     def _build_date_strings(date_from: str, date_to: str) -> List[str]:
@@ -205,7 +205,7 @@ class FileToObjectMapper:
             cursor += timedelta(days=1)
         return names
 
-    def map(self) -> List[MeteorRecord]:
+    def map(self) -> List[EventRecord]:
         if not self.date_strings:
             return []
         available_dates = {
@@ -214,11 +214,11 @@ class FileToObjectMapper:
         target_dates = sorted(available_dates.intersection(self.date_strings))
         for date_folder in target_dates:
             date_path = self.data_dir / date_folder
-            for meteor_folder in self._get_folder_content(date_path):
-                meteor_path = date_path / meteor_folder
-                if not meteor_path.is_dir():
+            for event_folder in self._get_folder_content(date_path):
+                event_path = date_path / event_folder
+                if not event_path.is_dir():
                     continue
-                record = self._process_meteor_folder(date_folder, meteor_folder, meteor_path)
+                record = self._process_event_folder(date_folder, event_folder, event_path)
                 if record:
                     self.records.append(record)
         return self.records
@@ -232,10 +232,10 @@ class FileToObjectMapper:
         suffix_lower = suffix.lower()
         return [name for name in entries if name.lower().endswith(suffix_lower)]
 
-    def _load_meteor_location(
+    def _load_event_location(
         self,
-        meteor: Dict[str, object],
-        meteor_path: Path,
+        event: Dict[str, object],
+        event_path: Path,
         folder_entries: Iterable[str],
     ) -> None:
         """Mark crossbearing status from generated result files and load location if present."""
@@ -245,16 +245,16 @@ class FileToObjectMapper:
             or self._find_files(folder_entries, ".stat")
             or "location.txt" in folder_entries
         )
-        meteor["camera_confirmed"] = 1 if has_crossbearing_results else 0
+        event["camera_confirmed"] = 1 if has_crossbearing_results else 0
 
         if "location.txt" in folder_entries:
-            location_file = meteor_path / "location.txt"
+            location_file = event_path / "location.txt"
             try:
                 with location_file.open("r", encoding="utf-8") as handle:
                     line = handle.readline().strip()
-                    meteor["location"] = line or None
+                    event["location"] = line or None
             except OSError:
-                meteor["location"] = None
+                event["location"] = None
 
     def _create_thumbnail(self, image_path: Path, thumbnail_path: Path) -> None:
         if not image_path.exists():
@@ -273,16 +273,16 @@ class FileToObjectMapper:
             # Skip thumbnail creation if Pillow cannot read the file
             return
 
-    def _load_meteor_stat_file(
+    def _load_event_stat_file(
         self,
-        meteor: Dict[str, object],
-        meteor_path: Path,
+        event: Dict[str, object],
+        event_path: Path,
         folder_entries: Iterable[str],
     ) -> None:
         stat_files = self._find_files(folder_entries, ".stat")
         if not stat_files:
             return
-        stat_path = meteor_path / stat_files[0]
+        stat_path = event_path / stat_files[0]
         try:
             with stat_path.open("r", encoding="utf-8") as handle:
                 for line in handle:
@@ -290,23 +290,23 @@ class FileToObjectMapper:
                     if len(parts) < 3:
                         continue
                     key = parts[0]
-                    if key in self.meteor_file_map:
-                        meteor[self.meteor_file_map[key]] = " ".join(parts[2:]).strip()
+                    if key in self.stat_file_map:
+                        event[self.stat_file_map[key]] = " ".join(parts[2:]).strip()
                     elif key == "shower":
-                        meteor["radiant_shower"] = " ".join(parts[2:5]).strip()
+                        event["radiant_shower"] = " ".join(parts[2:5]).strip()
         except OSError:
             return
 
     def _load_res_file_data(
         self,
-        meteor: Dict[str, object],
-        meteor_path: Path,
+        event: Dict[str, object],
+        event_path: Path,
         folder_entries: Iterable[str],
     ) -> List[ResEntryRecord]:
         res_files = self._find_files(folder_entries, ".res")
         if not res_files:
             return []
-        res_path = meteor_path / res_files[0]
+        res_path = event_path / res_files[0]
         try:
             with res_path.open("r", encoding="utf-8") as handle:
                 lines = handle.readlines()
@@ -317,9 +317,9 @@ class FileToObjectMapper:
         coords_start = self._parse_res_coordinates(lines[0])
         coords_end = self._parse_res_coordinates(lines[1])
         if coords_start:
-            meteor["track_startlong"], meteor["track_startlat"] = coords_start
+            event["track_startlong"], event["track_startlat"] = coords_start
         if coords_end:
-            meteor["track_endlong"], meteor["track_endlat"] = coords_end
+            event["track_endlong"], event["track_endlat"] = coords_end
         res_entries: List[ResEntryRecord] = []
         for line_no, raw_line in enumerate(lines, start=1):
             entry = self._parse_res_entry(line_no, raw_line)
@@ -377,14 +377,14 @@ class FileToObjectMapper:
             return "end"
         return "station"
 
-    def _load_meteor_event_data(
+    def _load_event_observation_data(
         self,
-        meteor_path: Path,
+        event_path: Path,
         folder_entries: Iterable[str],
     ) -> List[ObservationRecord]:
         observations: List[ObservationRecord] = []
         for station_name in folder_entries:
-            station_path = meteor_path / station_name
+            station_path = event_path / station_name
             if not station_path.is_dir():
                 continue
             for cam_name in self._get_folder_content(station_path):
@@ -459,7 +459,7 @@ class FileToObjectMapper:
         event_start_utc: datetime | None,
         values: Dict[str, object],
     ) -> str:
-        """Build a stable observation identifier that survives meteor regrouping."""
+        """Build a stable observation identifier that survives event regrouping."""
 
         if event_start_utc is not None:
             return (
@@ -597,28 +597,28 @@ class FileToObjectMapper:
         except (TypeError, ValueError):
             return None
 
-    def _process_meteor_folder(
-        self, date_folder: str, meteor_folder: str, meteor_path: Path
-    ) -> MeteorRecord | None:
-        meteor_image = meteor_path / "image.jpg"
-        thumbnail_path = meteor_path / "thumbnail.jpg"
-        self._create_thumbnail(meteor_image, thumbnail_path)
+    def _process_event_folder(
+        self, date_folder: str, event_folder: str, event_path: Path
+    ) -> EventRecord | None:
+        event_image = event_path / "image.jpg"
+        thumbnail_path = event_path / "thumbnail.jpg"
+        self._create_thumbnail(event_image, thumbnail_path)
 
-        datetimetag = f"{date_folder}{meteor_folder}"
-        meteor_payload: Dict[str, object] = {"datetimetag": datetimetag}
+        datetimetag = f"{date_folder}{event_folder}"
+        event_payload: Dict[str, object] = {"datetimetag": datetimetag}
         try:
-            meteor_payload["date"] = datetime.strptime(datetimetag, "%Y%m%d%H%M%S")
+            event_payload["date"] = datetime.strptime(datetimetag, "%Y%m%d%H%M%S")
         except ValueError:
-            meteor_payload["date"] = None
+            event_payload["date"] = None
 
-        folder_entries = self._get_folder_content(meteor_path)
-        self._load_meteor_location(meteor_payload, meteor_path, folder_entries)
-        self._load_meteor_stat_file(meteor_payload, meteor_path, folder_entries)
-        res_entries = self._load_res_file_data(meteor_payload, meteor_path, folder_entries)
-        observations = self._load_meteor_event_data(meteor_path, folder_entries)
+        folder_entries = self._get_folder_content(event_path)
+        self._load_event_location(event_payload, event_path, folder_entries)
+        self._load_event_stat_file(event_payload, event_path, folder_entries)
+        res_entries = self._load_res_file_data(event_payload, event_path, folder_entries)
+        observations = self._load_event_observation_data(event_path, folder_entries)
 
-        return MeteorRecord(
-            meteor=meteor_payload,
+        return EventRecord(
+            event=event_payload,
             observations=observations,
             res_entries=res_entries,
         )

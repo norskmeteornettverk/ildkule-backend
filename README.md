@@ -1,253 +1,150 @@
-<div id="top"></div>
-<!--
-*** Thanks for checking out the Best-README-Template. If you have a suggestion
-*** that would make this better, please fork the repo and create a pull request
-*** or simply open an issue with the tag "enhancement".
-*** Don't forget to give the project a star!
-*** Thanks again! Now go create something AMAZING! :D
--->
-
-
-
-<!-- PROJECT SHIELDS -->
-<!--
-*** I'm using markdown "reference style" links for readability.
-*** Reference links are enclosed in brackets [ ] instead of parentheses ( ).
-*** See the bottom of this document for the declaration of the reference variables
-*** for contributors-url, forks-url, etc. This is an optional, concise syntax you may use.
-*** https://www.markdownguide.org/basic-syntax/#reference-style-links
--->
-[![Contributors][contributors-shield]][contributors-url]
-[![Forks][forks-shield]][forks-url]
-[![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
-[![MIT License][license-shield]][license-url]
-[![LinkedIn][linkedin-shield]][linkedin-url]
-
+# Ildkule Backend
 
+This repository contains the backend code for the Ildkule project.
 
-<!-- PROJECT LOGO -->
-<br />
-<div align="center">
-  <a href="https://github.com/othneildrew/Best-README-Template">
-    <img src="images/logo.png" alt="Logo" width="80" height="80">
-  </a>
+It has two parts:
 
-  <h3 align="center">Best-README-Template</h3>
+- `api/` is the old PHP API
+- `fastapi_app/` is the new FastAPI version
 
-  <p align="center">
-    An awesome README template to jumpstart your projects!
-    <br />
-    <a href="https://github.com/othneildrew/Best-README-Template"><strong>Explore the docs »</strong></a>
-    <br />
-    <br />
-    <a href="https://github.com/othneildrew/Best-README-Template">View Demo</a>
-    ·
-    <a href="https://github.com/othneildrew/Best-README-Template/issues">Report Bug</a>
-    ·
-    <a href="https://github.com/othneildrew/Best-README-Template/issues">Request Feature</a>
-  </p>
-</div>
-
-
-
-<!-- TABLE OF CONTENTS -->
-<details>
-  <summary>Table of Contents</summary>
-  <ol>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-      <ul>
-        <li><a href="#built-with">Built With</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
-        <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#installation">Installation</a></li>
-      </ul>
-    </li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#license">License</a></li>
-    <li><a href="#contact">Contact</a></li>
-    <li><a href="#acknowledgments">Acknowledgments</a></li>
-  </ol>
-</details>
+The goal is to move from the old API to the new one in a safe way.
 
+## What This Project Does
 
+This backend:
 
-<!-- ABOUT THE PROJECT -->
-## About The Project
+- stores users, events, cameras, and stations
+- reads meteor data from files
+- saves data to MySQL
+- gives data to frontend clients through an API
+- keeps raw trail data and raw `.res` data for later use
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
+## Project Structure
 
-There are many great README templates available on GitHub; however, I didn't find one that really suited my needs so I created this enhanced one. I want to create a README template so amazing that it'll be the last one you ever need -- I think this is it.
+- `api/` old PHP code
+- `fastapi_app/` new Python API
+- `database/` SQL setup files
+- `thunder-tests/` old API request examples
 
-Here's why:
-* Your time should be focused on creating something amazing. A project that solves a problem and helps others
-* You shouldn't be doing the same tasks over and over like creating a README from scratch
-* You should implement DRY principles to the rest of your life :smile:
+## Run The FastAPI App
 
-Of course, no one template will serve all projects since your needs may be different. So I'll be adding more in the near future. You may also suggest changes by forking this repo and creating a pull request or opening an issue. Thanks to all the people have contributed to expanding this template!
+1. Create a virtual environment
+2. Install packages
+3. Copy the example env file
+4. Start the server
 
-Use the `BLANK_README.md` to get started.
+Example:
 
-<p align="right">(<a href="#top">back to top</a>)</p>
+```bash
+pip install -r fastapi_app/requirements.txt
+pip install -r fastapi_app/requirements-dev.txt
+cp fastapi_app/.env.example fastapi_app/.env
+uvicorn fastapi_app.app.main:app --reload
+```
 
+Open `http://127.0.0.1:8000/docs` to see the API docs.
 
+## MySQL Setup
 
-### Built With
+You need a running MySQL server before you start the API.
 
-This section should list any major frameworks/libraries used to bootstrap your project. Leave any add-ons/plugins for the acknowledgements section. Here are a few examples.
+Basic steps:
 
-* [Next.js](https://nextjs.org/)
-* [React.js](https://reactjs.org/)
-* [Vue.js](https://vuejs.org/)
-* [Angular](https://angular.io/)
-* [Svelte](https://svelte.dev/)
-* [Laravel](https://laravel.com)
-* [Bootstrap](https://getbootstrap.com)
-* [JQuery](https://jquery.com)
+1. Create a database, for example `ildkule`
+2. Put the correct MySQL login in `fastapi_app/.env`
+3. Make sure the MySQL service is running
 
-<p align="right">(<a href="#top">back to top</a>)</p>
+Example `DATABASE_URL`:
 
+```text
+mysql+pymysql://root:password@localhost:3306/ildkule
+```
 
+If your MySQL user uses `caching_sha2_password`, the Python app also needs
+`cryptography`. This is already included in `fastapi_app/requirements.txt`.
 
-<!-- GETTING STARTED -->
-## Getting Started
+## Database Script
 
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
+The main SQL setup file is:
 
-### Prerequisites
+```text
+database/build_db.sql
+```
 
-This is an example of how to list things you need to use the software and how to install them.
-* npm
-  ```sh
-  npm install npm@latest -g
-  ```
+Use this file when you want to create a fresh database from scratch.
 
-### Installation
+Important:
 
-_Below is an example of how you can instruct your audience on installing and setting up your app. This template doesn't rely on any external dependencies or services._
+- this script drops and recreates tables
+- do not run it on a database you want to keep
 
-1. Get a free API Key at [https://example.com](https://example.com)
-2. Clone the repo
-   ```sh
-   git clone https://github.com/your_username_/Project-Name.git
-   ```
-3. Install NPM packages
-   ```sh
-   npm install
-   ```
-4. Enter your API in `config.js`
-   ```js
-   const API_KEY = 'ENTER YOUR API';
-   ```
+## If The Database Already Has Data
 
-<p align="right">(<a href="#top">back to top</a>)</p>
+Be careful here.
 
+The FastAPI app does not clear the database by itself when it starts.
+It uses the existing tables and data.
 
+If you already have important data:
 
-<!-- USAGE EXAMPLES -->
-## Usage
+- make a backup first
+- do not run `database/build_db.sql`
+- update the schema with safe SQL changes instead of full reset
 
-Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
+Right now, `build_db.sql` is best for a new database, not for an old live one.
 
-_For more examples, please refer to the [Documentation](https://example.com)_
+## Settings
 
-<p align="right">(<a href="#top">back to top</a>)</p>
+The app reads settings from `fastapi_app/.env`.
 
+Important values:
 
+- `DATABASE_URL`
+- `JWT_SECRET_KEY`
+- `DATA_DIRECTORY`
 
-<!-- ROADMAP -->
-## Roadmap
+## Tests
 
-- [x] Add Changelog
-- [x] Add back to top links
-- [ ] Add Additional Templates w/ Examples
-- [ ] Add "components" document to easily copy & paste sections of the readme
-- [ ] Multi-language Support
-    - [ ] Chinese
-    - [ ] Spanish
+Run tests with:
 
-See the [open issues](https://github.com/othneildrew/Best-README-Template/issues) for a full list of proposed features (and known issues).
+```bash
+pytest -q fastapi_app/tests
+```
 
-<p align="right">(<a href="#top">back to top</a>)</p>
+The test suite uses SQLite and does not need your local MySQL database.
 
+## Notes
 
+- The new API supports meteor import from file data.
+- The import can create thumbnails from `image.jpg`.
+- Event import is done through `/api/eventload`.
+- The import upserts existing events and observations when it finds the same
+  data again.
+- Missing events and observations are soft-deleted, not hard-deleted.
+- Deleted items are hidden by default in API list calls.
 
-<!-- CONTRIBUTING -->
-## Contributing
+## Import Behavior
 
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+`/api/eventload` reads event folders from `DATA_DIRECTORY`.
 
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
-Don't forget to give the project a star! Thanks again!
+What it does:
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+- creates or updates events
+- creates or updates observations
+- stores raw trail data and raw `.res` rows
+- makes `thumbnail.jpg` from `image.jpg` when possible
 
-<p align="right">(<a href="#top">back to top</a>)</p>
+If a meteor or observation was in the database before, but is not found in the
+imported date range now, it is marked as deleted.
 
+This is a soft delete:
 
+- the row stays in the database
+- `is_deleted` becomes `true`
+- the API hides it by default
 
-<!-- LICENSE -->
-## License
+## Current Status
 
-Distributed under the MIT License. See `LICENSE.txt` for more information.
+The FastAPI port is active and tested.
 
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-
-
-<!-- CONTACT -->
-## Contact
-
-Your Name - [@your_twitter](https://twitter.com/your_username) - email@example.com
-
-Project Link: [https://github.com/your_username/repo_name](https://github.com/your_username/repo_name)
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-
-
-<!-- ACKNOWLEDGMENTS -->
-## Acknowledgments
-
-Use this space to list resources you find helpful and would like to give credit to. I've included a few of my favorites to kick things off!
-
-* [Choose an Open Source License](https://choosealicense.com)
-* [GitHub Emoji Cheat Sheet](https://www.webpagefx.com/tools/emoji-cheat-sheet)
-* [Malven's Flexbox Cheatsheet](https://flexbox.malven.co/)
-* [Malven's Grid Cheatsheet](https://grid.malven.co/)
-* [Img Shields](https://shields.io)
-* [GitHub Pages](https://pages.github.com)
-* [Font Awesome](https://fontawesome.com)
-* [React Icons](https://react-icons.github.io/react-icons/search)
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-
-
-<!-- MARKDOWN LINKS & IMAGES -->
-<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[contributors-shield]: https://img.shields.io/github/contributors/othneildrew/Best-README-Template.svg?style=for-the-badge
-[contributors-url]: https://github.com/othneildrew/Best-README-Template/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/othneildrew/Best-README-Template.svg?style=for-the-badge
-[forks-url]: https://github.com/othneildrew/Best-README-Template/network/members
-[stars-shield]: https://img.shields.io/github/stars/othneildrew/Best-README-Template.svg?style=for-the-badge
-[stars-url]: https://github.com/othneildrew/Best-README-Template/stargazers
-[issues-shield]: https://img.shields.io/github/issues/othneildrew/Best-README-Template.svg?style=for-the-badge
-[issues-url]: https://github.com/othneildrew/Best-README-Template/issues
-[license-shield]: https://img.shields.io/github/license/othneildrew/Best-README-Template.svg?style=for-the-badge
-[license-url]: https://github.com/othneildrew/Best-README-Template/blob/master/LICENSE.txt
-[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
-[linkedin-url]: https://linkedin.com/in/othneildrew
-[product-screenshot]: images/screenshot.png
+The old PHP API is still in the repository for reference during the move.

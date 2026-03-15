@@ -25,12 +25,12 @@ class ObservationCamData(Base):
     __tablename__ = "observation_cam_data"
     __table_args__ = (
         UniqueConstraint("observation_key", name="uq_observation_key"),
-        Index("ix_observation_cam_data_meteor_id", "meteor_id"),
+        Index("ix_observation_cam_data_event_id", "event_id"),
         Index("ix_observation_cam_data_cam_id", "cam_id"),
     )
 
     id = Column(unsigned_int(), primary_key=True, autoincrement=True)
-    meteor_id = Column(unsigned_int(), ForeignKey("meteor.id"), nullable=False)
+    event_id = Column(unsigned_int(), ForeignKey("event.id"), nullable=False)
     cam_id = Column(unsigned_int(), ForeignKey("cam.id"), nullable=False)
     observation_key = Column(String(255), nullable=False, index=True)
     source_hash = Column(String(64), nullable=False)
@@ -115,7 +115,7 @@ class ObservationCamData(Base):
     summary_recalibrated = Column(Integer)
     summary_meteor_probability = Column(Float)
 
-    meteor = relationship("Meteor", back_populates="observation_data")
+    event = relationship("Event", back_populates="observation_data")
     cam = relationship("Cam", back_populates="observations")
     trail_points = relationship(
         "ObservationTrailPoint",

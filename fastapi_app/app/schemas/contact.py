@@ -15,7 +15,7 @@ class ContactRequest(BaseModel):
     form: ContactForm
 
 
-class ReportMeteorForm(BaseModel):
+class ReportEventForm(BaseModel):
     navn: str
     epost: EmailStr
     telefon: Optional[str] = None
@@ -34,7 +34,7 @@ class ReportMeteorForm(BaseModel):
         allow_population_by_field_name = True
 
 
-class ReportMeteorRequest(BaseModel):
+class ReportEventRequest(BaseModel):
     rcToken: str
-    form: ReportMeteorForm
+    form: ReportEventForm
 
