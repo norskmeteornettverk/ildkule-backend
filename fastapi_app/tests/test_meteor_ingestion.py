@@ -556,7 +556,7 @@ def test_eventload_marks_missing_observation_deleted(client, db_session, tmp_pat
     event_response = client.get(f"/api/event/{active_observation.event_id}")
     assert event_response.status_code == 200
     returned_cam_names = [
-        item["cam"]["cam_name"] for item in event_response.json()["observation_cam_data"]
+        item["observation_ref"]["cam_name"] for item in event_response.json()["observations"]
     ]
     assert "cam3" in returned_cam_names
     assert "cam4" not in returned_cam_names
@@ -566,8 +566,8 @@ def test_eventload_marks_missing_observation_deleted(client, db_session, tmp_pat
     )
     assert event_response_with_deleted.status_code == 200
     returned_cam_names = [
-        item["cam"]["cam_name"]
-        for item in event_response_with_deleted.json()["observation_cam_data"]
+        item["observation_ref"]["cam_name"]
+        for item in event_response_with_deleted.json()["observations"]
     ]
     assert "cam3" in returned_cam_names
     assert "cam4" in returned_cam_names

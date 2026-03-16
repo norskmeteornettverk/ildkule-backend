@@ -15,7 +15,13 @@ router = APIRouter(tags=["auth"])
 user_service = UserService()
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    summary="Log in",
+    description="Authenticates a user and returns a JWT plus basic account data.",
+    response_description="Authenticated session payload.",
+)
 def login(payload: LoginRequest, session: Session = Depends(get_session)):
     user = user_service.authenticate(session, payload.username, payload.password)
     if not user:
@@ -45,7 +51,11 @@ def login(payload: LoginRequest, session: Session = Depends(get_session)):
     )
 
 
-@router.post("/passwordresetrequest")
+@router.post(
+    "/passwordresetrequest",
+    summary="Request password reset",
+    description="Starts the password-reset flow for the supplied e-mail address.",
+)
 def request_reset(
     payload: PasswordResetEmailRequest, session: Session = Depends(get_session)
 ):
@@ -53,7 +63,11 @@ def request_reset(
     return {"message": "Passordreset sendt dersom brukeren finnes"}
 
 
-@router.put("/passwordresetrequest")
+@router.put(
+    "/passwordresetrequest",
+    summary="Confirm password reset",
+    description="Completes the password-reset flow with token, e-mail, and new password.",
+)
 def confirm_reset(
     payload: PasswordResetConfirmation, session: Session = Depends(get_session)
 ):
@@ -66,4 +80,3 @@ def confirm_reset(
             detail="Kunne ikke oppdatere passordet",
         )
     return {"message": "Passordet ble endret"}
-

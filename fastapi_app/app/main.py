@@ -9,7 +9,23 @@ from .routers import admin, auth, forms, logs, events, users
 
 settings = get_settings()
 
-app = FastAPI(title="Ildkule API", version="2.0.0")
+app = FastAPI(
+    title="Ildkule API",
+    version="2.0.0",
+    description=(
+        "Public and administrative API for Ildkule. "
+        "The current OpenAPI document prioritises the new meteor-event contract, "
+        "Utforsk data, ingestion, users, and public forms."
+    ),
+    openapi_tags=[
+        {"name": "events", "description": "Meteor-event list, meteor-event detail, raw event supplements, and Utforsk endpoints."},
+        {"name": "forms", "description": "Public contact and observation-reporting endpoints."},
+        {"name": "auth", "description": "Authentication and password reset endpoints."},
+        {"name": "users", "description": "Account creation, account reads, and administrative user management."},
+        {"name": "station log", "description": "Station log intake endpoints."},
+        {"name": "admin", "description": "Administrative ingestion endpoints."},
+    ],
+)
 
 app.add_middleware(
     CORSMiddleware,

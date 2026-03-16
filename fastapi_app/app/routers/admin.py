@@ -13,7 +13,11 @@ settings = get_settings()
 service = EventService()
 
 
-@router.post("/eventload")
+@router.post(
+    "/eventload",
+    summary="Load events from files",
+    description="Administrative ingestion endpoint that reads event folders from DATA_DIRECTORY and upserts events and observations.",
+)
 def event_load(
     payload: FileLoadRequest,
     credentials: HTTPBasicCredentials = Depends(security),

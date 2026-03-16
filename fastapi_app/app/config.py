@@ -55,6 +55,18 @@ class Settings(BaseSettings):
     )
     contact_recipient: Optional[str] = None
     meteor_report_recipient: Optional[str] = None
+    public_timezone: str = Field(
+        default="Europe/Oslo",
+        description="IANA timezone used for public local-time serialisation",
+    )
+    candidate_max_end_height_km: float = Field(
+        default=25.0,
+        description="Maximum end height used when flagging meteorite candidates",
+    )
+    candidate_max_speed_kms: float = Field(
+        default=25.0,
+        description="Maximum speed used when flagging meteorite candidates",
+    )
 
     class Config:
         env_file = str(ENV_FILE_PATH)

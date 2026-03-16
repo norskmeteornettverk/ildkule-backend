@@ -104,3 +104,38 @@ def test_forms_recaptcha_failure_has_legacy_message_shape(client, monkeypatch):
     assert report.status_code == 401
     assert "message" in report.json()
     assert "error" in report.json()
+
+
+def test_reportmeteor_accepts_multipart_attachments(client, monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(contact_service, "verify_recaptcha", lambda _token: True)
+
+    def fake_send_mail(recipient, subject, html_body, alt_body=None, attachments=None):
+        captured["recipient"] = recipient
+        captured["subject"] = subject
+        captured["html_body"] = html_body
+        captured["attachments"] = list(attachments or [])
+
+    monkeypatch.setattr(contact_service, "send_mail", fake_send_mail)
+
+    response = client.post(
+        "/api/reportmeteor",
+        data={
+            "rcToken": "valid",
+            "navn": "Ada",
+            "epost": "ada@example.com",
+            "observationTime": "2026-03-15T20:15:00",
+            "latitude": "59.91",
+            "longitude": "10.75",
+            "directionText": "Fra vest mot nord",
+        },
+        files=[
+            ("attachments", ("meteor.jpg", b"binary-image", "image/jpeg")),
+        ],
+    )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "Observasjon sendt"
+    assert captured["attachments"][0]["filename"] == "meteor.jpg"
+    assert "Fra vest mot nord" in captured["html_body"]

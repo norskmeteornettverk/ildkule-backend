@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 from datetime import datetime
+import io
 from math import isfinite
 from math import ceil
 from typing import List, Optional
@@ -22,6 +24,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session, selectinload
 
+from ..config import get_settings
 from ..models import (
     Cam,
     Event,
@@ -38,6 +41,8 @@ from ..utils.serialization import (
     serialize_res_entry,
     serialize_trail_point,
 )
+
+settings = get_settings()
 
 
 class EventService:
@@ -76,7 +81,7 @@ class EventService:
             (
                 and_(
                     Event.track_endheight.isnot(None),
-                    Event.track_endheight < 40,
+                    Event.track_endheight <= settings.candidate_max_end_height_km,
                 ),
                 "Meteorittkandidat",
             ),
@@ -86,6 +91,11 @@ class EventService:
             ),
             else_="Upeilet",
         )
+
+    def _event_list_load_options(self):
+        return selectinload(Event.observation_data).selectinload(
+            ObservationCamData.cam
+        ).selectinload(Cam.station)
 
     def list_events(
         self,
@@ -113,6 +123,7 @@ class EventService:
                 ratings_subquery.c.positive_ratings,
                 ratings_subquery.c.negative_ratings,
             )
+            .options(self._event_list_load_options())
             .outerjoin(ratings_subquery, Event.id == ratings_subquery.c.event_id)
             .where(self._base_filter(include_deleted))
             .order_by(direction)
@@ -123,7 +134,7 @@ class EventService:
 
         events = []
         for event, ratings, positive_ratings, negative_ratings in results:
-            payload = serialize_event(event)
+            payload = serialize_event(event, include_relationships=True)
             payload["ratings"] = ratings or 0
             payload["positive_ratings"] = positive_ratings or 0
             payload["negative_ratings"] = negative_ratings or 0
@@ -150,6 +161,7 @@ class EventService:
     ) -> dict:
         stmt = (
             select(Event)
+            .options(self._event_list_load_options())
             .where(
                 self._base_filter(include_deleted),
                 or_(
@@ -163,7 +175,7 @@ class EventService:
         events = session.scalars(stmt).all()
         return {
             "totalItems": len(events),
-            "events": serialize_event_list(events),
+            "events": serialize_event_list(events, include_relationships=True),
             "totalPages": 1,
             "currentPage": 1,
         }
@@ -177,7 +189,7 @@ class EventService:
         include_deleted: bool = False,
         limit: int = 100,
     ) -> dict:
-        stmt = select(Event).where(self._base_filter(include_deleted))
+        stmt = select(Event).options(self._event_list_load_options()).where(self._base_filter(include_deleted))
 
         if station_names:
             stmt = (
@@ -201,7 +213,7 @@ class EventService:
         events = session.scalars(stmt).unique().all()
         return {
             "totalItems": len(events),
-            "events": serialize_event_list(events),
+            "events": serialize_event_list(events, include_relationships=True),
             "totalPages": 1,
             "currentPage": 1,
         }
@@ -377,7 +389,7 @@ class EventService:
             count(*) as Kameraopptak,
             count(distinct m.id) as Hendelser,
             count(distinct case when m.track_startheight is not null then m.id end) Krysspeilede,
-            COUNT(DISTINCT CASE WHEN m.track_startheight is not null and m.track_startheight < 40 THEN m.id END) Meteorittkandidater
+            COUNT(DISTINCT CASE WHEN m.track_endheight is not null and m.track_endheight <= {settings.candidate_max_end_height_km} THEN m.id END) Meteorittkandidater
             from station as s
             left outer join cam as c on s.id = c.station_id
             left outer join observation_cam_data as d on c.id = d.cam_id
@@ -395,7 +407,7 @@ class EventService:
             count(*) as Kameraopptak,
             count(distinct m.id) as Hendelser,
             count(distinct case when m.track_startheight is not null then m.id end) Krysspeilede,
-            COUNT(DISTINCT CASE WHEN m.track_startheight is not null and m.track_startheight < 40 THEN m.id END) Meteorittkandidater
+            COUNT(DISTINCT CASE WHEN m.track_endheight is not null and m.track_endheight <= {settings.candidate_max_end_height_km} THEN m.id END) Meteorittkandidater
             from station as s
             left outer join cam as c on s.id = c.station_id
             left outer join observation_cam_data as d on c.id = d.cam_id
@@ -412,7 +424,7 @@ class EventService:
             count(*) as Kameraopptak,
             count(distinct m.id) as Hendelser,
             count(distinct case when m.track_startheight is not null then m.id end) Krysspeilede,
-            COUNT(DISTINCT CASE WHEN m.track_startheight is not null and m.track_startheight < 40 THEN m.id END) Meteorittkandidater
+            COUNT(DISTINCT CASE WHEN m.track_endheight is not null and m.track_endheight <= {settings.candidate_max_end_height_km} THEN m.id END) Meteorittkandidater
             from station as s
             left outer join cam as c on s.id = c.station_id
             left outer join observation_cam_data as d on c.id = d.cam_id
@@ -463,6 +475,186 @@ class EventService:
             "stations": stations,
             "eventTypes": event_types,
         }
+
+    def explore(
+        self,
+        session: Session,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        stations: Optional[List[str]] = None,
+        cross_station_confirmed: Optional[bool] = None,
+        candidate_only: bool = False,
+        include_deleted: bool = False,
+    ) -> dict:
+        stmt = (
+            select(Event)
+            .options(self._event_list_load_options())
+            .where(self._base_filter(include_deleted))
+            .order_by(Event.date.desc())
+        )
+
+        if from_date:
+            stmt = stmt.where(Event.date >= self._parse_iso_date(from_date))
+        if to_date:
+            stmt = stmt.where(Event.date <= self._parse_iso_date(to_date, inclusive_end=True))
+        if stations:
+            stmt = (
+                stmt.join(ObservationCamData, Event.id == ObservationCamData.event_id)
+                .join(Cam, ObservationCamData.cam_id == Cam.id)
+                .join(Station, Cam.station_id == Station.id)
+                .where(Station.station_name.in_(stations))
+            )
+        if cross_station_confirmed is not None:
+            stmt = stmt.where(Event.camera_confirmed == (1 if cross_station_confirmed else 0))
+
+        events = session.scalars(stmt).unique().all()
+        serialised = [serialize_event(event, include_relationships=True) for event in events]
+        if candidate_only:
+            serialised = [
+                event_payload
+                for event_payload in serialised
+                if event_payload["candidate"]["is_candidate"]
+            ]
+
+        kpi = {
+            "total_events": len(serialised),
+            "cross_station_confirmed": sum(
+                1 for event_payload in serialised if event_payload["cross_station_confirmed"]
+            ),
+            "candidates": sum(
+                1 for event_payload in serialised if event_payload["candidate"]["is_candidate"]
+            ),
+            "stations": sorted(
+                {
+                    station
+                    for event_payload in serialised
+                    for station in event_payload["station_summary"]["stations"]
+                }
+            ),
+        }
+        return {
+            "filters": {
+                "from_date": from_date,
+                "to_date": to_date,
+                "stations": stations or [],
+                "cross_station_confirmed": cross_station_confirmed,
+                "candidate": candidate_only,
+            },
+            "candidate_settings": {
+                "max_end_height_km": settings.candidate_max_end_height_km,
+                "max_speed_kms": settings.candidate_max_speed_kms,
+            },
+            "kpi": kpi,
+            "events": [
+                {
+                    "id": event_payload["id"],
+                    "event_path": event_payload["event_path"],
+                    "title": event_payload["title"],
+                    "times": event_payload["times"],
+                    "location": event_payload["location"],
+                    "cross_station_confirmed": event_payload["cross_station_confirmed"],
+                    "candidate": event_payload["candidate"],
+                    "shower": event_payload["shower"],
+                    "ai_score": event_payload["ai_score"],
+                    "technical_validity": event_payload["technical_validity"],
+                    "station_summary": event_payload["station_summary"],
+                    "preview": event_payload["preview"],
+                    "radiant": {
+                        "ra": event_payload["radiant_ra"],
+                        "dec": event_payload["radiant_dec"],
+                    },
+                    "ground": {
+                        "lat": event_payload["track_endlat"],
+                        "lng": event_payload["track_endlong"],
+                        "slat": None,
+                        "slng": None,
+                    },
+                    "final_classification": event_payload["final_classification"],
+                }
+                for event_payload in serialised
+            ],
+        }
+
+    def explore_csv(
+        self,
+        session: Session,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        stations: Optional[List[str]] = None,
+        cross_station_confirmed: Optional[bool] = None,
+        candidate_only: bool = False,
+        include_deleted: bool = False,
+    ) -> str:
+        payload = self.explore(
+            session,
+            from_date=from_date,
+            to_date=to_date,
+            stations=stations,
+            cross_station_confirmed=cross_station_confirmed,
+            candidate_only=candidate_only,
+            include_deleted=include_deleted,
+        )
+        buffer = io.StringIO()
+        writer = csv.DictWriter(
+            buffer,
+            fieldnames=[
+                "id",
+                "event_path",
+                "title",
+                "utc_time",
+                "local_time",
+                "location",
+                "cross_station_confirmed",
+                "is_candidate",
+                "max_end_height_km",
+                "max_speed_kms",
+                "station_count",
+                "observation_count",
+                "shower",
+                "ra",
+                "dec",
+                "lat",
+                "lng",
+                "final_classification",
+            ],
+        )
+        writer.writeheader()
+        for event_payload in payload["events"]:
+            writer.writerow(
+                {
+                    "id": event_payload["id"],
+                    "event_path": event_payload["event_path"],
+                    "title": event_payload["title"],
+                    "utc_time": event_payload["times"]["utc"],
+                    "local_time": event_payload["times"]["local"],
+                    "location": event_payload["location"],
+                    "cross_station_confirmed": event_payload["cross_station_confirmed"],
+                    "is_candidate": event_payload["candidate"]["is_candidate"],
+                    "max_end_height_km": event_payload["candidate"]["max_end_height_km"],
+                    "max_speed_kms": event_payload["candidate"]["max_speed_kms"],
+                    "station_count": event_payload["station_summary"]["station_count"],
+                    "observation_count": event_payload["station_summary"]["observation_count"],
+                    "shower": event_payload["shower"],
+                    "ra": event_payload["radiant"]["ra"],
+                    "dec": event_payload["radiant"]["dec"],
+                    "lat": event_payload["ground"]["lat"],
+                    "lng": event_payload["ground"]["lng"],
+                    "final_classification": event_payload["final_classification"],
+                }
+            )
+        return buffer.getvalue()
+
+    def _parse_iso_date(self, raw_value: str, inclusive_end: bool = False) -> datetime:
+        try:
+            parsed = datetime.fromisoformat(raw_value)
+        except ValueError as exc:
+            try:
+                parsed = datetime.strptime(raw_value, "%Y-%m-%d")
+            except ValueError as inner_exc:
+                raise HTTPException(status_code=400, detail=f"Invalid date: {raw_value}") from inner_exc
+        if inclusive_end and parsed.hour == 0 and parsed.minute == 0 and parsed.second == 0:
+            parsed = parsed.replace(hour=23, minute=59, second=59)
+        return parsed
 
     def load_from_files(
         self,

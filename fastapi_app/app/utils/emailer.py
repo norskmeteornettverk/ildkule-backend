@@ -1,7 +1,7 @@
 import logging
 import smtplib
 from email.message import EmailMessage
-from typing import Optional
+from typing import Iterable, Optional
 
 from ..config import get_settings
 
@@ -14,6 +14,7 @@ def send_mail(
     subject: str,
     html_body: str,
     alt_body: Optional[str] = None,
+    attachments: Optional[Iterable[dict]] = None,
 ) -> None:
     """Send an e-mail using SMTP credentials defined in the settings."""
 
@@ -34,6 +35,16 @@ def send_mail(
     msg["To"] = recipient
     msg.set_content(alt_body or html_body, subtype="plain")
     msg.add_alternative(html_body, subtype="html")
+    for attachment in attachments or []:
+        content = attachment.get("content")
+        if content is None:
+            continue
+        msg.add_attachment(
+            content,
+            maintype=attachment.get("maintype", "application"),
+            subtype=attachment.get("subtype", "octet-stream"),
+            filename=attachment.get("filename"),
+        )
 
     try:
         with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port) as smtp:
@@ -42,4 +53,3 @@ def send_mail(
     except Exception:
         logger.exception("Failed to send e-mail via SMTP")
         raise
-

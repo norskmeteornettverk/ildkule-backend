@@ -12,13 +12,22 @@ router = APIRouter(tags=["users"])
 user_service = UserService()
 
 
-@router.post("/user", status_code=201)
+@router.post(
+    "/user",
+    status_code=201,
+    summary="Create user",
+    description="Creates a new user account.",
+)
 def create_user(payload: UserCreate, session: Session = Depends(get_session)):
     user = user_service.create_user(session, payload.username, payload.password)
     return serialize_user(user)
 
 
-@router.get("/user/{user_id}")
+@router.get(
+    "/user/{user_id}",
+    summary="Get user",
+    description="Returns public account fields for one user.",
+)
 def get_user(
     user_id: int,
     session: Session = Depends(get_session),
@@ -30,7 +39,11 @@ def get_user(
     return serialize_user(user)
 
 
-@router.get("/user/{user_id}/details")
+@router.get(
+    "/user/{user_id}/details",
+    summary="Get user details",
+    description="Returns account fields for one user. Currently the same shape as /user/{user_id}.",
+)
 def get_user_details(
     user_id: int,
     session: Session = Depends(get_session),
@@ -55,7 +68,11 @@ def patch_user(
     return serialize_user(user)
 
 
-@router.get("/users")
+@router.get(
+    "/users",
+    summary="List users",
+    description="Returns a paginated user list with rating counters.",
+)
 def list_users(
     page: int = Query(-1),
     limit: int = Query(20),

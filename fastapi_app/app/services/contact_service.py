@@ -45,7 +45,11 @@ class ContactService:
             body,
         )
 
-    def handle_report(self, payload: ReportEventRequest) -> None:
+    def handle_report(
+        self,
+        payload: ReportEventRequest,
+        attachments: list[dict] | None = None,
+    ) -> None:
         if not verify_recaptcha(payload.rcToken):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -59,6 +63,12 @@ class ContactService:
             raise HTTPException(status_code=500, detail="Recipient missing")
 
         form = payload.form
+        attachment_lines = "<br>".join(
+            [
+                f"{attachment.get('filename', 'vedlegg')} ({attachment.get('content_type', 'ukjent type')})"
+                for attachment in attachments or []
+            ]
+        )
         body = f"""
         Hei!<br>{form.navn} har meldt inn en ny observasjon via ildkule.net.<br><br>
         <table style="border:1px solid #000;border-collapse:collapse;text-align:left;">
@@ -69,6 +79,10 @@ class ContactService:
             <tr>
                 <td>Kontaktinformasjon</td>
                 <td>{form.navn}<br>{form.epost}<br>Tlf: {form.telefon or 'ukjent'}</td>
+            </tr>
+            <tr style="background-color:#D6EEEE;">
+                <td>Observasjonstidspunkt</td>
+                <td>{form.observation_time.isoformat() if form.observation_time else '-'}</td>
             </tr>
             <tr style="background-color:#D6EEEE;">
                 <td>Observasjonssted</td>
@@ -85,7 +99,9 @@ class ContactService:
             <tr><td>Farge</td><td>{form.farge or '-'}</td></tr>
             <tr style="background-color:#D6EEEE;"><td>Lysstyrke</td><td>{form.lysstyrke or '-'}</td></tr>
             <tr><td>Varighet</td><td>{form.varighet or '-'}</td></tr>
-            <tr style="background-color:#D6EEEE;"><td>Kommentarer</td><td>{form.melding or '-'}</td></tr>
+            <tr style="background-color:#D6EEEE;"><td>Retningsnotat</td><td>{form.direction_text or '-'}</td></tr>
+            <tr><td>Kommentarer</td><td>{form.melding or '-'}</td></tr>
+            <tr style="background-color:#D6EEEE;"><td>Vedlegg</td><td>{attachment_lines or '-'}</td></tr>
         </table><br><br>
         Denne e-posten er automatisk sendt fra ildkule.net.
         """
@@ -94,5 +110,6 @@ class ContactService:
             "Ny observasjon fra ildkule.net",
             body,
             body,
+            attachments=attachments,
         )
 

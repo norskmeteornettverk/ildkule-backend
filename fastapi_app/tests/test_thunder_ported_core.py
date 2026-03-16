@@ -154,6 +154,11 @@ def test_event_list_search_filter_and_get(client, db_session):
     assert listed.status_code == 200
     assert listed.json()["currentPage"] == 1
     assert len(listed.json()["events"]) == 1
+    first_event = listed.json()["events"][0]
+    assert "times" in first_event
+    assert "candidate" in first_event
+    assert "final_classification" in first_event
+    assert "station_summary" in first_event
 
     page2 = client.get("/api/events?page=2&limit=1")
     assert page2.status_code == 200
@@ -175,8 +180,20 @@ def test_event_list_search_filter_and_get(client, db_session):
     assert get_one.json()["id"] == event_a.id
     assert get_one.json()["event_path"] == "20211101/010101"
     assert get_one.json()["event_type"] == "Krysspeilet"
-    assert get_one.json()["thumbnail_url"].endswith("/data/20211101/010101/thumbnail.jpg")
-    assert get_one.json()["media"]["image_url"].endswith("/data/20211101/010101/image.jpg")
+    assert get_one.json()["preview"]["thumbnail_url"].endswith("/data/20211101/010101/thumbnail.jpg")
+    assert any(
+        artifact["role"] == "event_preview" and artifact["url"].endswith("/data/20211101/010101/image.jpg")
+        for artifact in get_one.json()["event_artifacts"]
+    )
+    assert get_one.json()["header"]["title"].startswith("Krysspeilet")
+    assert get_one.json()["classification"]["final_classification"] == "Meteor"
+    assert isinstance(get_one.json()["event_artifacts"], list)
+    assert isinstance(get_one.json()["observations"], list)
+    assert get_one.json()["observations"][0]["observation_ref"]["station_name"] == "larvik"
+    assert "camera_confirmed" not in get_one.json()
+    assert "user_confirmed" not in get_one.json()
+    assert "media" not in get_one.json()
+    assert "observation_cam_data" not in get_one.json()
 
     get_by_tag = client.get("/api/event/20211101/010101")
     assert get_by_tag.status_code == 200
@@ -251,3 +268,48 @@ def test_insight_cam_and_station(client, db_session):
     assert station_report.status_code == 200
     assert isinstance(station_report.json(), list)
     assert "Stasjonsnavn" in station_report.json()[0]
+
+
+def test_explore_and_csv_export(client, db_session):
+    station = Station(station_name="alta")
+    cam = Cam(station=station, cam_name="cam9")
+    event = Event(
+        datetimetag="20260203040506",
+        location="Finnmark",
+        date=datetime(2026, 2, 3, 4, 5, 6),
+        user_confirmed=1,
+        camera_confirmed=1,
+        track_endheight=22.0,
+        track_speed=20.0,
+        radiant_ra=12.3,
+        radiant_dec=-1.2,
+        track_endlat=69.9,
+        track_endlong=23.3,
+    )
+    db_session.add_all([station, cam, event])
+    db_session.commit()
+    db_session.add(
+        ObservationCamData(
+            event_id=event.id,
+            cam_id=cam.id,
+            summary_latitude=69.6,
+            summary_longitude=23.1,
+            summary_elevation=20,
+            **_observation_kwargs("alta:cam9:2026-02-03T04:05:06.000"),
+        )
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/explore?from_date=2026-02-01&to_date=2026-02-05&stations=alta&cross_station_confirmed=true&candidate=true"
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["kpi"]["total_events"] == 1
+    assert payload["events"][0]["candidate"]["is_candidate"] is True
+    assert payload["events"][0]["ground"]["lat"] == 69.9
+
+    csv_response = client.get("/api/explore/export.csv?candidate=true")
+    assert csv_response.status_code == 200
+    assert "event_path,title,utc_time,local_time" in csv_response.text
+    assert "20260203/040506" in csv_response.text
