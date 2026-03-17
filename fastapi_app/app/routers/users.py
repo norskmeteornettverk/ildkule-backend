@@ -21,38 +21,65 @@ user_service = UserService()
 
 TUTORIAL_CONTENT = TutorialContentResponse(
     title="Meteorvurderingstutorial",
-    intro="Kort innforing i hva brukeren skal se etter for aa kunne gi en trygg vurdering.",
+    intro="Kort veiledning for aa kjenne igjen en mulig ildkule og forstaa hva som er nyttig aa rapportere eller vurdere.",
     sections=[
         {
-            "id": "what",
-            "title": "Hva er en ildkule",
+            "id": "checklist",
+            "title": "Sjekkliste for mulig ildkule",
             "bullets": [
-                "En ildkule er et kraftig lysfenomen som ofte beveger seg raskt over himmelen.",
-                "Noen hendelser er meteorer, andre kan vaere fly, satellitter eller andre lyskilder.",
+                "Beveger seg raskt over himmelen, klart raskere enn et fly.",
+                "Beveger seg i rett linje og snur eller svinger ikke.",
+                "Lyser sterkere enn klare stjerner eller planeter.",
+                "Er ikke synlig foran terreng, traer eller tett skydekke.",
+                "Er vanligvis synlig kort tid, ofte 1 til 10 sekunder og sjelden mer enn et halvt minutt.",
             ],
         },
         {
-            "id": "look-for",
-            "title": "Hva du boer se etter",
+            "id": "other-signs",
+            "title": "Andre tegn som kan vaere nyttige",
             "bullets": [
-                "Se etter tydelig retning, varighet, farge og lysstyrke.",
-                "Legg merke til om hendelsen endret fart, lyste opp omgivelsene eller forsvant bratt.",
+                "Plutselig opplysning av terrenget eller tydelige skygger kan vaere et viktig tegn.",
+                "En lysende stripe eller flekk paa himmelen som gradvis blir svakere kan hoere til samme hendelse.",
+                "Droenn eller smell kan vaere relevante hvis de ikke passer med torden eller menneskelig aktivitet.",
+                "Et droenn etter en ildkule kommer ofte lenge etter lyset, gjerne over ett minutt senere.",
             ],
         },
         {
-            "id": "compare",
-            "title": "Slik bruker du vurderingene",
+            "id": "distance",
+            "title": "Hvor den ser ut til aa lande",
             "bullets": [
-                "Sammenlign egen vurdering med det du faktisk kan se i bilder, video og analyser.",
-                "Bruk ja eller nei bare naar du er rimelig sikker. Ellers kan vurderingen nullstilles.",
+                "Mange opplever at ildkula faller rett bak en aas eller like ved, men den er ofte mye lenger unna.",
+                "Ildkuler slokner typisk 20 til 60 kilometer over bakken.",
+                "Beskrivelsen av hvor den ser ut til aa lande er fortsatt nyttig, selv om inntrykket av avstand ofte er feil.",
             ],
         },
         {
-            "id": "quality",
+            "id": "what-is-fireball",
+            "title": "Hva en ildkule er",
+            "bullets": [
+                "Små stein- eller isbiter i solsystemet kalles meteoroider eller mikrometeoroider.",
+                "De begynner ofte aa lyse rundt 100 kilometer over bakken og er ofte borte innen de kommer ned til rundt 50 kilometer.",
+                "Ildkuler er meteorer som lyser sterkere enn Venus, og spesielt kraftige hendelser kalles ofte bolider.",
+                "Noen rester kan overleve helt ned til bakken og kalles da meteoritter.",
+            ],
+        },
+        {
+            "id": "strong-fireballs",
+            "title": "Kraftige ildkuler og varighet",
+            "bullets": [
+                "Svaert kraftige ildkuler kan lyse helt ned til 20 til 30 kilometer over bakken.",
+                "De kan gi overlydssmell og i noen tilfeller etterlate meteoritter paa bakken.",
+                "De fleste ildkuler lyser i noen faa sekunder, men noen kan vare over 10 sekunder ved lav innfallsvinkel.",
+                "Meteorer kan ogsaa observeres om dagen, men da maa de vanligvis vaere ekstra kraftige.",
+            ],
+        },
+        {
+            "id": "quality-and-level",
             "title": "Hvorfor tutorialen betyr noe",
             "bullets": [
                 "Gjennomgaatt tutorial kan loefte brukernivaaet fra 0 til 1.",
                 "Tutorialen er del av kvalitetssystemet, ikke bare onboarding.",
+                "Frontend-modalen har ogsaa bilder, eksempelvideoer og en publiseringsfot som ikke ennaa er egne felter i API-responsen.",
             ],
         },
     ],
@@ -160,7 +187,7 @@ def get_user_reviews(
     "/tutorial",
     response_model=TutorialContentResponse,
     summary="Get tutorial content",
-    description="Returns the current tutorial content used for the review guide. The runtime keeps tutorial content and tutorial status as separate API surfaces.",
+    description="Returns the current tutorial content used for the review guide. The runtime keeps tutorial content and tutorial status as separate API surfaces. This API now mirrors the main text sections from the frontend tutorial modal, but does not yet expose the modal's image, example video links, or publication footer as separate fields.",
 )
 def get_tutorial_content(_: User = Depends(get_current_user)):
     return TUTORIAL_CONTENT

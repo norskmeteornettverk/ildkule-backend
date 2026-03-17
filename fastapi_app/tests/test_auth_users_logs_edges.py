@@ -262,7 +262,9 @@ def test_user_review_history_and_tutorial_content(client, db_session):
     assert tutorial.status_code == 200
     payload = tutorial.json()
     assert payload["title"] == "Meteorvurderingstutorial"
-    assert len(payload["sections"]) >= 3
+    assert len(payload["sections"]) >= 6
+    assert payload["sections"][0]["title"] == "Sjekkliste for mulig ildkule"
+    assert payload["sections"][-1]["title"] == "Hvorfor tutorialen betyr noe"
 
 
 def test_user_review_history_rejects_other_non_admin(client, db_session):
