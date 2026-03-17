@@ -224,6 +224,15 @@ def admin_event_classification(
 
 
 @router.get(
+    "/insights/coordinates",
+    summary="Get coordinate report",
+    description="Convenience route for the solved-event coordinate report. The current runtime returns event end-point coordinates, while richer solved-event summary and geometry fields are being tracked separately.",
+)
+def report_coordinates(session: Session = Depends(get_session)):
+    return event_service.get_insight(session, "coordinates")
+
+
+@router.get(
     "/insights/{report_name}",
     summary="Get aggregate report",
     description="Returns one named aggregate report. Current supported values are `cam`, `station`, `total`, and `coordinates`. The `coordinates` variant is a solved-event coordinate report rather than a generic free-form map feed.",
@@ -236,15 +245,6 @@ def insight(
     session: Session = Depends(get_session),
 ):
     return event_service.get_insight(session, report_name)
-
-
-@router.get(
-    "/insights/coordinates",
-    summary="Get coordinate report",
-    description="Convenience route for the solved-event coordinate report. The current runtime returns event end-point coordinates, while richer solved-event summary and geometry fields are being tracked separately.",
-)
-def report_coordinates(session: Session = Depends(get_session)):
-    return event_service.get_insight(session, "coordinates")
 
 
 @router.get(

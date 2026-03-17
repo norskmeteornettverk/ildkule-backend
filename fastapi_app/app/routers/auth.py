@@ -19,7 +19,12 @@ user_service = UserService()
     "/login",
     response_model=TokenResponse,
     summary="Log in",
-    description="Authenticates a user and returns a JWT plus basic account data.",
+    description=(
+        "Authenticates a user and returns a JWT plus basic account data. "
+        "The current runtime returns the token in the response body and expects clients to send it back in "
+        "`Authorization: Bearer <token>` on protected routes. "
+        "The current runtime does not set an HTTP-only session cookie and does not expose a refresh-token endpoint."
+    ),
     response_description="Authenticated session payload.",
 )
 def login(payload: LoginRequest, session: Session = Depends(get_session)):

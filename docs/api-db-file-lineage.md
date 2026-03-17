@@ -112,6 +112,8 @@ flowchart LR
 - `File key / rule`: konkret noekkel, linje eller regel.
 - `Transform`: kort regel for mapping eller avledning.
 - `Status`: `direct`, `derived`, `db-only`, `file-only`, `api-only`.
+- Media-URL-er i API-et skal behandles som ferdige lenker. Frontend skal ikke bygge `/meteor/...`-stier selv hvis et URL-felt mangler.
+- Hoeyder i denne kontraktfamilien behandles som kilometer, hastighet som kilometer per sekund, og relevante vinkler som grader.
 
 ## Master lineage table
 
