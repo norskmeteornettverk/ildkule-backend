@@ -12,16 +12,27 @@ settings = get_settings()
 service = LogService()
 
 
-@router.get("/stationlog")
+@router.get(
+    "/stationlog",
+    summary="List stored station log rows",
+    description="Returns stored log rows pushed from stations. This endpoint is currently open in runtime and lists persisted log entries, not the richer station and camera last-seen status dataset tracked separately.",
+)
 def list_station_logs(session: Session = Depends(get_session)):
     logs = service.list(session)
     return [model_to_dict(log) for log in logs]
 
 
-@router.post("/stationlog")
+@router.post(
+    "/stationlog",
+    summary="Store a station log row",
+    description="Stores one pushed station log entry after bearer-token validation. Requests without a valid `Authorization: Bearer <token>` header are rejected with 401.",
+)
 def insert_station_log(
     payload: StationLogPayload,
-    authorization: str = Header(None),
+    authorization: str = Header(
+        None,
+        description="Bearer token for station-log ingestion, formatted as `Bearer <token>`.",
+    ),
     session: Session = Depends(get_session),
 ):
     if not settings.station_log_token:
@@ -46,4 +57,3 @@ def insert_station_log(
         payload.station.log_time,
     )
     return {"msg": "Success!", "id": record.id}
-

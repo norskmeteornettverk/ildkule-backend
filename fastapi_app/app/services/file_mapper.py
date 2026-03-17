@@ -238,7 +238,7 @@ class FileToObjectMapper:
         event_path: Path,
         folder_entries: Iterable[str],
     ) -> None:
-        """Mark crossbearing status from generated result files and load location if present."""
+        """Load cross-station solved status and human-readable place text for one event."""
 
         has_crossbearing_results = bool(
             self._find_files(folder_entries, ".res")
@@ -279,6 +279,8 @@ class FileToObjectMapper:
         event_path: Path,
         folder_entries: Iterable[str],
     ) -> None:
+        """Load cross-station solved event properties from a .stat file when present."""
+
         stat_files = self._find_files(folder_entries, ".stat")
         if not stat_files:
             return
@@ -303,6 +305,8 @@ class FileToObjectMapper:
         event_path: Path,
         folder_entries: Iterable[str],
     ) -> List[ResEntryRecord]:
+        """Load cross-station solved trajectory rows from .res and keep the raw row structure."""
+
         res_files = self._find_files(folder_entries, ".res")
         if not res_files:
             return []
@@ -345,7 +349,7 @@ class FileToObjectMapper:
             return None
 
     def _parse_res_entry(self, line_no: int, raw_line: str) -> ResEntryRecord | None:
-        """Parse one .res line and preserve both the numeric columns and raw text."""
+        """Parse one .res row as long1/lat1/long2/lat2/height/label plus raw text."""
 
         tokens = raw_line.split()
         if len(tokens) < 6:
@@ -382,6 +386,8 @@ class FileToObjectMapper:
         event_path: Path,
         folder_entries: Iterable[str],
     ) -> List[ObservationRecord]:
+        """Load individual-camera detection and measurement data from event.txt files."""
+
         observations: List[ObservationRecord] = []
         for station_name in folder_entries:
             station_path = event_path / station_name

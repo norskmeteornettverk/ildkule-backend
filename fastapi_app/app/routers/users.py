@@ -3,7 +3,13 @@ from sqlalchemy.orm import Session
 
 from ..db import get_session
 from ..models import User
-from ..schemas.user import PasswordChangeRequest, TutorialUpdate, UserCreate, UserPatch
+from ..schemas.user import (
+    PasswordChangeRequest,
+    TutorialUpdate,
+    UserCreate,
+    UserListResponse,
+    UserPatch,
+)
 from ..security import enforce_role, get_current_user, verify_password
 from ..services.user_service import UserService
 from ..utils.serialization import serialize_user
@@ -26,7 +32,7 @@ def create_user(payload: UserCreate, session: Session = Depends(get_session)):
 @router.get(
     "/user/{user_id}",
     summary="Get user",
-    description="Returns public account fields for one user.",
+    description="Returns account fields for one authenticated user. This is not a public profile endpoint.",
 )
 def get_user(
     user_id: int,
@@ -42,7 +48,7 @@ def get_user(
 @router.get(
     "/user/{user_id}/details",
     summary="Get user details",
-    description="Returns account fields for one user. Currently the same shape as /user/{user_id}.",
+    description="Returns account fields for one authenticated user from the legacy details route. It currently returns the same shape as `/api/user/{user_id}`.",
 )
 def get_user_details(
     user_id: int,
@@ -70,11 +76,15 @@ def patch_user(
 
 @router.get(
     "/users",
+    response_model=UserListResponse,
     summary="List users",
-    description="Returns a paginated user list with rating counters.",
+    description="Returns a user list with rating counters. In current runtime `page=-1` is a compatibility shortcut that behaves like the first page because negative page numbers clamp to offset 0.",
 )
 def list_users(
-    page: int = Query(-1),
+    page: int = Query(
+        -1,
+        description="Page number. The compatibility default `-1` behaves like the first page because negative values clamp to offset 0.",
+    ),
     limit: int = Query(20),
     orderby: str = Query("date"),
     order: str = Query("desc"),

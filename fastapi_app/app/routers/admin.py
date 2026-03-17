@@ -16,7 +16,13 @@ service = EventService()
 @router.post(
     "/eventload",
     summary="Load events from files",
-    description="Administrative ingestion endpoint that reads event folders from DATA_DIRECTORY and upserts events and observations.",
+    description=(
+        "Administrative ingestion endpoint that reads `YYYYMMDD/HHMMSS` event folders from `DATA_DIRECTORY` for the requested date window. "
+        "Events are upserted by `datetimetag`, observations are upserted by stable `observation_key`, stored `.res` rows are replaced per event reload, "
+        "and stored trail points are replaced per observation reload. Items inside the imported date window that are not seen in the current run are soft-deleted "
+        "with `deletion_reason = missing_from_import`. Renamed event folders therefore become new events, while moved observations can be reattached when the same "
+        "`observation_key` is still produced."
+    ),
 )
 def event_load(
     payload: FileLoadRequest,

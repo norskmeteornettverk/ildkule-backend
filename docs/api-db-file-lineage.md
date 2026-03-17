@@ -24,46 +24,85 @@ FastAPI er aktiv sannhetskilde for API-kontrakt og serialisering. PHP brukes bar
 
 ```mermaid
 flowchart LR
-    A[Data directory<br/>YYYYMMDD/HHMMSS] --> B[FileToObjectMapper]
+    subgraph F["Files and folders"]
+        subgraph FE["Event folder: YYYYMMDD/HHMMSS"]
+            F0["event folder name"]
+            F1["location.txt"]
+            F2["*.stat"]
+            F3["*.res"]
+            F7["event media files"]
+        end
+        subgraph FO["Observation folder: YYYYMMDD/HHMMSS/{station}/{cam}"]
+            F4["station folder name"]
+            F5["cam folder name"]
+            F6["event.txt"]
+            F8["observation media files"]
+        end
+    end
 
-    A --> A1[location.txt]
-    A --> A2[*.stat]
-    A --> A3[*.res]
-    A --> A4[station/cam/event.txt]
-    A --> A5[image, map, html, video files]
+    subgraph D["Database tables"]
+        D1[(event)]
+        D2[(station)]
+        D3[(cam)]
+        D4[(observation_cam_data)]
+        D5[(event_res_entry)]
+        D6[(observation_trail_point)]
+    end
 
-    B --> C1[event record]
-    B --> C2[observation record]
-    B --> C3[res entry records]
-    B --> C4[trail point records]
+    subgraph A["API surfaces"]
+        A1["/api/events"]
+        A2["/api/event/{id}"]
+        A3["/api/event/{date}/{time}"]
+        A4["/api/event/{id}/res"]
+        A5["/api/observation/{id}/trail"]
+        A6["/api/explore"]
+        A7["/api/explore/export.csv"]
+        A8["/api/events/filters"]
+        A9["/api/insight/*"]
+    end
 
-    C1 --> D1[(event)]
-    C2 --> D2[(observation_cam_data)]
-    C3 --> D3[(event_res_entry)]
-    C4 --> D4[(observation_trail_point)]
-    C2 --> D5[(station)]
-    C2 --> D6[(cam)]
+    F0 -- "datetimetag, date" --> D1
+    F1 -- "location, cross-station solved signal" --> D1
+    F2 -- "cross-station solved event properties" --> D1
+    F3 -- "start/end coordinates" --> D1
+    F3 -- "one stored row per source row" --> D5
+    F4 -- "station_name" --> D2
+    F5 -- "cam_name" --> D3
+    F6 -- "raw observation values" --> D4
+    F6 -- "frame-normalised trail rows" --> D6
+    D2 -- "station_id" --> D3
+    D3 -- "cam_id" --> D4
+    D1 -- "event_id" --> D4
 
-    D1 --> E1[serialize_event]
-    D2 --> E2[serialize_observation]
-    D3 --> E3[serialize_res_entry]
-    D4 --> E4[serialize_trail_point]
-    D1 --> E5[explore and insight SQL]
-    D6 --> E5
-    D5 --> E5
+    D1 -- "event list rows" --> A1
+    D1 -- "event header/detail basis" --> A2
+    D1 -- "event header/detail basis" --> A3
+    D4 -- "observations" --> A2
+    D4 -- "observations" --> A3
+    D5 -- "raw .res rows" --> A4
+    D6 -- "trailPoints" --> A5
+    D1 -- "event card basis" --> A6
+    D2 -- "station labels and counts" --> A6
+    D3 -- "camera labels" --> A6
+    D4 -- "station summary and observation-derived values" --> A6
+    D1 -- "CSV event basis" --> A7
+    D2 -- "CSV station-derived values" --> A7
+    D3 -- "CSV camera-derived values" --> A7
+    D4 -- "CSV observation-derived values" --> A7
+    D1 -- "years and event types" --> A8
+    D2 -- "station list" --> A8
+    D3 -- "station list via cams" --> A8
+    D1 -- "event aggregates" --> A9
+    D2 -- "station aggregates" --> A9
+    D3 -- "camera aggregates" --> A9
+    D4 -- "observation aggregates" --> A9
 
-    A5 --> E1
-    A5 --> E2
-
-    E1 --> F1["/api/events"]
-    E1 --> F2["/api/event/{id}"]
-    E1 --> F3["/api/event/{date}/{time}"]
-    E5 --> F4["/api/explore"]
-    E5 --> F5["/api/explore/export.csv"]
-    E5 --> F6["/api/events/filters"]
-    E5 --> F7["/api/insight/*"]
-    E3 --> F8["/api/event/{id}/res"]
-    E4 --> F9["/api/observation/{id}/trail"]
+    F7 -. "direct file-backed artifacts" .-> A1
+    F7 -. "direct file-backed artifacts" .-> A2
+    F7 -. "direct file-backed artifacts" .-> A3
+    F7 -. "direct file-backed artifacts" .-> A6
+    F7 -. "direct file-backed artifacts" .-> A7
+    F8 -. "direct file-backed artifacts" .-> A2
 ```
 
 ## Read guide
@@ -82,7 +121,7 @@ flowchart LR
 | Event | `/api/event/{id}`, `/api/events`, `/api/event/{date}/{time}` | `id` | `event.id` | - | auto increment | direkte kolonne | direct | `fastapi_app/app/models/event.py:15` |
 | Event | same | `event_path` | `event.datetimetag` | event folder | `YYYYMMDD/HHMMSS` | `datetimetag[:8] + "/" + datetimetag[8:]` | derived | `fastapi_app/app/services/file_mapper.py:592`, `fastapi_app/app/utils/serialization.py:603` |
 | Event | same | `public_url` | `event.datetimetag` | event folder | `YYYYMMDD/HHMMSS` | bygger frontend-url fra `FRONT_URL` + `datetimetag` | derived | `fastapi_app/app/utils/serialization.py:28`, `fastapi_app/app/utils/serialization.py:609` |
-| Event | same | `location` | `event.location` | `location.txt` | foerste linje | direkte tekst fra fil | direct | `fastapi_app/app/services/file_mapper.py:247`, `fastapi_app/app/models/event.py:17` |
+| Event | same | `location` | `event.location` | `location.txt` | foerste linje | menneskelesbar stedstekst for en cross-station solved hendelse | direct | `fastapi_app/app/services/file_mapper.py:247`, `fastapi_app/app/models/event.py:17` |
 | Event | same | `times.utc`, `times.local`, `times.timezone` | `event.date` | event folder | `datetimetag -> datetime` | lokal tid beregnes fra `public_timezone` | derived | `fastapi_app/app/services/file_mapper.py:594`, `fastapi_app/app/utils/serialization.py:360` |
 | Event | same | `event_type` | `event.camera_confirmed`, `event.track_endheight` | `location.txt`, `*.stat`, `*.res` | filtilstedevaerelse + `endheight` | `Meteorittkandidat` hvis lav nok `track_endheight`, ellers `Krysspeilet` hvis `camera_confirmed`, ellers `Upeilet` | derived | `fastapi_app/app/utils/serialization.py:46`, `fastapi_app/app/services/file_mapper.py:241` |
 | Event | same | `cross_station_confirmed` | `event.camera_confirmed` | `location.txt`, `*.stat`, `*.res` | minst en av disse finnes | boolsk av `camera_confirmed` | derived | `fastapi_app/app/services/file_mapper.py:241`, `fastapi_app/app/utils/serialization.py:607` |
@@ -91,22 +130,22 @@ flowchart LR
 | Event | same | `classification.user_confirmed` | `event.user_confirmed` | - | - | direkte videresending i `classification`-wrapper; raw toppnivaa-feltet prunes, men nested feltet beholdes | direct | `fastapi_app/app/utils/serialization.py:644`, `fastapi_app/app/utils/serialization.py:505` |
 | Event | same | `title` | `event.location`, `event.date`, `event.camera_confirmed`, `event.track_endheight` | `location.txt`, `*.stat`, event folder | kombinerer `event_type` med sted eller UTC-tid | bruker `location` foerst, ellers dato | derived | `fastapi_app/app/utils/serialization.py:390` |
 | Event | same | `title_basis.event_type`, `title_basis.location`, `title_basis.cross_station_confirmed` | `event.camera_confirmed`, `event.track_endheight`, `event.location` | `location.txt`, `*.stat`, `*.res` | samme grunnlag som over | eksplisitt debug-/forklaringspakke for tittel | derived | `fastapi_app/app/utils/serialization.py:618` |
-| Event | same | `track_startheight` | `event.track_startheight` | `*.stat` | `startheight` | `coerce_number` kan trekke ut tallet fra tekst med enhet | direct | `fastapi_app/app/services/file_mapper.py:62`, `fastapi_app/app/services/event_service.py:940` |
-| Event | same | `track_endheight` | `event.track_endheight` | `*.stat` | `endheight` | samme coercion-regel | direct | `fastapi_app/app/services/file_mapper.py:63`, `fastapi_app/app/services/event_service.py:972` |
-| Event | same | `track_groundtrack` | `event.track_groundtrack` | `*.stat` | `groundtrack` | direkte | direct | `fastapi_app/app/services/file_mapper.py:64` |
-| Event | same | `track_course` | `event.track_course` | `*.stat` | `course` | direkte | direct | `fastapi_app/app/services/file_mapper.py:65` |
-| Event | same | `track_incidence` | `event.track_incidence` | `*.stat` | `incidence` | direkte | direct | `fastapi_app/app/services/file_mapper.py:66` |
-| Event | same | `track_speed` | `event.track_speed` | `*.stat` | `speed` | direkte med coercion | direct | `fastapi_app/app/services/file_mapper.py:67`, `fastapi_app/app/services/event_service.py:972` |
-| Event | same | `track_speed_source` | `event.track_speed_source` | `*.stat` | `speed_source` | direkte tekst | direct | `fastapi_app/app/services/file_mapper.py:68` |
-| Event | same | `track_startlat`, `track_startlong` | `event.track_startlat`, `event.track_startlong` | `*.res` | linje 1 | parser foerste koordinatpar fra `.res` | derived | `fastapi_app/app/services/file_mapper.py:318`, `fastapi_app/app/services/file_mapper.py:328` |
-| Event | same | `track_endlat`, `track_endlong` | `event.track_endlat`, `event.track_endlong` | `*.res` | linje 2 | parser andre koordinatpar fra `.res` | derived | `fastapi_app/app/services/file_mapper.py:320`, `fastapi_app/app/services/file_mapper.py:328` |
-| Event | same | `fit_error` | `event.fit_error` | `*.stat` | `error` | direkte | direct | `fastapi_app/app/services/file_mapper.py:69` |
-| Event | same | `fit_quality` | `event.fit_quality` | `*.stat` | `quality` | direkte | direct | `fastapi_app/app/services/file_mapper.py:70` |
-| Event | same | `radiant_ra` | `event.radiant_ra` | `*.stat` | `ra` | direkte | direct | `fastapi_app/app/services/file_mapper.py:71` |
-| Event | same | `radiant_dec` | `event.radiant_dec` | `*.stat` | `dec` | direkte | direct | `fastapi_app/app/services/file_mapper.py:72` |
-| Event | same | `radiant_ecl_long` | `event.radiant_ecl_long` | `*.stat` | `ecl_long` | direkte | direct | `fastapi_app/app/services/file_mapper.py:73` |
-| Event | same | `radiant_ecl_lat` | `event.radiant_ecl_lat` | `*.stat` | `ecl_lat` | direkte | direct | `fastapi_app/app/services/file_mapper.py:74` |
-| Event | same | `shower`, `summary_basis.shower`, `analysis.radiant.shower` | `event.radiant_shower` | `*.stat` | `shower` | egen branch i parser | direct | `fastapi_app/app/services/file_mapper.py:297`, `fastapi_app/app/utils/serialization.py:442` |
+| Event | same | `track_startheight` | `event.track_startheight` | `*.stat` | `[track] startheight` | `.stat` er en cross-station solved event summary; `coerce_number` kan trekke ut tallet fra tekst med enhet | direct | `fastapi_app/app/services/file_mapper.py:62`, `fastapi_app/app/services/event_service.py:940` |
+| Event | same | `track_endheight` | `event.track_endheight` | `*.stat` | `[track] endheight` | samme coercion-regel | direct | `fastapi_app/app/services/file_mapper.py:63`, `fastapi_app/app/services/event_service.py:972` |
+| Event | same | `track_groundtrack` | `event.track_groundtrack` | `*.stat` | `[track] groundtrack` | direkte | direct | `fastapi_app/app/services/file_mapper.py:64` |
+| Event | same | `track_course` | `event.track_course` | `*.stat` | `[track] course` | direkte | direct | `fastapi_app/app/services/file_mapper.py:65` |
+| Event | same | `track_incidence` | `event.track_incidence` | `*.stat` | `[track] incidence` | direkte | direct | `fastapi_app/app/services/file_mapper.py:66` |
+| Event | same | `track_speed` | `event.track_speed` | `*.stat` | `[track] speed` | direkte med coercion | direct | `fastapi_app/app/services/file_mapper.py:67`, `fastapi_app/app/services/event_service.py:972` |
+| Event | same | `track_speed_source` | `event.track_speed_source` | `*.stat` | `[track] speed_source` | direkte tekst | direct | `fastapi_app/app/services/file_mapper.py:68` |
+| Event | same | `track_startlat`, `track_startlong` | `event.track_startlat`, `event.track_startlong` | `*.res` | linje 1, token 0-1 | event-nivaaet bruker bare foerste koordinatpar paa raden; samme rad inneholder ogsaa `long2/lat2` | derived | `fastapi_app/app/services/file_mapper.py:317`, `fastapi_app/app/services/file_mapper.py:330` |
+| Event | same | `track_endlat`, `track_endlong` | `event.track_endlat`, `event.track_endlong` | `*.res` | linje 2, token 0-1 | event-nivaaet bruker bare foerste koordinatpar paa raden; samme rad inneholder ogsaa `long2/lat2` | derived | `fastapi_app/app/services/file_mapper.py:318`, `fastapi_app/app/services/file_mapper.py:330` |
+| Event | same | `fit_error` | `event.fit_error` | `*.stat` | `[fit] error` | direkte | direct | `fastapi_app/app/services/file_mapper.py:69` |
+| Event | same | `fit_quality` | `event.fit_quality` | `*.stat` | `[fit] quality` | direkte | direct | `fastapi_app/app/services/file_mapper.py:70` |
+| Event | same | `radiant_ra` | `event.radiant_ra` | `*.stat` | `[radiant] ra` | direkte | direct | `fastapi_app/app/services/file_mapper.py:71` |
+| Event | same | `radiant_dec` | `event.radiant_dec` | `*.stat` | `[radiant] dec` | direkte | direct | `fastapi_app/app/services/file_mapper.py:72` |
+| Event | same | `radiant_ecl_long` | `event.radiant_ecl_long` | `*.stat` | `[radiant] ecl_long` | direkte | direct | `fastapi_app/app/services/file_mapper.py:73` |
+| Event | same | `radiant_ecl_lat` | `event.radiant_ecl_lat` | `*.stat` | `[radiant] ecl_lat` | direkte | direct | `fastapi_app/app/services/file_mapper.py:74` |
+| Event | same | `shower`, `summary_basis.shower`, `analysis.radiant.shower` | `event.radiant_shower` | `*.stat` | `[radiant] shower` | egen branch i parser; `.stat` brukes her som solved-event summary, ikke som rå observasjonsfil | direct | `fastapi_app/app/services/file_mapper.py:297`, `fastapi_app/app/utils/serialization.py:442` |
 | Event | same | `analysis.radiant.ra`, `analysis.radiant.dec` | `event.radiant_ra`, `event.radiant_dec` | `*.stat` | `ra`, `dec` | direkte viderepakking | direct | `fastapi_app/app/utils/serialization.py:469` |
 | Event | same | `analysis.atmospheric_path.start_height_km`, `end_height_km`, `start_lat`, `start_lng`, `end_lat`, `end_lng`, `course_deg`, `incidence_deg`, `speed_kms` | `event.track_*` | `*.stat`, `*.res` | som over | direkte viderepakking | direct | `fastapi_app/app/utils/serialization.py:447` |
 | Event | same | `analysis.atmospheric_path.geometry_points` | - | - | - | alltid `None` i dagens backend | api-only | `fastapi_app/app/utils/serialization.py:461` |
@@ -118,7 +157,7 @@ flowchart LR
 | Observation | event detail | `observations[].observation_ref.station_name` | `station.station_name` via `cam.station_id` | station folder | mappenavn under event | direkte | direct | `fastapi_app/app/services/event_service.py:739`, `fastapi_app/app/utils/serialization.py:377` |
 | Observation | event detail | `observations[].observation_ref.cam_name` | `cam.cam_name` | cam folder | mappenavn under station | direkte | direct | `fastapi_app/app/services/event_service.py:754`, `fastapi_app/app/utils/serialization.py:377` |
 | Observation | event detail | `observations[].observation_ref.event_start_utc` | `observation_cam_data.event_start_utc` | `event.txt` | `video:start` eller foerste `trail:timestamps` | parser tidspunkt fra fil | derived | `fastapi_app/app/services/file_mapper.py:443`, `fastapi_app/app/models/observation_cam_data.py:37` |
-| Observation | event detail | `observations[].trail_frames`, `trail_duration`, `trail_slope`, `trail_offset`, `trail_speed`, `trail_correlation`, `trail_positions`, `trail_timestamps`, `trail_coordinates`, `trail_gnomonic`, `trail_midpoint`, `trail_arc`, `trail_brightness`, `trail_dct_midpoint`, `trail_dct`, `trail_size`, `trail_frame_brightness` | `observation_cam_data.trail_*` | `event.txt` | `[trail]` section | `event_file_map` map + aliasstoette | direct | `fastapi_app/app/services/file_mapper.py:81`, `fastapi_app/app/models/observation_cam_data.py:44` |
+| Observation | event detail | `observations[].trail_frames`, `trail_duration`, `trail_slope`, `trail_offset`, `trail_speed`, `trail_correlation`, `trail_positions`, `trail_timestamps`, `trail_coordinates`, `trail_gnomonic`, `trail_midpoint`, `trail_arc`, `trail_brightness`, `trail_dct_midpoint`, `trail_dct`, `trail_size`, `trail_frame_brightness` | `observation_cam_data.trail_*` | `event.txt` | `[trail]` section | `event.txt` er kameranivaaets deteksjons- og målefil; `event_file_map` map + aliasstoette | direct | `fastapi_app/app/services/file_mapper.py:81`, `fastapi_app/app/models/observation_cam_data.py:44` |
 | Observation | event detail | `observations[].video_start`, `video_end`, `video_wallclock`, `video_heigth`, `video_raw`, `video_flash` | `observation_cam_data.video_*` | `event.txt` | `[video]` section | `height` og `heigth` mappes til samme kolonne | direct | `fastapi_app/app/services/file_mapper.py:99`, `fastapi_app/app/models/observation_cam_data.py:61` |
 | Observation | event detail | `observations[].config_*` | `observation_cam_data.config_*` | `event.txt` | `[config]` section | mange aliasformer; se appendiks | direct | `fastapi_app/app/services/file_mapper.py:105`, `fastapi_app/app/models/observation_cam_data.py:67` |
 | Observation | event detail | `observations[].summary_latitude`, `summary_longitude`, `summary_elevation`, `summary_timestamp`, `summary_startpos`, `summary_endpos`, `summary_duration`, `summary_sunalt`, `summary_recalibrated`, `summary_meteor_probability` | `observation_cam_data.summary_*` | `event.txt` | `[summary]` section | direkte | direct | `fastapi_app/app/services/file_mapper.py:141`, `fastapi_app/app/models/observation_cam_data.py:107` |
@@ -126,8 +165,8 @@ flowchart LR
 | Observation | event detail | `observations[].trail_point_count` | - | `event.txt` | `[trail]` section | antall lastede `trail_points` hvis relasjonen er loadet | derived | `fastapi_app/app/utils/serialization.py:563` |
 | Observation | event detail | `observations[].source_hash` | `observation_cam_data.source_hash` | `event.txt` | hash av station, cam, `video_start`, `trail_timestamps`, `trail_positions` | finnes i DB men prunes bort fra offentlig payload | db-only | `fastapi_app/app/services/file_mapper.py:471`, `fastapi_app/app/utils/serialization.py:504` |
 | Observation | event detail | `observations[].cam_id`, `event_id`, `cam`, `media`, `fireball_image_url`, `gnomonic_video_url` | `observation_cam_data.cam_id`, `event_id` | media files | interne felter | serialiseres kortvarig men prunes i offentlig payload | db-only | `fastapi_app/app/utils/serialization.py:560`, `496` |
-| Res entries | `/api/event/{id}/res` | `resEntries[].id`, `line_no`, `entry_type`, `label`, `raw_line` | `event_res_entry.*` | `*.res` | en rad per parsebar linje | `entry_type` avledes fra `label` | direct | `fastapi_app/app/services/file_mapper.py:335`, `351`, `fastapi_app/app/models/event_res_entry.py:17` |
-| Res entries | `/api/event/{id}/res` | `resEntries[].long1`, `lat1`, `long2`, `lat2`, `height` | `event_res_entry.*` | `*.res` | tokens 1-5 paa raden | serialiseres direkte fra modellen; felt er ikke eksplisitt deklarert i schemaet, men slipper gjennom fordi schemaene tillater extras | direct | `fastapi_app/app/services/file_mapper.py:337`, `fastapi_app/app/utils/serialization.py:583`, `fastapi_app/app/schemas/event.py:6` |
+| Res entries | `/api/event/{id}/res` | `resEntries[].id`, `line_no`, `entry_type`, `label`, `raw_line` | `event_res_entry.*` | `*.res` | en rad per parsebar linje | `.res` brukes som row-based solved geometry output; `entry_type` avledes fra `label` og blir i praksis `start`, `end` eller `station` | direct | `fastapi_app/app/services/file_mapper.py:335`, `351`, `fastapi_app/app/models/event_res_entry.py:17` |
+| Res entries | `/api/event/{id}/res` | `resEntries[].long1`, `lat1`, `long2`, `lat2`, `height` | `event_res_entry.*` | `*.res` | samme rad: token 0-4 | begge koordinatpar leses fra samme `.res`-rad; dagens port bruker bare `long1/lat1` paa event-nivaa, mens `long2/lat2` foreloepig ser redundant eller avrundet ut | direct | `fastapi_app/app/services/file_mapper.py:350`, `fastapi_app/app/utils/serialization.py:583`, `fastapi_app/app/schemas/event.py:6` |
 | Trail points | `/api/observation/{id}/trail` | `trailPoints[].frame_index`, `pixel_x`, `pixel_y`, `event_timestamp`, `coord_long`, `coord_lat` | `observation_trail_point.*` | `event.txt` | `[trail]` arrays normalisert per frame | direkte viderepakking | direct | `fastapi_app/app/services/file_mapper.py:487`, `fastapi_app/app/models/observation_trail_point.py:27`, `fastapi_app/app/schemas/event.py:397` |
 | Trail points | `/api/observation/{id}/trail` | `trailPoints[].gnomonic_x`, `gnomonic_y`, `brightness`, `dct`, `size`, `frame_brightness` | `observation_trail_point.*` | `event.txt` | `[trail]` arrays normalisert per frame | serialiseres direkte fra modellen; felt er ikke eksplisitt deklarert i schemaet, men slipper gjennom fordi schemaene tillater extras | direct | `fastapi_app/app/models/observation_trail_point.py:33`, `fastapi_app/app/utils/serialization.py:587`, `fastapi_app/app/schemas/event.py:6` |
 | Explore | `/api/explore` | `filters.from_date`, `to_date`, `stations`, `cross_station_confirmed`, `candidate` | - | - | query params | echo av request-filter | api-only | `fastapi_app/app/routers/events.py:252`, `fastapi_app/app/services/event_service.py:530` |
@@ -140,7 +179,7 @@ flowchart LR
 | Filters | `/api/events/filters` | `stations` | `station.station_name` | station folder | distinct join via `cam` og `observation_cam_data` | derived | `fastapi_app/app/services/event_service.py:454` |
 | Filters | `/api/events/filters` | `eventTypes` | `event.camera_confirmed`, `event.track_endheight` | `location.txt`, `*.stat`, `*.res` | samme regel som `event_type` | distinct case-uttrykk i SQL | derived | `fastapi_app/app/services/event_service.py:462` |
 | Insight | `/api/insight/cam`, `/api/insight/station`, `/api/insight/total` | rapportfelter som `Stasjonsnavn`, `Kameranavn`, `Hendelser`, `Krysspeilede`, `Meteorittkandidater` | `station`, `cam`, `observation_cam_data`, `event` | station folder, cam folder, `*.stat`, `*.res`, `event.txt` | SQL aggregasjoner over joinet datasett | derived | `fastapi_app/app/services/event_service.py:347` |
-| Insight | `/api/report/coordinates`, `/api/insight/coordinates` | `lat`, `lng` | `event.track_endlat`, `event.track_endlong` | `*.res` | andre koordinatpar i `.res` | direkte SQL-uttrekk | direct | `fastapi_app/app/services/event_service.py:429` |
+| Insight | `/api/report/coordinates`, `/api/insight/coordinates` | `lat`, `lng` | `event.track_endlat`, `event.track_endlong` | `*.res` | linje 2, token 0-1 | direkte SQL-uttrekk av event-feltene som ble satt fra foerste koordinatpar paa andre rad | direct | `fastapi_app/app/services/event_service.py:429`, `fastapi_app/app/services/file_mapper.py:318` |
 | Review | `POST /api/event/{id}/review` | `eventID`, `userID`, `confirmed` | `user_review.event_id`, `user_review.user_id`, `user_review.confirmed` | - | payload + auth token | `Positive/1 -> 1`, `Negative/0 -> 0`, ellers `-1` | direct | `fastapi_app/app/routers/events.py:156`, `fastapi_app/app/services/event_service.py:334` |
 | Review | `POST /api/event/{id}/review` response | `msg` | `user_review.confirmed` | - | - | ren tekst bygget fra rating | derived | `fastapi_app/app/routers/events.py:174` |
 | Classification | `PUT /api/event/{id}`, `PUT /api/event/{id}/classification` | `id`, `user_confirmed` | `event.id`, `event.user_confirmed` | - | payload | samme `Positive/Negative/1/0` mapping | direct | `fastapi_app/app/routers/events.py:184`, `fastapi_app/app/services/event_service.py:348` |
@@ -201,14 +240,46 @@ flowchart LR
 | `cam` | `id`, `station_id`, `created` | `cam_name` eksponeres via `observation_ref` og `station_summary`; resten er interne koblingsfelter | `fastapi_app/app/models/cam.py:13`, `fastapi_app/app/utils/serialization.py:371`, `407` |
 | `user_review` | hele tabellen | brukes til ratinger og review-oppdatering, men har ingen egen offentlig list/detail response | `database/build_db.sql:324`, `fastapi_app/app/services/event_service.py:334` |
 
+## Observed redundancy and control points
+
+### Potentially redundant fields
+
+| Area | Field(s) | Why it looks redundant today | Evidence |
+|---|---|---|---|
+| `.res` -> `event` | `event.track_startlat`, `event.track_startlong` vs `event_res_entry` line 1 `long1`, `lat1` | event-feltene er kopi av foerste koordinatpar paa foerste `.res`-rad | `fastapi_app/app/services/file_mapper.py:317`, `fastapi_app/app/services/file_mapper.py:347` |
+| `.res` -> `event` | `event.track_endlat`, `event.track_endlong` vs `event_res_entry` line 2 `long1`, `lat1` | event-feltene er kopi av foerste koordinatpar paa andre `.res`-rad | `fastapi_app/app/services/file_mapper.py:318`, `fastapi_app/app/services/file_mapper.py:347` |
+| `.res` row shape | `long2`, `lat2` vs `long1`, `lat1` | begge koordinatpar kommer fra samme rad; i observerte fixtures ser andre par ut som avrundet eller redundant variant | `fastapi_app/tests/test_meteor_ingestion.py:203`, `257` |
+| Event payload | `header.*` vs toppnivaa `id`, `event_path`, `title`, `location`, `times`, `cross_station_confirmed` | `header` er en wrapper rundt felt som allerede finnes paa toppnivaa | `fastapi_app/app/utils/serialization.py:630` |
+| Event payload | `classification.cross_station_confirmed` vs toppnivaa `cross_station_confirmed` | samme verdi publiseres to steder | `fastapi_app/app/utils/serialization.py:607`, `644` |
+| Event payload | `summary_basis.location`, `summary_basis.station_summary`, `summary_basis.shower`, `summary_basis.candidate` | samme grunnlagsfelt finnes ogsaa paa toppnivaa | `fastapi_app/app/utils/serialization.py:638` |
+| Event payload | `station_count`, `observation_count` vs `station_summary.station_count`, `station_summary.observation_count` | toppnivaa-feltene er kopier av verdier i `station_summary` | `fastapi_app/app/utils/serialization.py:624`, `625` |
+| Event payload | `event_artifacts` vs `analysis.artifacts` | samme artefaktliste ligger i to payload-steder | `fastapi_app/app/utils/serialization.py:613`, `652` |
+| Observation payload | `trail_*` raw arrays vs `/api/observation/{id}/trail` normaliserte `trailPoints[]` | samme kildeinnhold lagres baade som raatekst i `observation_cam_data` og som frame-normaliserte rader | `fastapi_app/app/models/observation_cam_data.py:44`, `fastapi_app/app/models/observation_trail_point.py:27` |
+
+### Known ingestion and parser gaps
+
+| Source | Gap or ambiguity | Current behavior | Evidence |
+|---|---|---|---|
+| `location.txt` | flere tekstlinjer | bare foerste linje leses inn til `event.location`; resten ignoreres | `fastapi_app/app/services/file_mapper.py:253` |
+| `event.txt` | ukjente nøkler | nøkler som ikke finnes i `event_file_map` ignoreres stille | `fastapi_app/app/services/file_mapper.py:436` |
+| `event.txt` | dupliserte nøkler | siste observerte verdi vinner hvis samme mapte felt kommer flere ganger | `fastapi_app/app/services/file_mapper.py:418` |
+| `*.stat` | flere filer i samme event-mappe | bare foerste `.stat`-fil brukes | `fastapi_app/app/services/file_mapper.py:284`, `287` |
+| `*.stat` | ukjente nøkler eller seksjoner | bare nøkler i `stat_file_map` pluss spesialtilfellet `shower` leses inn; resten ignoreres | `fastapi_app/app/services/file_mapper.py:292` |
+| `*.stat` | lange `shower`-navn | parseren joiner bare et begrenset tokenutvalg for `shower`, saa veldig lange navn kan bli trunkert | `fastapi_app/app/services/file_mapper.py:295` |
+| `*.res` | flere filer i samme event-mappe | bare foerste `.res`-fil brukes | `fastapi_app/app/services/file_mapper.py:310`, `313` |
+| `*.res` | filer med mindre enn to linjer | event-nivaaets start/slutt-koordinater settes ikke; hele `.res`-innlesingen returnerer tom liste | `fastapi_app/app/services/file_mapper.py:319` |
+| `*.res` | rader med for faa tokens | rader med faerre enn seks tokens blir ikke til `event_res_entry` | `fastapi_app/app/services/file_mapper.py:355` |
+| `*.res` | ekstra tokens utover standardrad | parseren lagrer bare token 0-4 og `label`; eventuell ekstra struktur beholdes bare i `raw_line` | `fastapi_app/app/services/file_mapper.py:350` |
+| Public schema control | implisitt eksponering av extras | flere felt slipper gjennom fordi Pydantic-basisskjemaene tillater extras, selv om de ikke er eksplisitt deklarert i schemaet | `fastapi_app/app/schemas/event.py:6`, `fastapi_app/app/utils/serialization.py:583`, `587` |
+
 ## Files ingested into database
 
 | File or folder | DB target | Mapping rule | Evidence |
 |---|---|---|---|
 | `YYYYMMDD/HHMMSS` | `event.datetimetag`, `event.date` | foldernavn concatenates til `datetimetag`, parses til datetime | `fastapi_app/app/services/file_mapper.py:585` |
-| `location.txt` | `event.location`, indirekte `event.camera_confirmed` | foerste linje -> `location`; filtilstedevaerelse setter cross-station signal | `fastapi_app/app/services/file_mapper.py:235` |
-| `*.stat` | `event.track_*`, `fit_*`, `radiant_*`, `timestamp` | `stat_file_map` | `fastapi_app/app/services/file_mapper.py:62`, `276` |
-| `*.res` | `event.track_start*`, `event.track_end*`, `event_res_entry.*` | linje 1 og 2 gir start/slutt-koordinater; alle linjer lagres som egne rader | `fastapi_app/app/services/file_mapper.py:300` |
+| `location.txt` | `event.location`, indirekte `event.camera_confirmed` | foerste linje -> menneskelesbar stedstekst; filtilstedevaerelse setter cross-station solved signal | `fastapi_app/app/services/file_mapper.py:235` |
+| `*.stat` | `event.track_*`, `fit_*`, `radiant_*`, `timestamp` | cross-station solved event summary via `stat_file_map`; observerte filer bruker seksjoner som `[track]`, `[fit]`, `[radiant]`, `[date]` | `fastapi_app/app/services/file_mapper.py:62`, `276`, `fastapi_app/tests/test_meteor_ingestion.py:170` |
+| `*.res` | `event.track_start*`, `event.track_end*`, `event_res_entry.*` | cross-station solved trajectory rows; linje 1 og 2 setter event-koordinater fra token 0-1; samme rader lagres ogsaa fullt som `event_res_entry` med token 0-4 og `label` som `start`, `end` eller `station` | `fastapi_app/app/services/file_mapper.py:300`, `fastapi_app/app/services/file_mapper.py:347`, `fastapi_app/app/services/file_mapper.py:376` |
 | `station` folder name | `station.station_name` | mappenavn | `fastapi_app/app/services/event_service.py:739` |
 | `cam` folder name | `cam.cam_name`, `cam.station_id` | mappenavn under station | `fastapi_app/app/services/event_service.py:754` |
 | `station/cam/event.txt` | `observation_cam_data.*`, `observation_trail_point.*`, `observation_key`, `source_hash`, `event_start_utc` | `event_file_map`, `_build_trail_points`, `_build_observation_key`, `_build_source_hash` | `fastapi_app/app/services/file_mapper.py:380`, `455`, `471`, `487` |
@@ -233,7 +304,7 @@ flowchart LR
 | `config:pto_width`, `config:ptowidth` | `config_pto_width` | alias | `fastapi_app/app/services/file_mapper.py:144` |
 | `config:pto_height`, `config:ptoheight` | `config_pto_height` | alias | `fastapi_app/app/services/file_mapper.py:146` |
 | `config:event_dir`, `config:eventdir` | `config_event_dir` | alias | `fastapi_app/app/services/file_mapper.py:149` |
-| `frames`, `duration`, `latitude`, `longitude` | `trail_frames`, `trail_duration`, `summary_latitude`, `summary_longitude` | fallback for eldre enkle fixtures uten sections | `fastapi_app/app/services/file_mapper.py:154` |
+| `frames`, `duration`, `latitude`, `longitude` | `trail_frames`, `trail_duration`, `summary_latitude`, `summary_longitude` | fallback for eldre enkle `event.txt`-varianter uten sections | `fastapi_app/app/services/file_mapper.py:154` |
 
 ## Appendix B: coercion and normalization rules
 

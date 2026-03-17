@@ -23,16 +23,16 @@ class EventReviewRequest(BaseModel):
     eventID: Optional[int] = Field(
         default=None,
         alias="eventID",
-        description="Optional event id in the payload. Must match the URL if sent.",
+        description="Optional event id in the payload. Must match the URL event id when sent, otherwise the request is rejected with 400.",
     )
     userID: Optional[int] = Field(
         default=None,
         alias="userID",
-        description="Optional user id in the payload. Must match the authenticated user if sent.",
+        description="Optional user id in the payload. Must match the authenticated token user when sent, otherwise the request is rejected with 400.",
     )
     confirmed: str = Field(
         ...,
-        description="Review value. Accepted values today are Positive, Negative, 1, 0.",
+        description="Review value. Accepted values today are Positive, Negative, 1, and 0. Positive and 1 are treated as yes, while Negative and 0 are treated as no.",
     )
 
 
@@ -40,18 +40,18 @@ class EventClassificationUpdate(BaseModel):
     id: int = Field(..., description="Event id.")
     user_confirmed: Optional[str] = Field(
         default=None,
-        description="Admin classification input. Accepted values today are Positive, Negative, 1, 0.",
+        description="Classification input. Accepted values today are Positive, Negative, 1, and 0. Positive and 1 map to confirmed meteor, while Negative and 0 map to not meteor.",
     )
 
 
 class EventTimes(MeteorSchema):
     utc: Optional[str] = Field(
         default=None,
-        description="UTC timestamp used as the main machine-readable event time.",
+        description="UTC timestamp used as the main machine-readable event time. Null means the backend could not derive a stable event time from current source data.",
     )
     local: Optional[str] = Field(
         default=None,
-        description="Local public display time in the configured public timezone.",
+        description="Local public display time serialised by the backend in the configured public timezone, not in the browser timezone. Null means the backend could not derive a stable event time from current source data.",
     )
     timezone: str = Field(
         ...,
@@ -92,7 +92,7 @@ class ArtifactManifestItem(MeteorSchema):
     level: str = Field(..., description="Artifact scope. Current values are event or observation.")
     language: Optional[str] = Field(
         default=None,
-        description="Language variant when available. Null means no explicit language variant is known.",
+        description="Language variant when available. Null means the artifact uses the default file variant without a language prefix, which in current public file naming usually means the Norwegian base file.",
     )
     url: str = Field(..., description="Resolved public URL for opening or downloading the artifact.")
     interactive: bool = Field(..., description="True when the artifact should be treated as interactive content.")
@@ -101,7 +101,7 @@ class ArtifactManifestItem(MeteorSchema):
     visibility: str = Field(..., description="Visibility hint for the frontend.")
     observation_ref: Optional[str] = Field(
         default=None,
-        description="Observation key when the artifact belongs to a specific observation.",
+        description="Observation key when the artifact belongs to a specific observation. Null means the artifact belongs to the event level rather than one observation package.",
     )
 
 
@@ -128,7 +128,7 @@ class StationSummary(MeteorSchema):
     cameras: List[str] = Field(..., description="Camera labels derived from visible observations.")
     label: Optional[str] = Field(
         default=None,
-        description="Short text summary intended for cards and compact views.",
+        description="Short compact station/camera summary for cards and compact views, for example a combined label built from the visible stations or cameras in the response.",
     )
 
 
@@ -137,11 +137,11 @@ class TechnicalValidity(MeteorSchema):
     is_deleted: bool = Field(..., description="Soft-delete state from ingestion lifecycle.")
     source_bad_detection: Optional[bool] = Field(
         default=None,
-        description="Null means this technical indicator is not yet sourced in the current backend.",
+        description="True when the event source is known to come from an incorrect-detection bucket. Null means this indicator is not yet sourced in the current backend.",
     )
     proper_triangulation: Optional[bool] = Field(
         default=None,
-        description="Null means the backend does not have enough source data to state this reliably.",
+        description="True when the solved event geometry passes the backend's basic sanity checks. Null means the backend does not yet have enough source data to state this reliably.",
     )
 
 
@@ -201,14 +201,72 @@ class MeteorEventHeader(MeteorSchema):
 class MeteorEventSummaryBasis(MeteorSchema):
     location: Optional[str] = Field(
         default=None,
-        description="Location value used when building summary text.",
+        description="Location value used when building dynamic summary text.",
     )
     station_summary: StationSummary
     shower: Optional[str] = Field(
         default=None,
-        description="Meteor shower when known. Null means no shower is assigned.",
+        description="Meteor shower value used when building dynamic summary text. Null means no shower is assigned.",
     )
     candidate: CandidateStatus
+
+
+class MeteorEventTitleBasis(MeteorSchema):
+    event_type: str = Field(
+        ...,
+        description="Public event type used when building the title.",
+    )
+    location: Optional[str] = Field(
+        default=None,
+        description="Location value used when building the title. Null means the title falls back to time-based wording.",
+    )
+    cross_station_confirmed: bool = Field(
+        ...,
+        description="Cross-station status used when building the title.",
+    )
+
+
+class AtmosphericStationPoint(MeteorSchema):
+    observation_key: Optional[str] = Field(
+        default=None,
+        description="Observation key for the contributing observation when available.",
+    )
+    station_name: Optional[str] = Field(
+        default=None,
+        description="Station name for the contributing observation when available.",
+    )
+    cam_name: Optional[str] = Field(
+        default=None,
+        description="Camera name for the contributing observation when available.",
+    )
+    station_lat: Optional[float] = Field(
+        default=None,
+        description="Observation-side station or camera latitude basis when available from summary data.",
+    )
+    station_lng: Optional[float] = Field(
+        default=None,
+        description="Observation-side station or camera longitude basis when available from summary data.",
+    )
+    station_elevation_m: Optional[float] = Field(
+        default=None,
+        description="Observation-side elevation basis in metres when available from summary data.",
+    )
+    start_lat: Optional[float] = Field(
+        default=None,
+        description="Reserved for observation-linked start latitude when that source is connected.",
+    )
+    start_lng: Optional[float] = Field(
+        default=None,
+        description="Reserved for observation-linked start longitude when that source is connected.",
+    )
+    end_lat: Optional[float] = Field(
+        default=None,
+        description="Reserved for observation-linked end latitude when that source is connected.",
+    )
+    end_lng: Optional[float] = Field(
+        default=None,
+        description="Reserved for observation-linked end longitude when that source is connected.",
+    )
 
 
 class MeteorEventClassification(MeteorSchema):
@@ -258,11 +316,11 @@ class AtmosphericPath(MeteorSchema):
     )
     geometry_points: Optional[List[Dict[str, Any]]] = Field(
         default=None,
-        description="Reserved for explicit path geometry. Null means this backend does not yet expose sampled path points.",
+        description="Reserved for explicit sampled path geometry for dynamic 3D or map rendering. Null means this backend does not yet expose sampled path points.",
     )
-    station_points: List[Dict[str, Any]] = Field(
+    station_points: List[AtmosphericStationPoint] = Field(
         ...,
-        description="Observation/station context used when rendering path views.",
+        description="Observation-linked station and summary points used when rendering solved atmospheric path views. Each item currently gives station or camera basis plus placeholder start or end fields for future richer geometry.",
     )
 
 
@@ -341,9 +399,9 @@ class MeteorEvent(MeteorSchema):
     final_classification: str = Field(..., description="Public final classification.")
     times: EventTimes
     title: str = Field(..., description="User-facing event title.")
-    title_basis: Dict[str, Any] = Field(
+    title_basis: MeteorEventTitleBasis = Field(
         ...,
-        description="Raw basis used to build the public title.",
+        description="Structured basis used to build the public title. Frontend should treat this as explanation data, not as a second title source.",
     )
     station_summary: StationSummary
     station_count: int = Field(..., description="Number of unique stations in the visible response.")
@@ -383,8 +441,34 @@ class MeteorEventListResponse(MeteorSchema):
 class MeteorResEntry(MeteorSchema):
     id: int
     line_no: int = Field(..., description="Line number in the stored .res file.")
-    entry_type: str = Field(..., description="Parsed row type.")
-    label: Optional[str] = Field(default=None, description="Source label from the .res row.")
+    entry_type: str = Field(
+        ...,
+        description="Parsed row type. Current runtime values are typically start, end, or station.",
+    )
+    label: Optional[str] = Field(
+        default=None,
+        description="Source label from the .res row, for example Start or End when present.",
+    )
+    long1: Optional[float] = Field(
+        default=None,
+        description="First longitude value from the .res row. Event-level start/end coordinates are currently taken from this first coordinate pair on row 1 and row 2.",
+    )
+    lat1: Optional[float] = Field(
+        default=None,
+        description="First latitude value from the .res row. Event-level start/end coordinates are currently taken from this first coordinate pair on row 1 and row 2.",
+    )
+    long2: Optional[float] = Field(
+        default=None,
+        description="Second longitude value from the same .res row. Its exact public semantics are not fully locked yet and it currently looks redundant or rounded in observed samples.",
+    )
+    lat2: Optional[float] = Field(
+        default=None,
+        description="Second latitude value from the same .res row. Its exact public semantics are not fully locked yet and it currently looks redundant or rounded in observed samples.",
+    )
+    height: Optional[float] = Field(
+        default=None,
+        description="Height value stored on the same .res row as the coordinate pairs.",
+    )
     raw_line: str = Field(..., description="Original stored .res line.")
 
 
@@ -394,7 +478,7 @@ class MeteorResEntriesResponse(MeteorSchema):
     offset: int
     resEntries: List[MeteorResEntry] = Field(
         ...,
-        description="Stored raw .res rows for one event.",
+        description="Stored .res rows for one event. In practice this is row-based solved trajectory or geometry output for a cross-station event, with Start and End as the clearest row types today.",
     )
 
 
@@ -405,6 +489,30 @@ class MeteorTrailPoint(MeteorSchema):
     event_timestamp: Optional[float] = Field(default=None, description="Event timestamp when available.")
     coord_long: Optional[float] = Field(default=None, description="Solved longitude when available.")
     coord_lat: Optional[float] = Field(default=None, description="Solved latitude when available.")
+    gnomonic_x: Optional[float] = Field(
+        default=None,
+        description="Frame-aligned gnomonic x value when available from the raw trail series.",
+    )
+    gnomonic_y: Optional[float] = Field(
+        default=None,
+        description="Frame-aligned gnomonic y value when available from the raw trail series.",
+    )
+    brightness: Optional[float] = Field(
+        default=None,
+        description="Frame-aligned brightness value when available from the raw trail series.",
+    )
+    dct: Optional[float] = Field(
+        default=None,
+        description="Frame-aligned DCT-derived value when available from the raw trail series.",
+    )
+    size: Optional[float] = Field(
+        default=None,
+        description="Frame-aligned size value when available from the raw trail series.",
+    )
+    frame_brightness: Optional[float] = Field(
+        default=None,
+        description="Frame-aligned frame brightness value when available from the raw trail series.",
+    )
 
 
 class MeteorObservationTrailResponse(MeteorSchema):
@@ -413,7 +521,7 @@ class MeteorObservationTrailResponse(MeteorSchema):
     offset: int
     trailPoints: List[MeteorTrailPoint] = Field(
         ...,
-        description="Frame-aligned trail points for one observation.",
+        description="Frame-aligned trail points normalised from the raw trail series in one observation event.txt file.",
     )
 
 
@@ -439,7 +547,7 @@ class ExploreMeteorEvent(MeteorSchema):
     radiant: RadiantPayload
     ground: Dict[str, Optional[float]] = Field(
         ...,
-        description="Ground and station coordinate basis for Utforsk. Fields such as slat/slng may be null when that source is not yet connected.",
+        description="Ground and station coordinate basis for Utforsk. Current keys are `lat`, `lng`, `slat`, and `slng`. In current runtime `lat` and `lng` come from event end-point coordinates, while `slat` and `slng` are reserved for connected start-point or station-line sources and may be null.",
     )
     final_classification: str
 
@@ -447,7 +555,7 @@ class ExploreMeteorEvent(MeteorSchema):
 class ExploreResponse(MeteorSchema):
     filters: Dict[str, Any] = Field(
         ...,
-        description="Echo of the active Utforsk filters.",
+        description="Echo of the active Utforsk filters built from the same request that produced the event cards and KPI values. Current keys are `from_date`, `to_date`, `stations`, `cross_station_confirmed`, and `candidate`.",
     )
     candidate_settings: CandidateSettings = Field(
         ...,
@@ -455,7 +563,7 @@ class ExploreResponse(MeteorSchema):
     )
     kpi: Dict[str, Any] = Field(
         ...,
-        description="Aggregate values built from the same filtered data set as the event list.",
+        description="Aggregate values built from the same filtered Utforsk data set as the event cards. Current keys are `total_events`, `cross_station_confirmed`, `candidates`, and `stations`.",
     )
     events: List[ExploreMeteorEvent] = Field(
         ...,

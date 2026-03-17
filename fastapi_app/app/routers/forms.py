@@ -97,6 +97,47 @@ async def _parse_report_payload(request: Request) -> tuple[ReportEventRequest, l
         "Multipart can include one or more attachments."
     ),
     response_description="Observation report accepted.",
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/ReportEventRequest"}
+                },
+                "multipart/form-data": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["rcToken"],
+                        "properties": {
+                            "rcToken": {
+                                "type": "string",
+                                "description": "Required reCAPTCHA token.",
+                            },
+                            "payload": {
+                                "type": "string",
+                                "description": "Optional JSON string version of `ReportEventRequest` for multipart submissions.",
+                            },
+                            "attachments": {
+                                "type": "array",
+                                "items": {"type": "string", "format": "binary"},
+                                "description": "Preferred multipart attachment field for one or more uploaded files.",
+                            },
+                            "files": {
+                                "type": "array",
+                                "items": {"type": "string", "format": "binary"},
+                                "description": "Legacy multipart attachment field still accepted for compatibility.",
+                            },
+                            "attachment": {
+                                "type": "string",
+                                "format": "binary",
+                                "description": "Legacy single-file attachment field still accepted for compatibility.",
+                            },
+                        },
+                    }
+                },
+            },
+        }
+    },
 )
 async def report_meteor(request: Request):
     try:

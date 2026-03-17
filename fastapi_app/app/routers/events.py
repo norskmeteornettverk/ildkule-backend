@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
@@ -54,7 +54,10 @@ def get_events(
     searchTerm: Optional[str] = Query(None),
     stationName: Optional[str] = Query(None),
     year: Optional[str] = Query(None),
-    eventType: Optional[str] = Query(None),
+    eventType: Optional[str] = Query(
+        None,
+        description="Comma-separated event-type filter. Current public values are Meteorittkandidat, Krysspeilet, and Upeilet.",
+    ),
     includeDeleted: bool = Query(False),
     page: int = Query(1),
     limit: int = Query(20),
@@ -111,7 +114,12 @@ def get_event(
     "/event/{event_id}/res",
     response_model=MeteorResEntriesResponse,
     summary="Get stored .res rows for one event",
-    description="Returns paginated raw .res rows that belong to one event.",
+    description=(
+        "Returns paginated stored .res rows for one event. "
+        "In the current backend these rows act as solved trajectory or geometry rows for a cross-station event. "
+        "The parser reads each row as long1/lat1/long2/lat2/height/label, and the event-level start/end coordinates are taken from the first coordinate pair on row 1 and row 2. "
+        "Start and End are the clearest row labels today, while the exact semantics of the second coordinate pair are still being clarified."
+    ),
     response_description="Paginated stored .res rows.",
 )
 def get_event_res_entries(
@@ -134,7 +142,7 @@ def get_event_res_entries(
     "/observation/{observation_id}/trail",
     response_model=MeteorObservationTrailResponse,
     summary="Get stored trail points for one observation",
-    description="Returns paginated frame-aligned trail points extracted from source observation files.",
+    description="Returns paginated frame-aligned trail points normalised from the raw trail arrays in one observation event.txt file.",
     response_description="Paginated observation trail points.",
 )
 def get_observation_trail_points(
@@ -153,7 +161,11 @@ def get_observation_trail_points(
     )
 
 
-@router.post("/event/{event_id}/review")
+@router.post(
+    "/event/{event_id}/review",
+    summary="Review event",
+    description="Stores one authenticated review for an event. Optional payload fields `eventID` and `userID` must match the URL id and authenticated token user when they are sent.",
+)
 def review_event(
     event_id: int,
     payload: EventReviewRequest,
@@ -181,7 +193,11 @@ def review_event(
     return {"msg": message}
 
 
-@router.put("/event/{event_id}")
+@router.put(
+    "/event/{event_id}",
+    summary="Update event classification",
+    description="Updates the public event classification using the current compatibility input values Positive, Negative, 1, or 0.",
+)
 def update_event_classification(
     event_id: int,
     payload: EventClassificationUpdate,
@@ -194,7 +210,11 @@ def update_event_classification(
     return {"msg": "Success!"}
 
 
-@router.put("/event/{event_id}/classification")
+@router.put(
+    "/event/{event_id}/classification",
+    summary="Admin update event classification",
+    description="Admin-only variant of event classification update. Current compatibility input values Positive and 1 map to confirmed meteor, while Negative and 0 map to not meteor.",
+)
 def admin_event_classification(
     event_id: int,
     payload: EventClassificationUpdate,
@@ -210,16 +230,22 @@ def admin_event_classification(
 @router.get(
     "/insight/{report_name}",
     summary="Get aggregate report",
-    description="Returns a named aggregate report such as cam, station, total, or coordinates.",
+    description="Returns one named aggregate report. Current supported values are `cam`, `station`, `total`, and `coordinates`. The `coordinates` variant is a solved-event coordinate report rather than a generic free-form map feed.",
 )
-def insight(report_name: str, session: Session = Depends(get_session)):
+def insight(
+    report_name: str = Path(
+        ...,
+        description="Report selector. Supported values today are `cam`, `station`, `total`, and `coordinates`.",
+    ),
+    session: Session = Depends(get_session),
+):
     return event_service.get_insight(session, report_name)
 
 
 @router.get(
     "/report/coordinates",
     summary="Get coordinate report",
-    description="Convenience endpoint for the public coordinate report.",
+    description="Convenience alias for `/api/insight/coordinates`. The current runtime returns event end-point coordinates, while richer solved-event summary and geometry fields are being tracked separately.",
 )
 def report_coordinates(session: Session = Depends(get_session)):
     return event_service.get_insight(session, "coordinates")
@@ -296,7 +322,13 @@ def explore_export_csv(
     )
 
 
-@router.get("/eventboard")
+@router.get(
+    "/eventboard",
+    response_model=MeteorEventListResponse,
+    summary="List events for admin event board",
+    description="Admin-authenticated event-board list. This currently reuses the same event list payload as `/api/events`, but is intended for the protected moderation or admin board rather than the public list.",
+    response_description="Paginated event-board list.",
+)
 def event_board(
     includeDeleted: bool = Query(False),
     page: int = Query(1),
