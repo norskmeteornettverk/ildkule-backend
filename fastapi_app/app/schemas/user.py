@@ -69,3 +69,46 @@ class TutorialUpdate(BaseModel):
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8)
+
+
+class UserReviewHistoryItem(BaseModel):
+    event_id: int = Field(..., description="Reviewed event id.")
+    event_path: Optional[str] = Field(
+        default=None,
+        description="Event path in `YYYYMMDD/HHMMSS` form when available.",
+    )
+    location: Optional[str] = Field(
+        default=None,
+        description="Event location text when available.",
+    )
+    confirmed: Optional[int] = Field(
+        default=None,
+        description="Stored review value. Current runtime uses 1 for yes, 0 for no, and -1 or null for unclear or reset values.",
+    )
+    review_label: str = Field(
+        ...,
+        description="Human-readable review label for the stored value.",
+    )
+
+
+class UserReviewHistoryResponse(BaseModel):
+    message: str
+    reviews: List[UserReviewHistoryItem]
+
+
+class TutorialContentSection(BaseModel):
+    id: str = Field(..., description="Stable tutorial section id.")
+    title: str = Field(..., description="Tutorial section title.")
+    bullets: List[str] = Field(
+        ...,
+        description="Short bullet points for this tutorial section.",
+    )
+
+
+class TutorialContentResponse(BaseModel):
+    title: str = Field(..., description="Tutorial title used in the client.")
+    intro: str = Field(..., description="Short tutorial introduction.")
+    sections: List[TutorialContentSection] = Field(
+        ...,
+        description="Ordered tutorial content sections.",
+    )

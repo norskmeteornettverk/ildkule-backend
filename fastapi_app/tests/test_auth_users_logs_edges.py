@@ -6,7 +6,15 @@ import pytest
 from fastapi import HTTPException
 
 from fastapi_app.app.db import SessionLocal, get_session, session_scope
-from fastapi_app.app.models import LogStation, User
+from fastapi_app.app.models import (
+    Cam,
+    Event,
+    LogStation,
+    ObservationCamData,
+    Station,
+    User,
+    UserReview,
+)
 from fastapi_app.app.routers import logs as logs_router
 from fastapi_app.app.routers import users as users_router
 from fastapi_app.app.routers import auth as auth_router
@@ -100,6 +108,52 @@ def test_password_reset_request_and_confirm_success(client, monkeypatch):
     assert recorded["reset_email"] == "reset@example.com"
 
 
+def test_verification_confirm_and_resend(client, db_session, monkeypatch):
+    sent = {}
+    monkeypatch.setattr(
+        user_service_module,
+        "send_mail",
+        lambda recipient, subject, html_body, alt_body=None, attachments=None: sent.update(
+            {"recipient": recipient, "subject": subject, "body": html_body}
+        ),
+    )
+    user = User(
+        username="verify@example.com",
+        password="pw",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=False,
+        confirm_token="token-123",
+    )
+    db_session.add(user)
+    db_session.commit()
+
+    resend = client.post(
+        "/api/auth/verification/resend",
+        json={"email": "verify@example.com"},
+    )
+    assert resend.status_code == 200
+    assert "Ny verifiseringslenke" in resend.json()["message"]
+    assert sent["recipient"] == "verify@example.com"
+
+    refreshed = db_session.get(User, user.id)
+    assert refreshed.confirm_token is not None
+
+    confirm = client.get(
+        "/api/auth/verification/confirm",
+        params={"token": refreshed.confirm_token},
+    )
+    assert confirm.status_code == 200
+    assert confirm.json()["account_confirmed"] is True
+
+    db_session.refresh(refreshed)
+    assert refreshed.confirmed is True
+    assert refreshed.confirm_token is None
+
+    invalid = client.get("/api/auth/verification/confirm", params={"token": "wrong"})
+    assert invalid.status_code == 401
+
+
 def test_user_route_requires_auth_and_rejects_invalid_or_stale_token(client):
     no_header = client.get("/api/users/1")
     assert no_header.status_code == 401
@@ -175,6 +229,67 @@ def test_patch_user_updates_admin_fields(client, db_session):
     assert payload["user_level"] == "3"
     assert payload["account_confirmed"] is True
     assert payload["tutorial_completed"] is True
+
+
+def test_user_review_history_and_tutorial_content(client, db_session):
+    owner = User(
+        username="history@example.com",
+        password="pw",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=True,
+    )
+    event = Event(
+        datetimetag="20240102030405",
+        location="Oslo",
+        date=datetime(2024, 1, 2, 3, 4, 5),
+        user_confirmed=1,
+    )
+    db_session.add_all([owner, event])
+    db_session.commit()
+    db_session.add(UserReview(user_id=owner.id, event_id=event.id, confirmed=1))
+    db_session.commit()
+
+    reviews = client.get(
+        f"/api/users/{owner.id}/reviews",
+        headers=_auth_header(owner),
+    )
+    assert reviews.status_code == 200
+    assert reviews.json()["reviews"][0]["event_path"] == "20240102/030405"
+    assert reviews.json()["reviews"][0]["review_label"] == "Ja"
+
+    tutorial = client.get("/api/tutorial", headers=_auth_header(owner))
+    assert tutorial.status_code == 200
+    payload = tutorial.json()
+    assert payload["title"] == "Meteorvurderingstutorial"
+    assert len(payload["sections"]) >= 3
+
+
+def test_user_review_history_rejects_other_non_admin(client, db_session):
+    owner = User(
+        username="history-owner@example.com",
+        password="pw",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=True,
+    )
+    other = User(
+        username="history-other@example.com",
+        password="pw",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=True,
+    )
+    db_session.add_all([owner, other])
+    db_session.commit()
+
+    response = client.get(
+        f"/api/users/{owner.id}/reviews",
+        headers=_auth_header(other),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Not authorized"
 
 
 def test_change_password_rejects_wrong_current_password(client, db_session):
@@ -292,9 +407,46 @@ def test_station_logs_list_and_post_auth_cases(client, db_session, monkeypatch):
     assert isinstance(ok.json()["id"], int)
 
 
+def test_station_network_returns_aggregated_status(client, db_session, monkeypatch):
+    station = Station(station_name="sorreisa")
+    cam = Cam(station=station, cam_name="cam1")
+    event = Event(
+        datetimetag="20240102030405",
+        date=datetime.utcnow(),
+    )
+    observation = ObservationCamData(
+        event=event,
+        cam=cam,
+        observation_key="sorreisa:cam1:2024-01-02T03:04:05.000",
+        source_hash="hash",
+        event_start_utc=datetime.utcnow(),
+    )
+    db_session.add_all([station, cam, event, observation])
+    db_session.add(
+        LogStation(
+            station_name="sorreisa",
+            code="OK",
+            log_time=datetime.utcnow(),
+        )
+    )
+    db_session.commit()
+    monkeypatch.setattr(logs_router.settings, "station_network_offline_minutes", 60)
+    monkeypatch.setattr(logs_router.settings, "station_snapshot_base_url", "https://example.com/cam")
+
+    response = client.get("/api/station-network")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["offline_after_minutes"] == 60
+    assert payload["stations"][0]["station_name"] == "sorreisa"
+    assert payload["stations"][0]["cameras"][0]["cam_name"] == "cam1"
+    assert payload["stations"][0]["cameras"][0]["connected"] is True
+    assert payload["stations"][0]["cameras"][0]["snapshot_url"].endswith("/sorreisa/cam1/snapshot.jpg")
+
+
 def test_user_service_direct_edge_cases(db_session, monkeypatch):
     service = UserService()
     monkeypatch.setattr(user_service_module, "get_password_hash", lambda password: f"hashed::{password}")
+    monkeypatch.setattr(user_service_module, "send_mail", lambda *args, **kwargs: None)
 
     created = service.create_user(db_session, "fresh@example.com", "new-password")
     assert created.username == "fresh@example.com"

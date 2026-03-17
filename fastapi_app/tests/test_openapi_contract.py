@@ -62,3 +62,22 @@ def test_openapi_exposes_filters_station_logs_and_path_lookup(client):
     }
     assert descriptions["date_tag"] == "Event date folder in `YYYYMMDD` format."
     assert descriptions["time_tag"] == "Event time folder in `HHMMSS` format."
+
+
+def test_openapi_exposes_verification_tutorial_reviews_and_station_network(client):
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+
+    payload = response.json()
+    paths = payload["paths"]
+
+    assert "/api/auth/verification/confirm" in paths
+    assert "/api/auth/verification/resend" in paths
+    assert "/api/tutorial" in paths
+    assert "/api/users/{user_id}/reviews" in paths
+    assert "/api/station-network" in paths
+
+    schemas = payload["components"]["schemas"]
+    assert "StationNetworkResponse" in schemas
+    assert "TutorialContentResponse" in schemas
+    assert "UserReviewHistoryResponse" in schemas

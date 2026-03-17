@@ -9,6 +9,8 @@ from ..schemas.user import (
     UserCreate,
     UserListResponse,
     UserPatch,
+    UserReviewHistoryResponse,
+    TutorialContentResponse,
 )
 from ..security import enforce_role, get_current_user, verify_password
 from ..services.user_service import UserService
@@ -16,6 +18,45 @@ from ..utils.serialization import serialize_user
 
 router = APIRouter(tags=["users"])
 user_service = UserService()
+
+TUTORIAL_CONTENT = TutorialContentResponse(
+    title="Meteorvurderingstutorial",
+    intro="Kort innforing i hva brukeren skal se etter for aa kunne gi en trygg vurdering.",
+    sections=[
+        {
+            "id": "what",
+            "title": "Hva er en ildkule",
+            "bullets": [
+                "En ildkule er et kraftig lysfenomen som ofte beveger seg raskt over himmelen.",
+                "Noen hendelser er meteorer, andre kan vaere fly, satellitter eller andre lyskilder.",
+            ],
+        },
+        {
+            "id": "look-for",
+            "title": "Hva du boer se etter",
+            "bullets": [
+                "Se etter tydelig retning, varighet, farge og lysstyrke.",
+                "Legg merke til om hendelsen endret fart, lyste opp omgivelsene eller forsvant bratt.",
+            ],
+        },
+        {
+            "id": "compare",
+            "title": "Slik bruker du vurderingene",
+            "bullets": [
+                "Sammenlign egen vurdering med det du faktisk kan se i bilder, video og analyser.",
+                "Bruk ja eller nei bare naar du er rimelig sikker. Ellers kan vurderingen nullstilles.",
+            ],
+        },
+        {
+            "id": "quality",
+            "title": "Hvorfor tutorialen betyr noe",
+            "bullets": [
+                "Gjennomgaatt tutorial kan loefte brukernivaaet fra 0 til 1.",
+                "Tutorialen er del av kvalitetssystemet, ikke bare onboarding.",
+            ],
+        },
+    ],
+)
 
 
 @router.post(
@@ -94,6 +135,35 @@ def list_users(
     users = user_service.list_users(session, limit, offset, orderby, order)
     payload = [serialize_user(user, ratings=ratings) for user, ratings in users]
     return {"message": "User list created", "users": payload}
+
+
+@router.get(
+    "/users/{user_id}/reviews",
+    response_model=UserReviewHistoryResponse,
+    summary="Get user review history",
+    description="Returns the authenticated user's own event review history. Admins can also read another user's history.",
+)
+def get_user_reviews(
+    user_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.id != user_id and current_user.role != "ROLE_ADMIN":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return {
+        "message": "Review history loaded",
+        "reviews": user_service.list_user_reviews(session, user_id),
+    }
+
+
+@router.get(
+    "/tutorial",
+    response_model=TutorialContentResponse,
+    summary="Get tutorial content",
+    description="Returns the current tutorial content used for the review guide. The runtime keeps tutorial content and tutorial status as separate API surfaces.",
+)
+def get_tutorial_content(_: User = Depends(get_current_user)):
+    return TUTORIAL_CONTENT
 
 
 @router.put(

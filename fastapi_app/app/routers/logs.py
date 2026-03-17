@@ -3,7 +3,12 @@ from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..db import get_session
-from ..schemas.log import StationLogEntry, StationLogPayload, StationLogWriteResponse
+from ..schemas.log import (
+    StationLogEntry,
+    StationLogPayload,
+    StationLogWriteResponse,
+    StationNetworkResponse,
+)
 from ..services.log_service import LogService
 from ..utils.serialization import model_to_dict
 
@@ -21,6 +26,16 @@ service = LogService()
 def list_station_logs(session: Session = Depends(get_session)):
     logs = service.list(session)
     return [model_to_dict(log) for log in logs]
+
+
+@router.get(
+    "/station-network",
+    response_model=StationNetworkResponse,
+    summary="Get station and camera status",
+    description="Returns aggregated station and camera status for the network view. This is a richer operational view than `GET /api/station-logs`, with per-camera last-seen values, derived online or offline state, and snapshot or latest image links when available.",
+)
+def station_network(session: Session = Depends(get_session)):
+    return service.station_network(session)
 
 
 @router.post(

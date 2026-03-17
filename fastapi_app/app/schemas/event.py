@@ -452,6 +452,31 @@ class MeteorEventListResponse(MeteorSchema):
     currentPage: int = Field(..., description="Current page number.")
 
 
+class AdminMeteorEvent(MeteorEvent):
+    ratings: int = Field(
+        ...,
+        description="Total number of stored user reviews for this event.",
+    )
+    positive_ratings: int = Field(
+        ...,
+        description="Number of positive user reviews for this event.",
+    )
+    negative_ratings: int = Field(
+        ...,
+        description="Number of negative user reviews for this event.",
+    )
+
+
+class AdminMeteorEventListResponse(MeteorSchema):
+    totalItems: int = Field(..., description="Total number of items matching the current query.")
+    events: List[AdminMeteorEvent] = Field(
+        ...,
+        description="Paginated admin event-board rows with review counters.",
+    )
+    totalPages: int = Field(..., description="Total page count for the current query.")
+    currentPage: int = Field(..., description="Current page number.")
+
+
 class MeteorResEntry(MeteorSchema):
     id: int
     line_no: int = Field(..., description="Line number in the stored .res file.")

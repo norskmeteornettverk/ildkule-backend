@@ -126,6 +126,7 @@ class EventService:
         order_by: str,
         order: str,
         include_deleted: bool = False,
+        include_ratings: bool = False,
     ) -> dict:
         ratings_subquery = self._ratings_subquery()
         sortable_columns = {
@@ -156,9 +157,10 @@ class EventService:
         events = []
         for event, ratings, positive_ratings, negative_ratings in results:
             payload = serialize_event(event, include_relationships=True)
-            payload["ratings"] = ratings or 0
-            payload["positive_ratings"] = positive_ratings or 0
-            payload["negative_ratings"] = negative_ratings or 0
+            if include_ratings:
+                payload["ratings"] = ratings or 0
+                payload["positive_ratings"] = positive_ratings or 0
+                payload["negative_ratings"] = negative_ratings or 0
             events.append(payload)
 
         total_items = session.scalar(

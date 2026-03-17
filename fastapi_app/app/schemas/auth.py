@@ -57,6 +57,25 @@ class PasswordResetEmailRequest(BaseModel):
     email: EmailStr
 
 
+class VerificationResendRequest(BaseModel):
+    email: EmailStr = Field(
+        ...,
+        description="Account e-mail used when requesting a new verification link.",
+    )
+
+
+class VerificationConfirmationResponse(BaseModel):
+    message: str = Field(..., description="Human-readable verification result.")
+    account_confirmed: bool = Field(
+        ...,
+        description="Account confirmation state after the verification check.",
+    )
+
+
+class VerificationResendResponse(BaseModel):
+    message: str = Field(..., description="Human-readable resend result.")
+
+
 class PasswordResetConfirmation(BaseModel):
     passwordResetId: str = Field(..., alias="passwordResetId")
     email: EmailStr

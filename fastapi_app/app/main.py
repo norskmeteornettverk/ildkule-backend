@@ -20,9 +20,9 @@ app = FastAPI(
     openapi_tags=[
         {"name": "events", "description": "Meteor-event list, meteor-event detail, raw event supplements, and Utforsk endpoints."},
         {"name": "forms", "description": "Public contact and observation-reporting endpoints."},
-        {"name": "auth", "description": "Authentication and password reset endpoints."},
-        {"name": "users", "description": "Account creation, account reads, and administrative user management."},
-        {"name": "station logs", "description": "Station log intake and read endpoints."},
+        {"name": "auth", "description": "Authentication, verification, and password reset endpoints."},
+        {"name": "users", "description": "Account creation, account reads, tutorial content, review history, and administrative user management."},
+        {"name": "station logs", "description": "Station log intake, raw log reads, and aggregated station-network status endpoints."},
         {"name": "admin", "description": "Administrative ingestion endpoints."},
     ],
 )

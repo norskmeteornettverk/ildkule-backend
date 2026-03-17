@@ -9,7 +9,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
-from ..models import User, UserReview
+from ..models import Event, User, UserReview
 from ..security import get_password_hash, verify_password
 from ..utils.emailer import send_mail
 
@@ -17,6 +17,21 @@ settings = get_settings()
 
 
 class UserService:
+    def _verification_target(self, token: str) -> str:
+        if settings.front_url:
+            return f"{settings.front_url.rstrip('/')}/brukerprofil/verifiser?token={token}"
+        return token
+
+    def _send_verification_mail(self, email: str, token: str) -> None:
+        verification_target = self._verification_target(token)
+        subject = "Bekreft brukerkontoen din hos ildkule.net"
+        body = (
+            "Hei!<br/>Du kan bekrefte brukerkontoen din hos ildkule.net ved å bruke lenken under."
+            f"<br/><a href=\"{verification_target}\">Bekreft kontoen</a>"
+            "<br/><br/>Hvis du ikke ventet denne e-posten, kan du se bort fra den."
+        )
+        send_mail(email, subject, body, body)
+
     def create_user(self, session: Session, username: str, password: str) -> User:
         existing = session.scalar(
             select(User).where(func.lower(User.username) == username.lower())
@@ -26,9 +41,15 @@ class UserService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User already exists",
             )
-        user = User(username=username, password=get_password_hash(password))
+        user = User(
+            username=username,
+            password=get_password_hash(password),
+            confirm_token=secrets.token_hex(20),
+        )
         session.add(user)
         session.flush()
+        if user.confirm_token:
+            self._send_verification_mail(user.username, user.confirm_token)
         return user
 
     def authenticate(
@@ -117,6 +138,38 @@ class UserService:
             )
         return formatted
 
+    def list_user_reviews(self, session: Session, user_id: int) -> list[dict]:
+        stmt = (
+            select(UserReview, Event)
+            .join(Event, UserReview.event_id == Event.id)
+            .where(UserReview.user_id == user_id)
+            .order_by(Event.date.desc().nullslast(), UserReview.event_id.desc())
+        )
+        rows = session.execute(stmt).all()
+        reviews: list[dict] = []
+        for review, event in rows:
+            event_path = (
+                f"{event.datetimetag[:8]}/{event.datetimetag[8:]}"
+                if event and event.datetimetag
+                else None
+            )
+            reviews.append(
+                {
+                    "event_id": review.event_id,
+                    "event_path": event_path,
+                    "location": event.location if event else None,
+                    "confirmed": review.confirmed,
+                    "review_label": (
+                        "Ja"
+                        if review.confirmed == 1
+                        else "Nei"
+                        if review.confirmed == 0
+                        else "Usikker"
+                    ),
+                }
+            )
+        return reviews
+
     def request_password_reset(self, session: Session, email: str) -> bool:
         user = session.scalar(
             select(User).where(func.lower(User.username) == email.lower())
@@ -140,6 +193,28 @@ class UserService:
         )
         send_mail(email, subject, body, body)
         return True
+
+    def resend_verification(self, session: Session, email: str) -> bool:
+        user = session.scalar(
+            select(User).where(func.lower(User.username) == email.lower())
+        )
+        if not user:
+            return False
+        if user.confirmed:
+            return True
+        user.confirm_token = secrets.token_hex(20)
+        session.add(user)
+        self._send_verification_mail(email, user.confirm_token)
+        return True
+
+    def confirm_user(self, session: Session, token: str) -> Optional[User]:
+        user = session.scalar(select(User).where(User.confirm_token == token))
+        if not user:
+            return None
+        user.confirmed = True
+        user.confirm_token = None
+        session.add(user)
+        return user
 
     def reset_password(
         self, session: Session, email: str, token: str, new_password: str

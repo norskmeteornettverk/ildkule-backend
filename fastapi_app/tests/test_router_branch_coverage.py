@@ -349,6 +349,42 @@ def test_event_review_messages_and_alias_routes(client, db_session, monkeypatch)
     assert by_path.json()["title"] == "20240101/010203"
 
 
+def test_admin_eventboard_uses_admin_response_shape(client, db_session, monkeypatch):
+    monkeypatch.setattr(
+        events_router.event_service,
+        "list_events",
+        lambda session, page, limit, order_by, order, include_deleted=False, include_ratings=False: {
+            "totalItems": 1,
+            "events": [
+                {
+                    **_minimal_event(9, "admin"),
+                    "ratings": 5,
+                    "positive_ratings": 3,
+                    "negative_ratings": 2,
+                }
+            ],
+            "totalPages": 1,
+            "currentPage": page,
+        },
+    )
+    admin = User(
+        username="board@example.com",
+        password="pw",
+        role="ROLE_ADMIN",
+        user_level="10",
+        confirmed=True,
+    )
+    db_session.add(admin)
+    db_session.commit()
+
+    response = client.get("/api/admin/events", headers=_auth_header(admin))
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["events"][0]["ratings"] == 5
+    assert payload["events"][0]["positive_ratings"] == 3
+    assert payload["events"][0]["negative_ratings"] == 2
+
+
 def test_explore_export_rejects_unsupported_format(client):
     response = client.get("/api/explore/export", params={"format": "json"})
     assert response.status_code == 400

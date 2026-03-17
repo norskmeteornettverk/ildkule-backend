@@ -46,6 +46,14 @@ class Settings(BaseSettings):
         default=None,
         description="Bearer token shared with event stations when pushing logs",
     )
+    station_network_offline_minutes: int = Field(
+        default=60,
+        description="Minutes since last seen before a station or camera is treated as offline.",
+    )
+    station_snapshot_base_url: Optional[str] = Field(
+        default=None,
+        description="Optional base URL used when building live snapshot links for station cameras.",
+    )
     eventload_username: Optional[str] = "sys_admin"
     eventload_password: Optional[str] = "secretpassword"
 

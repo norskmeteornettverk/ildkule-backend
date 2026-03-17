@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from ..db import get_session
 from ..models import User
 from ..schemas.event import (
+    AdminMeteorEventListResponse,
     EventClassificationUpdate,
     EventFilterOptionsResponse,
     ExploreResponse,
@@ -263,11 +264,26 @@ def insight(
     response_description="Utforsk response with filters, KPI values, and event cards.",
 )
 def explore(
-    from_date: Optional[str] = Query(None),
-    to_date: Optional[str] = Query(None),
-    stations: Optional[str] = Query(None),
-    cross_station_confirmed: Optional[str] = Query(None),
-    candidate: bool = Query(False),
+    from_date: Optional[str] = Query(
+        None,
+        description="Inclusive start date in `YYYY-MM-DD` form.",
+    ),
+    to_date: Optional[str] = Query(
+        None,
+        description="Inclusive end date in `YYYY-MM-DD` form.",
+    ),
+    stations: Optional[str] = Query(
+        None,
+        description="Comma-separated station names, for example `alta,ski`.",
+    ),
+    cross_station_confirmed: Optional[str] = Query(
+        None,
+        description="Optional boolean filter accepted as `true`, `false`, `1`, `0`, `yes`, or `no`.",
+    ),
+    candidate: bool = Query(
+        False,
+        description="Set true to keep only candidate events.",
+    ),
     includeDeleted: bool = Query(False),
     session: Session = Depends(get_session),
 ):
@@ -290,11 +306,26 @@ def explore(
     response_description="CSV export built from the filtered Utforsk data set.",
 )
 def explore_export_csv(
-    from_date: Optional[str] = Query(None),
-    to_date: Optional[str] = Query(None),
-    stations: Optional[str] = Query(None),
-    cross_station_confirmed: Optional[str] = Query(None),
-    candidate: bool = Query(False),
+    from_date: Optional[str] = Query(
+        None,
+        description="Inclusive start date in `YYYY-MM-DD` form.",
+    ),
+    to_date: Optional[str] = Query(
+        None,
+        description="Inclusive end date in `YYYY-MM-DD` form.",
+    ),
+    stations: Optional[str] = Query(
+        None,
+        description="Comma-separated station names, for example `alta,ski`.",
+    ),
+    cross_station_confirmed: Optional[str] = Query(
+        None,
+        description="Optional boolean filter accepted as `true`, `false`, `1`, `0`, `yes`, or `no`.",
+    ),
+    candidate: bool = Query(
+        False,
+        description="Set true to keep only candidate events.",
+    ),
     format: str = Query(
         "csv",
         description="Export format. Only `csv` is supported today. Other values return HTTP 400.",
@@ -317,7 +348,7 @@ def explore_export_csv(
 
 @router.get(
     "/admin/events",
-    response_model=MeteorEventListResponse,
+    response_model=AdminMeteorEventListResponse,
     summary="List events for admin board",
     description="Admin-authenticated event-board list. This route currently reuses the same event list payload as `/api/events`, but it belongs to the protected moderation or admin board. Admin-specific counters and queue fields are not yet split into a separate response shape, so clients should treat this as the current runtime contract rather than a fully locked admin-only payload.",
     response_description="Paginated event-board list.",
@@ -338,6 +369,7 @@ def event_board(
         order_by=orderby,
         order=order,
         include_deleted=includeDeleted,
+        include_ratings=True,
     )
 
 

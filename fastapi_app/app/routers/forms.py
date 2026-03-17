@@ -94,7 +94,9 @@ async def _parse_report_payload(request: Request) -> tuple[ReportEventRequest, l
     description=(
         "Receives a public meteor observation report. "
         "Supports JSON and multipart form submissions. "
-        "Multipart can include one or more attachments."
+        "Multipart can include one or more attachments. "
+        "The preferred multipart contract is `rcToken` plus optional `payload` JSON and one or more files in `attachments`. "
+        "Legacy fields `files`, `attachment`, `observation_time`, and `direction_text` are still accepted for compatibility."
     ),
     response_description="Observation report accepted.",
     openapi_extra={

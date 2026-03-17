@@ -7,6 +7,9 @@ from ..schemas.auth import (
     PasswordResetConfirmation,
     PasswordResetEmailRequest,
     TokenResponse,
+    VerificationConfirmationResponse,
+    VerificationResendRequest,
+    VerificationResendResponse,
 )
 from ..security import create_access_token
 from ..services.user_service import UserService
@@ -23,8 +26,8 @@ user_service = UserService()
         "Authenticates a user and returns a JWT plus basic account data. "
         "The current runtime returns the token in the response body and expects clients to send it back in "
         "`Authorization: Bearer <token>` on protected routes. "
-        "The current runtime does not set an HTTP-only session cookie, does not expose a refresh-token endpoint, "
-        "and does not yet expose dedicated account-verification or resend-verification routes."
+        "The current runtime does not set an HTTP-only session cookie and does not expose a refresh-token endpoint. "
+        "Account verification is handled by the dedicated verification routes in this auth group."
     ),
     response_description="Authenticated session payload.",
 )
@@ -84,5 +87,40 @@ def confirm_reset(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Kunne ikke oppdatere passordet",
-        )
+    )
     return {"message": "Passordet ble endret"}
+
+
+@router.get(
+    "/verification/confirm",
+    response_model=VerificationConfirmationResponse,
+    summary="Confirm account verification",
+    description="Confirms one user account from the verification token sent by e-mail. Invalid or stale tokens return 401.",
+)
+def confirm_verification(token: str, session: Session = Depends(get_session)):
+    user = user_service.confirm_user(session, token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Kunne ikke bekrefte kontoen",
+        )
+    return VerificationConfirmationResponse(
+        message="Kontoen er bekreftet",
+        account_confirmed=True,
+    )
+
+
+@router.post(
+    "/verification/resend",
+    response_model=VerificationResendResponse,
+    summary="Resend account verification",
+    description="Requests a new verification link for an unconfirmed account. The response is intentionally neutral when the account does not exist.",
+)
+def resend_verification(
+    payload: VerificationResendRequest,
+    session: Session = Depends(get_session),
+):
+    user_service.resend_verification(session, payload.email)
+    return VerificationResendResponse(
+        message="Ny verifiseringslenke sendt dersom kontoen finnes og ikke er bekreftet"
+    )
