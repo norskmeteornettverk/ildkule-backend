@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import PlainTextResponse
@@ -8,6 +8,7 @@ from ..db import get_session
 from ..models import User
 from ..schemas.event import (
     EventClassificationUpdate,
+    EventFilterOptionsResponse,
     ExploreResponse,
     EventReviewRequest,
     MeteorEvent,
@@ -90,6 +91,7 @@ def get_events(
 
 @router.get(
     "/events/filters",
+    response_model=EventFilterOptionsResponse,
     summary="Get event filter options",
     description="Returns available years, stations, and meteor event types for list filtering.",
     response_description="Available event-filter values.",
@@ -225,6 +227,7 @@ def admin_event_classification(
 
 @router.get(
     "/insights/coordinates",
+    response_model=List[Dict[str, Any]],
     summary="Get coordinate report",
     description="Convenience route for the solved-event coordinate report. The current runtime returns event end-point coordinates, while richer solved-event summary and geometry fields are being tracked separately.",
 )
@@ -234,6 +237,7 @@ def report_coordinates(session: Session = Depends(get_session)):
 
 @router.get(
     "/insights/{report_name}",
+    response_model=List[Dict[str, Any]],
     summary="Get aggregate report",
     description="Returns one named aggregate report. Current supported values are `cam`, `station`, `total`, and `coordinates`. The `coordinates` variant is a solved-event coordinate report rather than a generic free-form map feed.",
 )
@@ -315,7 +319,7 @@ def explore_export_csv(
     "/admin/events",
     response_model=MeteorEventListResponse,
     summary="List events for admin board",
-    description="Admin-authenticated event-board list. This currently reuses the same event list payload as `/api/events`, but is intended for the protected moderation or admin board rather than the public list.",
+    description="Admin-authenticated event-board list. This route currently reuses the same event list payload as `/api/events`, but it belongs to the protected moderation or admin board. Admin-specific counters and queue fields are not yet split into a separate response shape, so clients should treat this as the current runtime contract rather than a fully locked admin-only payload.",
     response_description="Paginated event-board list.",
 )
 def event_board(

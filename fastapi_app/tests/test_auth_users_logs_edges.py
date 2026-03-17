@@ -45,7 +45,7 @@ def test_login_rejects_wrong_password(client, db_session, monkeypatch):
 
     response = client.post(
         "/api/auth/login",
-        json={"username": "login@example.com", "password": "wrong-password"},
+        json={"identifier": "login@example.com", "password": "wrong-password"},
     )
 
     assert response.status_code == 401
@@ -164,7 +164,7 @@ def test_patch_user_updates_admin_fields(client, db_session):
         json={
             "role": "ROLE_MODERATOR",
             "user_level": "3",
-            "confirmed": True,
+            "account_confirmed": True,
             "tutorial_completed": True,
         },
     )
@@ -173,7 +173,7 @@ def test_patch_user_updates_admin_fields(client, db_session):
     payload = response.json()
     assert payload["role"] == "ROLE_MODERATOR"
     assert payload["user_level"] == "3"
-    assert payload["confirmed"] is True
+    assert payload["account_confirmed"] is True
     assert payload["tutorial_completed"] is True
 
 

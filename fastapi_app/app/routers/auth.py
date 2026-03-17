@@ -23,12 +23,13 @@ user_service = UserService()
         "Authenticates a user and returns a JWT plus basic account data. "
         "The current runtime returns the token in the response body and expects clients to send it back in "
         "`Authorization: Bearer <token>` on protected routes. "
-        "The current runtime does not set an HTTP-only session cookie and does not expose a refresh-token endpoint."
+        "The current runtime does not set an HTTP-only session cookie, does not expose a refresh-token endpoint, "
+        "and does not yet expose dedicated account-verification or resend-verification routes."
     ),
     response_description="Authenticated session payload.",
 )
 def login(payload: LoginRequest, session: Session = Depends(get_session)):
-    user = user_service.authenticate(session, payload.username, payload.password)
+    user = user_service.authenticate(session, payload.identifier, payload.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -47,12 +48,12 @@ def login(payload: LoginRequest, session: Session = Depends(get_session)):
         accessToken=jwt_token,
         id=user.id,
         email=user.username,
-        username=user.username,
+        identifier=user.username,
         user_role=user.role,
         roles=[user.role],
         user_level=user.user_level,
         tutorial_completed=bool(user.tutorial_completed),
-        confirmed=bool(user.confirmed),
+        account_confirmed=bool(user.confirmed),
     )
 
 

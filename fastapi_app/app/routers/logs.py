@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..db import get_session
-from ..schemas.log import StationLogPayload
+from ..schemas.log import StationLogEntry, StationLogPayload, StationLogWriteResponse
 from ..services.log_service import LogService
 from ..utils.serialization import model_to_dict
 
@@ -14,6 +14,7 @@ service = LogService()
 
 @router.get(
     "/station-logs",
+    response_model=list[StationLogEntry],
     summary="List stored station log rows",
     description="Returns stored log rows pushed from stations. This endpoint is currently open in runtime and lists persisted log entries, not the richer station and camera last-seen status dataset tracked separately.",
 )
@@ -24,6 +25,7 @@ def list_station_logs(session: Session = Depends(get_session)):
 
 @router.post(
     "/station-logs",
+    response_model=StationLogWriteResponse,
     summary="Store a station log row",
     description="Stores one pushed station log entry after bearer-token validation. Requests without a valid `Authorization: Bearer <token>` header are rejected with 401.",
 )

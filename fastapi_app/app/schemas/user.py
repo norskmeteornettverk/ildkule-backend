@@ -1,11 +1,20 @@
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, root_validator
 
 
 class UserCreate(BaseModel):
-    username: EmailStr
+    identifier: EmailStr = Field(
+        ...,
+        description="Account identifier for the new user. The current runtime stores this as the user's e-mail based identifier.",
+    )
     password: str = Field(min_length=8)
+
+    @root_validator(pre=True)
+    def _accept_legacy_username(cls, values):
+        if "identifier" not in values and "username" in values:
+            values["identifier"] = values["username"]
+        return values
 
 
 class UserPatch(BaseModel):
@@ -17,7 +26,7 @@ class UserPatch(BaseModel):
         default=None,
         description="Admin-managed user level.",
     )
-    confirmed: Optional[bool] = Field(
+    account_confirmed: Optional[bool] = Field(
         default=None,
         description="Admin-managed account confirmation flag.",
     )
@@ -29,11 +38,14 @@ class UserPatch(BaseModel):
 
 class UserSummary(BaseModel):
     id: int
-    username: EmailStr
+    identifier: EmailStr = Field(
+        ...,
+        description="Public account identifier for the user.",
+    )
     role: str
     user_level: Optional[str] = None
     tutorial_completed: bool
-    confirmed: bool
+    account_confirmed: bool
     ratings: int = 0
     positive_ratings: int = 0
     negative_ratings: int = 0

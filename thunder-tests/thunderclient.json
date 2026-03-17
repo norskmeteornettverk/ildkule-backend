@@ -13,7 +13,7 @@
     "params": [],
     "body": {
       "type": "text",
-      "raw": "{\"username\":\"\", \"password\":\"fdghfdghj\"}",
+      "raw": "{\"identifier\":\"\", \"password\":\"fdghfdghj\"}",
       "form": []
     },
     "tests": [
@@ -39,7 +39,7 @@
         "type": "res-body",
         "custom": "",
         "action": "contains",
-        "value": "username"
+        "value": "identifier"
       }
     ]
   },
@@ -258,7 +258,7 @@
     "params": [],
     "body": {
       "type": "json",
-      "raw": "{\"id\":\"1\",\"user_confirmed\":\"1\"}",
+      "raw": "{\"user_confirmed\":\"1\"}",
       "form": []
     },
     "auth": {
@@ -482,7 +482,7 @@
     "params": [],
     "body": {
       "type": "json",
-      "raw": "{\"username\":\"test\", \"password\":\"test\"}",
+      "raw": "{\"identifier\":\"test\", \"password\":\"test\"}",
       "form": []
     },
     "tests": [

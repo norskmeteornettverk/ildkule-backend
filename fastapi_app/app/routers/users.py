@@ -25,7 +25,7 @@ user_service = UserService()
     description="Creates a new user account.",
 )
 def create_user(payload: UserCreate, session: Session = Depends(get_session)):
-    user = user_service.create_user(session, payload.username, payload.password)
+    user = user_service.create_user(session, payload.identifier, payload.password)
     return serialize_user(user)
 
 
@@ -50,7 +50,7 @@ def get_user(
     summary="Patch user",
     description=(
         "Admin-only partial update for account fields. "
-        "Current supported fields are `role`, `user_level`, `confirmed`, and `tutorial_completed`. "
+        "Current supported fields are `role`, `user_level`, `account_confirmed`, and `tutorial_completed`. "
         "Regular users should use the dedicated tutorial and password routes for self-service actions."
     ),
 )
@@ -62,7 +62,13 @@ def patch_user(
 ):
     user = user_service.patch_user(
         session,
-        {"id": user_id, **payload.dict(exclude_unset=True)},
+        {
+            "id": user_id,
+            **{
+                ("confirmed" if key == "account_confirmed" else key): value
+                for key, value in payload.dict(exclude_unset=True).items()
+            },
+        },
     )
     return serialize_user(user)
 

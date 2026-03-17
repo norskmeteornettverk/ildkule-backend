@@ -152,7 +152,8 @@ These terms come from the frontend UI text. They are listed here without dependi
 
 | English name | Norwegian name | Aliases | Common values | Description |
 | --- | --- | --- | --- | --- |
-| username | brukernavn | e-post |  | The login identity in the frontend. |
+| identifier | identifikator | login-id, e-post |  | The public login and account identifier in the FastAPI API. |
+| username | brukernavn | e-post |  | Older internal name for the same account identity that is stored in the database. |
 | password | passord | password |  | The secret used for login and reset. |
 | user role | brukerrolle | rolle | ROLE_USER, ROLE_MOD, ROLE_ADMIN | The user's access role. |
 | user level | brukernivå |  | lav, middels, høy | The user's review level in the frontend. |

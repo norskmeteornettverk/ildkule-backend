@@ -1,15 +1,21 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, root_validator
 
 
 class LoginRequest(BaseModel):
-    username: EmailStr = Field(
+    identifier: str = Field(
         ...,
-        description="Compatibility login field. The current field name is username, but it is intended to accept the account identifier used for login.",
+        description="Account identifier used for login. This field is intended to support username or e-mail.",
     )
     password: str
+
+    @root_validator(pre=True)
+    def _accept_legacy_username(cls, values):
+        if "identifier" not in values and "username" in values:
+            values["identifier"] = values["username"]
+        return values
 
 
 class TokenResponse(BaseModel):
@@ -24,7 +30,7 @@ class TokenResponse(BaseModel):
     )
     id: int = Field(..., description="Authenticated user id.")
     email: EmailStr = Field(..., description="Authenticated account e-mail.")
-    username: EmailStr = Field(
+    identifier: str = Field(
         ...,
         description="Authenticated account identifier as returned by the backend.",
     )
@@ -41,7 +47,7 @@ class TokenResponse(BaseModel):
         ...,
         description="Whether the authenticated user has completed the tutorial.",
     )
-    confirmed: bool = Field(
+    account_confirmed: bool = Field(
         ...,
         description="Account confirmation status for the authenticated user.",
     )

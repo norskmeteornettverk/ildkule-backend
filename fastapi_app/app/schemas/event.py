@@ -19,6 +19,21 @@ class EventFilterParams(BaseModel):
     order: str = "desc"
 
 
+class EventFilterOptionsResponse(MeteorSchema):
+    years: List[str] = Field(
+        ...,
+        description="Available year values for event filtering.",
+    )
+    stations: List[str] = Field(
+        ...,
+        description="Available station names for event filtering.",
+    )
+    eventTypes: List[str] = Field(
+        ...,
+        description="Available public event types for event filtering.",
+    )
+
+
 class EventReviewRequest(BaseModel):
     eventID: Optional[int] = Field(
         default=None,
@@ -524,6 +539,67 @@ class MeteorObservationTrailResponse(MeteorSchema):
     )
 
 
+class ExploreGround(MeteorSchema):
+    lat: Optional[float] = Field(
+        default=None,
+        description="Solved event latitude used in the ground map when available.",
+    )
+    lng: Optional[float] = Field(
+        default=None,
+        description="Solved event longitude used in the ground map when available.",
+    )
+    slat: Optional[float] = Field(
+        default=None,
+        description="Connected start-point or station-line latitude when that source is available. Null means the current runtime does not yet expose this value.",
+    )
+    slng: Optional[float] = Field(
+        default=None,
+        description="Connected start-point or station-line longitude when that source is available. Null means the current runtime does not yet expose this value.",
+    )
+
+
+class ExploreFilters(MeteorSchema):
+    from_date: Optional[str] = Field(
+        default=None,
+        description="Inclusive start date filter in `YYYY-MM-DD` form when one was sent.",
+    )
+    to_date: Optional[str] = Field(
+        default=None,
+        description="Inclusive end date filter in `YYYY-MM-DD` form when one was sent.",
+    )
+    stations: List[str] = Field(
+        ...,
+        description="Selected station names after CSV parsing. Empty list means no station filter was applied.",
+    )
+    cross_station_confirmed: Optional[bool] = Field(
+        default=None,
+        description="Cross-station filter after request parsing. Null means no explicit filter was applied.",
+    )
+    candidate: bool = Field(
+        ...,
+        description="True when Utforsk is limited to candidate events only.",
+    )
+
+
+class ExploreKpi(MeteorSchema):
+    total_events: int = Field(
+        ...,
+        description="Number of event cards in the current filtered Utforsk response.",
+    )
+    cross_station_confirmed: int = Field(
+        ...,
+        description="Number of filtered events marked as cross-station confirmed.",
+    )
+    candidates: int = Field(
+        ...,
+        description="Number of filtered events marked as candidates by the active backend thresholds.",
+    )
+    stations: List[str] = Field(
+        ...,
+        description="Sorted list of station names represented in the current filtered event set.",
+    )
+
+
 class ExploreMeteorEvent(MeteorSchema):
     id: int
     event_path: str
@@ -544,25 +620,25 @@ class ExploreMeteorEvent(MeteorSchema):
     station_summary: StationSummary
     preview: EventPreview
     radiant: RadiantPayload
-    ground: Dict[str, Optional[float]] = Field(
+    ground: ExploreGround = Field(
         ...,
-        description="Ground and station coordinate basis for Utforsk. Current keys are `lat`, `lng`, `slat`, and `slng`. In current runtime `lat` and `lng` come from event end-point coordinates, while `slat` and `slng` are reserved for connected start-point or station-line sources and may be null.",
+        description="Ground and station coordinate basis for Utforsk. In current runtime `lat` and `lng` come from event end-point coordinates, while `slat` and `slng` are reserved for connected start-point or station-line sources and may be null.",
     )
     final_classification: str
 
 
 class ExploreResponse(MeteorSchema):
-    filters: Dict[str, Any] = Field(
+    filters: ExploreFilters = Field(
         ...,
-        description="Echo of the active Utforsk filters built from the same request that produced the event cards and KPI values. Current keys are `from_date`, `to_date`, `stations`, `cross_station_confirmed`, and `candidate`.",
+        description="Echo of the active Utforsk filters built from the same request that produced the event cards and KPI values.",
     )
     candidate_settings: CandidateSettings = Field(
         ...,
         description="Active backend thresholds used when computing candidate status.",
     )
-    kpi: Dict[str, Any] = Field(
+    kpi: ExploreKpi = Field(
         ...,
-        description="Aggregate values built from the same filtered Utforsk data set as the event cards. Current keys are `total_events`, `cross_station_confirmed`, `candidates`, and `stations`.",
+        description="Aggregate values built from the same filtered Utforsk data set as the event cards.",
     )
     events: List[ExploreMeteorEvent] = Field(
         ...,

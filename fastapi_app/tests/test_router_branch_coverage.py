@@ -138,10 +138,10 @@ def test_users_create_and_self_service_edges(client, db_session, monkeypatch):
     ))
     created = client.post(
         "/api/users",
-        json={"username": "created@example.com", "password": "password-123"},
+        json={"identifier": "created@example.com", "password": "password-123"},
     )
     assert created.status_code == 201
-    assert created.json()["username"] == "created@example.com"
+    assert created.json()["identifier"] == "created@example.com"
 
     owner = User(
         username="owner@example.com",
@@ -218,13 +218,19 @@ def test_events_list_search_filter_and_explore_bool_parsing(client, monkeypatch)
         events_router.event_service,
         "explore",
         lambda session, **kwargs: {
-            "filters": kwargs,
+            "filters": {
+                "from_date": kwargs.get("from_date"),
+                "to_date": kwargs.get("to_date"),
+                "stations": kwargs.get("stations") or [],
+                "cross_station_confirmed": kwargs.get("cross_station_confirmed"),
+                "candidate": kwargs.get("candidate_only", False),
+            },
             "candidate_settings": {"max_end_height_km": 25.0, "max_speed_kms": 25.0},
             "kpi": {
                 "total_events": 1,
                 "cross_station_confirmed": 1,
                 "candidates": 0,
-                "stations": 1,
+                "stations": ["ski"],
             },
             "events": [],
         },
@@ -290,7 +296,7 @@ def test_event_review_messages_and_alias_routes(client, db_session, monkeypatch)
     monkeypatch.setattr(
         events_router.event_service,
         "get_insight",
-        lambda session, report_name: {"report": report_name},
+        lambda session, report_name: [{"report": report_name}],
     )
     monkeypatch.setattr(
         events_router.event_service,
@@ -332,11 +338,11 @@ def test_event_review_messages_and_alias_routes(client, db_session, monkeypatch)
 
     insight = client.get("/api/insights/cam")
     assert insight.status_code == 200
-    assert insight.json()["report"] == "cam"
+    assert insight.json()[0]["report"] == "cam"
 
     coordinates = client.get("/api/insights/coordinates")
     assert coordinates.status_code == 200
-    assert coordinates.json()["report"] == "coordinates"
+    assert coordinates.json()[0]["report"] == "coordinates"
 
     by_path = client.get("/api/events/by-path/20240101/010203", params={"includeDeleted": True})
     assert by_path.status_code == 200

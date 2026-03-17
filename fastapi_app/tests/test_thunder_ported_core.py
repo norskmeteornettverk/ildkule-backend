@@ -39,12 +39,14 @@ def test_login_and_user_reads(client, db_session, monkeypatch):
 
     login = client.post(
         "/api/auth/login",
-        json={"username": "test@example.com", "password": "test"},
+        json={"identifier": "test@example.com", "password": "test"},
     )
     assert login.status_code == 200
     payload = login.json()
     assert "accessToken" in payload
     assert payload["id"] == user.id
+    assert payload["identifier"] == "test@example.com"
+    assert payload["account_confirmed"] is True
 
     headers = {"Authorization": f"Bearer {payload['accessToken']}"}
 

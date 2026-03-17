@@ -537,9 +537,11 @@ def serialize_user(user: User, ratings: Optional[dict] = None) -> dict:
     payload["user_role"] = payload.get("role")
     payload["roles"] = [payload.get("role")]
     payload["id"] = user.id
-    payload["username"] = user.username
+    payload["identifier"] = user.username
+    payload.pop("username", None)
     payload["tutorial_completed"] = bool(payload.get("tutorial_completed"))
-    payload["confirmed"] = bool(payload.get("confirmed"))
+    payload["account_confirmed"] = bool(payload.get("confirmed"))
+    payload.pop("confirmed", None)
     payload["user_level"] = payload.get("user_level")
     if ratings:
         payload.update(ratings)
