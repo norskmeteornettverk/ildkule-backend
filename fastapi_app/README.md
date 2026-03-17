@@ -6,23 +6,33 @@ code lives under `fastapi_app/` and exposes the same HTTP resources
 
 ## Getting started
 
-1. Create and activate a virtual environment (recommended).
-2. Install dependencies:
+1. Use a local virtual environment for this project. Do not rely on global Python packages.
+   Example:
    ```bash
-   pip install -r fastapi_app/requirements.txt
+   python -m venv .venv
    ```
-3. Optional for tests:
+2. Activate the virtual environment.
+   Example on Windows PowerShell:
    ```bash
-   pip install -r fastapi_app/requirements-dev.txt
+   .\.venv\Scripts\Activate.ps1
    ```
-4. Copy the sample environment file and adjust the values so they match your
+3. Install dependencies with the same Python interpreter that owns the virtual environment:
+   ```bash
+   python -m pip install --upgrade pip
+   python -m pip install -r fastapi_app/requirements.txt
+   ```
+4. Optional for tests:
+   ```bash
+   python -m pip install -r fastapi_app/requirements-dev.txt
+   ```
+5. Copy the sample environment file and adjust the values so they match your
    infrastructure:
    ```bash
    cp fastapi_app/.env.example fastapi_app/.env
    ```
-5. Start the API server:
+6. Start the API server with the same Python interpreter:
    ```bash
-   uvicorn fastapi_app.app.main:app --reload
+   python -m uvicorn fastapi_app.app.main:app --reload
    ```
 
 The application reads configuration from `fastapi_app/.env` regardless of the
@@ -30,6 +40,11 @@ current working directory. At a minimum set
 `DATABASE_URL` (MySQL DSN) and `JWT_SECRET_KEY`.  SMTP and reCAPTCHA settings
 are optional but required if you want to send contact/report forms.  The station
 log endpoint validates a bearer token configured via `STATION_LOG_TOKEN`.
+
+If startup fails with import or dependency errors, first check that the virtual
+environment is active and that the packages were installed inside that
+environment. A mixed global/local Python setup can load the wrong package
+versions.
 
 ## Notes
 
