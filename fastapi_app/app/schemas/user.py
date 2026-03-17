@@ -9,9 +9,22 @@ class UserCreate(BaseModel):
 
 
 class UserPatch(BaseModel):
-    id: int
-    role: Optional[str] = None
-    user_level: Optional[str] = None
+    role: Optional[str] = Field(
+        default=None,
+        description="Admin-managed role value for the account.",
+    )
+    user_level: Optional[str] = Field(
+        default=None,
+        description="Admin-managed user level.",
+    )
+    confirmed: Optional[bool] = Field(
+        default=None,
+        description="Admin-managed account confirmation flag.",
+    )
+    tutorial_completed: Optional[bool] = Field(
+        default=None,
+        description="Admin-managed tutorial completion flag. This can be set both true and false.",
+    )
 
 
 class UserSummary(BaseModel):
@@ -35,10 +48,12 @@ class UserListResponse(BaseModel):
 
 
 class TutorialUpdate(BaseModel):
-    tutorialComplete: bool
+    completed: bool = Field(
+        ...,
+        description="Tutorial completion state for the user. Set true to mark it completed, or false to clear the completed state.",
+    )
 
 
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8)
-

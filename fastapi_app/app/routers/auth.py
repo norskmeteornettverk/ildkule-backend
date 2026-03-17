@@ -52,7 +52,7 @@ def login(payload: LoginRequest, session: Session = Depends(get_session)):
 
 
 @router.post(
-    "/passwordresetrequest",
+    "/password-reset/request",
     summary="Request password reset",
     description="Starts the password-reset flow for the supplied e-mail address.",
 )
@@ -63,8 +63,8 @@ def request_reset(
     return {"message": "Passordreset sendt dersom brukeren finnes"}
 
 
-@router.put(
-    "/passwordresetrequest",
+@router.post(
+    "/password-reset/confirm",
     summary="Confirm password reset",
     description="Completes the password-reset flow with token, e-mail, and new password.",
 )

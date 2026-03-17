@@ -22,7 +22,7 @@ app = FastAPI(
         {"name": "forms", "description": "Public contact and observation-reporting endpoints."},
         {"name": "auth", "description": "Authentication and password reset endpoints."},
         {"name": "users", "description": "Account creation, account reads, and administrative user management."},
-        {"name": "station log", "description": "Station log intake endpoints."},
+        {"name": "station logs", "description": "Station log intake and read endpoints."},
         {"name": "admin", "description": "Administrative ingestion endpoints."},
     ],
 )
@@ -41,9 +41,9 @@ if data_directory:
     if data_path.exists() and data_path.is_dir():
         app.mount("/data", StaticFiles(directory=str(data_path)), name="data")
 
-app.include_router(auth.router, prefix="/api")
+app.include_router(auth.router, prefix="/api/auth")
 app.include_router(users.router, prefix="/api")
 app.include_router(events.router, prefix="/api")
-app.include_router(forms.router, prefix="/api")
+app.include_router(forms.router, prefix="/api/forms")
 app.include_router(logs.router, prefix="/api")
-app.include_router(admin.router, prefix="/api")
+app.include_router(admin.router, prefix="/api/admin")

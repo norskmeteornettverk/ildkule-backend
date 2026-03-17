@@ -14,8 +14,8 @@ service = EventService()
 
 
 @router.post(
-    "/eventload",
-    summary="Load events from files",
+    "/event-imports",
+    summary="Import events from files",
     description=(
         "Administrative ingestion endpoint that reads `YYYYMMDD/HHMMSS` event folders from `DATA_DIRECTORY` for the requested date window. "
         "Events are upserted by `datetimetag`, observations are upserted by stable `observation_key`, stored `.res` rows are replaced per event reload, "

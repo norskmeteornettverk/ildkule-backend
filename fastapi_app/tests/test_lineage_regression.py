@@ -43,7 +43,7 @@ def _write_event_txt(path, *, include_trail: bool = True, include_summary: bool 
 
 def _post_eventload(client):
     return client.post(
-        "/api/eventload",
+        "/api/admin/event-imports",
         auth=("sys_admin", "secretpassword"),
         json={"date_from": "20230101", "date_to": "20230102"},
     )
@@ -109,13 +109,13 @@ def test_reimport_clears_missing_event_source_fields(client, db_session, tmp_pat
     )
     assert res_entry_count == 0
 
-    event_response = client.get(f"/api/event/{event.id}")
+    event_response = client.get(f"/api/events/{event.id}")
     assert event_response.status_code == 200
     payload = event_response.json()
     assert payload["location"] is None
     assert payload["cross_station_confirmed"] is False
 
-    res_response = client.get(f"/api/event/{event.id}/res?limit=10&offset=0")
+    res_response = client.get(f"/api/events/{event.id}/res?limit=10&offset=0")
     assert res_response.status_code == 200
     assert res_response.json()["totalItems"] == 0
     assert res_response.json()["resEntries"] == []
@@ -161,7 +161,7 @@ def test_reimport_clears_missing_observation_source_fields(client, db_session, t
     assert trail_points == []
 
     event = db_session.scalars(select(Event)).one()
-    event_response = client.get(f"/api/event/{event.id}")
+    event_response = client.get(f"/api/events/{event.id}")
     assert event_response.status_code == 200
     observation_payload = event_response.json()["observations"][0]
     assert observation_payload["trail_frames"] is None
@@ -169,7 +169,7 @@ def test_reimport_clears_missing_observation_source_fields(client, db_session, t
     assert observation_payload["summary_longitude"] is None
     assert observation_payload["trail_point_count"] == 0
 
-    trail_response = client.get(f"/api/observation/{observation.id}/trail?limit=10&offset=0")
+    trail_response = client.get(f"/api/observations/{observation.id}/trail?limit=10&offset=0")
     assert trail_response.status_code == 200
     assert trail_response.json()["totalItems"] == 0
     assert trail_response.json()["trailPoints"] == []

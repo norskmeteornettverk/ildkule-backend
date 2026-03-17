@@ -89,7 +89,7 @@ async def _parse_report_payload(request: Request) -> tuple[ReportEventRequest, l
 
 
 @router.post(
-    "/reportmeteor",
+    "/meteor-report",
     summary="Send public observation report",
     description=(
         "Receives a public meteor observation report. "
@@ -102,7 +102,37 @@ async def _parse_report_payload(request: Request) -> tuple[ReportEventRequest, l
             "required": True,
             "content": {
                 "application/json": {
-                    "schema": {"$ref": "#/components/schemas/ReportEventRequest"}
+                    "schema": {
+                        "type": "object",
+                        "required": ["rcToken", "form"],
+                        "properties": {
+                            "rcToken": {
+                                "type": "string",
+                                "description": "Required reCAPTCHA token.",
+                            },
+                            "form": {
+                                "type": "object",
+                                "required": ["navn", "epost"],
+                                "properties": {
+                                    "navn": {"type": "string", "description": "Reporter name."},
+                                    "epost": {"type": "string", "format": "email", "description": "Reporter e-mail address."},
+                                    "telefon": {"type": "string", "description": "Reporter phone number."},
+                                    "observationTime": {"type": "string", "format": "date-time", "description": "Observation time when known."},
+                                    "latitude": {"type": "number", "description": "Reporter latitude when the form includes map position."},
+                                    "longitude": {"type": "number", "description": "Reporter longitude when the form includes map position."},
+                                    "firstdirection": {"type": "string", "description": "Direction at first sighting."},
+                                    "firstheight": {"type": "string", "description": "Height angle at first sighting."},
+                                    "lastdirection": {"type": "string", "description": "Direction at last sighting."},
+                                    "lastheight": {"type": "string", "description": "Height angle at last sighting."},
+                                    "directionText": {"type": "string", "description": "Free-text direction fallback when the reporter cannot place the event on a map."},
+                                    "farge": {"type": "string", "description": "Colour description from the public form."},
+                                    "lysstyrke": {"type": "string", "description": "Brightness description."},
+                                    "varighet": {"type": "string", "description": "Duration description."},
+                                    "melding": {"type": "string", "description": "Free-text observation note."},
+                                },
+                            },
+                        },
+                    }
                 },
                 "multipart/form-data": {
                     "schema": {

@@ -30,7 +30,7 @@ def test_event_review_accepts_legacy_and_modern_payload(client, db_session):
     db_session.commit()
 
     response = client.post(
-        f"/api/event/{event.id}/review",
+        f"/api/events/{event.id}/review",
         headers=_auth_header(user.id),
         json={"confirmed": "Positive"},
     )
@@ -42,7 +42,7 @@ def test_event_review_accepts_legacy_and_modern_payload(client, db_session):
     assert review.confirmed == 1
 
     mismatch = client.post(
-        f"/api/event/{event.id}/review",
+        f"/api/events/{event.id}/review",
         headers=_auth_header(user.id),
         json={"eventID": event.id + 1, "userID": user.id, "confirmed": "Positive"},
     )
@@ -66,7 +66,7 @@ def test_eventboard_accepts_pagination_params(client, db_session):
     db_session.commit()
 
     response = client.get(
-        "/api/eventboard?page=1&limit=2&orderby=date&order=desc",
+        "/api/admin/events?page=1&limit=2&orderby=date&order=desc",
         headers=_auth_header(admin.id, role="ROLE_ADMIN", user_level="10"),
     )
     assert response.status_code == 200
@@ -79,7 +79,7 @@ def test_forms_recaptcha_failure_has_legacy_message_shape(client, monkeypatch):
     monkeypatch.setattr(contact_service, "verify_recaptcha", lambda _token: False)
 
     contact = client.post(
-        "/api/contact",
+        "/api/forms/contact",
         json={
             "rcToken": "invalid",
             "form": {
@@ -95,7 +95,7 @@ def test_forms_recaptcha_failure_has_legacy_message_shape(client, monkeypatch):
     assert "error" in contact.json()
 
     report = client.post(
-        "/api/reportmeteor",
+        "/api/forms/meteor-report",
         json={
             "rcToken": "invalid",
             "form": {"navn": "Ada", "epost": "ada@example.com"},
@@ -120,7 +120,7 @@ def test_reportmeteor_accepts_multipart_attachments(client, monkeypatch):
     monkeypatch.setattr(contact_service, "send_mail", fake_send_mail)
 
     response = client.post(
-        "/api/reportmeteor",
+        "/api/forms/meteor-report",
         data={
             "rcToken": "valid",
             "navn": "Ada",

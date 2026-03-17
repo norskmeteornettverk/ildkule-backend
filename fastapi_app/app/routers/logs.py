@@ -7,13 +7,13 @@ from ..schemas.log import StationLogPayload
 from ..services.log_service import LogService
 from ..utils.serialization import model_to_dict
 
-router = APIRouter(tags=["station log"])
+router = APIRouter(tags=["station logs"])
 settings = get_settings()
 service = LogService()
 
 
 @router.get(
-    "/stationlog",
+    "/station-logs",
     summary="List stored station log rows",
     description="Returns stored log rows pushed from stations. This endpoint is currently open in runtime and lists persisted log entries, not the richer station and camera last-seen status dataset tracked separately.",
 )
@@ -23,7 +23,7 @@ def list_station_logs(session: Session = Depends(get_session)):
 
 
 @router.post(
-    "/stationlog",
+    "/station-logs",
     summary="Store a station log row",
     description="Stores one pushed station log entry after bearer-token validation. Requests without a valid `Authorization: Bearer <token>` header are rejected with 401.",
 )

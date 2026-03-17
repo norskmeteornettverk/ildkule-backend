@@ -89,7 +89,20 @@ def get_events(
 
 
 @router.get(
-    "/event/{event_id}",
+    "/events/filters",
+    summary="Get event filter options",
+    description="Returns available years, stations, and meteor event types for list filtering.",
+    response_description="Available event-filter values.",
+)
+def get_event_filter_options(
+    includeDeleted: bool = Query(False),
+    session: Session = Depends(get_session),
+    ):
+    return event_service.get_filter_options(session, include_deleted=includeDeleted)
+
+
+@router.get(
+    "/events/{event_id}",
     response_model=MeteorEvent,
     summary="Get meteor event detail",
     description=(
@@ -111,7 +124,7 @@ def get_event(
 
 
 @router.get(
-    "/event/{event_id}/res",
+    "/events/{event_id}/res",
     response_model=MeteorResEntriesResponse,
     summary="Get stored .res rows for one event",
     description=(
@@ -139,7 +152,7 @@ def get_event_res_entries(
 
 
 @router.get(
-    "/observation/{observation_id}/trail",
+    "/observations/{observation_id}/trail",
     response_model=MeteorObservationTrailResponse,
     summary="Get stored trail points for one observation",
     description="Returns paginated frame-aligned trail points normalised from the raw trail arrays in one observation event.txt file.",
@@ -162,7 +175,7 @@ def get_observation_trail_points(
 
 
 @router.post(
-    "/event/{event_id}/review",
+    "/events/{event_id}/review",
     summary="Review event",
     description="Stores one authenticated review for an event. Optional payload fields `eventID` and `userID` must match the URL id and authenticated token user when they are sent.",
 )
@@ -194,26 +207,9 @@ def review_event(
 
 
 @router.put(
-    "/event/{event_id}",
+    "/events/{event_id}/classification",
     summary="Update event classification",
-    description="Updates the public event classification using the current compatibility input values Positive, Negative, 1, or 0.",
-)
-def update_event_classification(
-    event_id: int,
-    payload: EventClassificationUpdate,
-    session: Session = Depends(get_session),
-    __: User = Depends(get_current_user),
-):
-    event_service.update_user_confirmation(
-        session, event_id, payload.user_confirmed
-    )
-    return {"msg": "Success!"}
-
-
-@router.put(
-    "/event/{event_id}/classification",
-    summary="Admin update event classification",
-    description="Admin-only variant of event classification update. Current compatibility input values Positive and 1 map to confirmed meteor, while Negative and 0 map to not meteor.",
+    description="Admin-only event classification update. Current compatibility input values Positive and 1 map to confirmed meteor, while Negative and 0 map to not meteor.",
 )
 def admin_event_classification(
     event_id: int,
@@ -228,7 +224,7 @@ def admin_event_classification(
 
 
 @router.get(
-    "/insight/{report_name}",
+    "/insights/{report_name}",
     summary="Get aggregate report",
     description="Returns one named aggregate report. Current supported values are `cam`, `station`, `total`, and `coordinates`. The `coordinates` variant is a solved-event coordinate report rather than a generic free-form map feed.",
 )
@@ -243,25 +239,12 @@ def insight(
 
 
 @router.get(
-    "/report/coordinates",
+    "/insights/coordinates",
     summary="Get coordinate report",
-    description="Convenience alias for `/api/insight/coordinates`. The current runtime returns event end-point coordinates, while richer solved-event summary and geometry fields are being tracked separately.",
+    description="Convenience route for the solved-event coordinate report. The current runtime returns event end-point coordinates, while richer solved-event summary and geometry fields are being tracked separately.",
 )
 def report_coordinates(session: Session = Depends(get_session)):
     return event_service.get_insight(session, "coordinates")
-
-
-@router.get(
-    "/events/filters",
-    summary="Get event filter options",
-    description="Returns available years, stations, and meteor event types for list filtering.",
-    response_description="Available event-filter values.",
-)
-def get_event_filter_options(
-    includeDeleted: bool = Query(False),
-    session: Session = Depends(get_session),
-    ):
-    return event_service.get_filter_options(session, include_deleted=includeDeleted)
 
 
 @router.get(
@@ -296,10 +279,10 @@ def explore(
 
 
 @router.get(
-    "/explore/export.csv",
+    "/explore/export",
     response_class=PlainTextResponse,
     summary="Export Utforsk CSV",
-    description="Exports the same filtered Utforsk data set as CSV.",
+    description="Exports the same filtered Utforsk data set as CSV. Use `format=csv`. Other format values are rejected with HTTP 400.",
     response_description="CSV export built from the filtered Utforsk data set.",
 )
 def explore_export_csv(
@@ -308,9 +291,15 @@ def explore_export_csv(
     stations: Optional[str] = Query(None),
     cross_station_confirmed: Optional[str] = Query(None),
     candidate: bool = Query(False),
+    format: str = Query(
+        "csv",
+        description="Export format. Only `csv` is supported today. Other values return HTTP 400.",
+    ),
     includeDeleted: bool = Query(False),
     session: Session = Depends(get_session),
 ):
+    if format.lower() != "csv":
+        raise HTTPException(status_code=400, detail="Only csv export is supported")
     return event_service.explore_csv(
         session,
         from_date=from_date,
@@ -323,9 +312,9 @@ def explore_export_csv(
 
 
 @router.get(
-    "/eventboard",
+    "/admin/events",
     response_model=MeteorEventListResponse,
-    summary="List events for admin event board",
+    summary="List events for admin board",
     description="Admin-authenticated event-board list. This currently reuses the same event list payload as `/api/events`, but is intended for the protected moderation or admin board rather than the public list.",
     response_description="Paginated event-board list.",
 )
@@ -349,15 +338,21 @@ def event_board(
 
 
 @router.get(
-    "/event/{date_tag}/{time_tag}",
+    "/events/by-path/{date_tag}/{time_tag}",
     response_model=MeteorEvent,
     summary="Get meteor event detail by date/time tag",
-    description="Same meteor-event detail contract as /event/{event_id}, looked up by date and time path.",
+    description="Same meteor-event detail contract as `/api/events/{event_id}`, looked up by event path components from `YYYYMMDD/HHMMSS`.",
     response_description="Meteor-event detail object.",
 )
 def get_event_by_tag(
-    date_tag: str,
-    time_tag: str,
+    date_tag: str = Path(
+        ...,
+        description="Event date folder in `YYYYMMDD` format.",
+    ),
+    time_tag: str = Path(
+        ...,
+        description="Event time folder in `HHMMSS` format.",
+    ),
     includeDeleted: bool = Query(False),
     session: Session = Depends(get_session),
 ):

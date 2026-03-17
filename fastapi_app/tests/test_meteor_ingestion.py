@@ -334,7 +334,7 @@ def test_file_mapper_supports_sectioned_event_aliases(tmp_path_factory):
 
 def test_eventload_endpoint_ingests_data(client, db_session, sample_data_dir):
     response = client.post(
-        "/api/eventload",
+        "/api/admin/event-imports",
         auth=("sys_admin", "secretpassword"),
         json={"date_from": "20230101", "date_to": "20230102"},
     )
@@ -369,13 +369,13 @@ def test_eventload_endpoint_ingests_data(client, db_session, sample_data_dir):
     assert len(trail_points) == 3
     assert trail_points[0].pixel_x == 10.0
 
-    res_response = client.get(f"/api/event/{event.id}/res?limit=10&offset=0")
+    res_response = client.get(f"/api/events/{event.id}/res?limit=10&offset=0")
     assert res_response.status_code == 200
     assert res_response.json()["totalItems"] == 2
     assert res_response.json()["resEntries"][0]["entry_type"] == "start"
 
     trail_response = client.get(
-        f"/api/observation/{observation.id}/trail?limit=10&offset=0"
+        f"/api/observations/{observation.id}/trail?limit=10&offset=0"
     )
     assert trail_response.status_code == 200
     assert trail_response.json()["totalItems"] == 3
@@ -413,7 +413,7 @@ def test_eventload_reloads_same_observation_without_duplicates(client, db_sessio
     settings.data_directory = str(base)
 
     first_response = client.post(
-        "/api/eventload",
+        "/api/admin/event-imports",
         auth=("sys_admin", "secretpassword"),
         json={"date_from": "20230101", "date_to": "20230102"},
     )
@@ -443,7 +443,7 @@ def test_eventload_reloads_same_observation_without_duplicates(client, db_sessio
     )
 
     second_response = client.post(
-        "/api/eventload",
+        "/api/admin/event-imports",
         auth=("sys_admin", "secretpassword"),
         json={"date_from": "20230101", "date_to": "20230102"},
     )
@@ -517,7 +517,7 @@ def test_eventload_marks_missing_observation_deleted(client, db_session, tmp_pat
     settings.data_directory = str(base)
 
     first_response = client.post(
-        "/api/eventload",
+        "/api/admin/event-imports",
         auth=("sys_admin", "secretpassword"),
         json={"date_from": "20230101", "date_to": "20230102"},
     )
@@ -531,7 +531,7 @@ def test_eventload_marks_missing_observation_deleted(client, db_session, tmp_pat
     shutil.rmtree(second_cam_dir)
 
     second_response = client.post(
-        "/api/eventload",
+        "/api/admin/event-imports",
         auth=("sys_admin", "secretpassword"),
         json={"date_from": "20230101", "date_to": "20230102"},
     )
@@ -553,7 +553,7 @@ def test_eventload_marks_missing_observation_deleted(client, db_session, tmp_pat
     assert active_observation.is_deleted is False
     assert active_observation.deletion_reason is None
 
-    event_response = client.get(f"/api/event/{active_observation.event_id}")
+    event_response = client.get(f"/api/events/{active_observation.event_id}")
     assert event_response.status_code == 200
     returned_cam_names = [
         item["observation_ref"]["cam_name"] for item in event_response.json()["observations"]
@@ -562,7 +562,7 @@ def test_eventload_marks_missing_observation_deleted(client, db_session, tmp_pat
     assert "cam4" not in returned_cam_names
 
     event_response_with_deleted = client.get(
-        f"/api/event/{active_observation.event_id}?includeDeleted=true"
+        f"/api/events/{active_observation.event_id}?includeDeleted=true"
     )
     assert event_response_with_deleted.status_code == 200
     returned_cam_names = [

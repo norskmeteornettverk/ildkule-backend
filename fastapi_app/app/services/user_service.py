@@ -165,6 +165,13 @@ class UserService:
             user.role = payload["role"]
         if "user_level" in payload and payload["user_level"] is not None:
             user.user_level = str(payload["user_level"])
+        if "confirmed" in payload and payload["confirmed"] is not None:
+            user.confirmed = bool(payload["confirmed"])
+        if (
+            "tutorial_completed" in payload
+            and payload["tutorial_completed"] is not None
+        ):
+            user.tutorial_completed = bool(payload["tutorial_completed"])
         session.add(user)
         return user
 

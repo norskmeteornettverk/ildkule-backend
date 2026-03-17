@@ -37,7 +37,6 @@ class EventReviewRequest(BaseModel):
 
 
 class EventClassificationUpdate(BaseModel):
-    id: int = Field(..., description="Event id.")
     user_confirmed: Optional[str] = Field(
         default=None,
         description="Classification input. Accepted values today are Positive, Negative, 1, and 0. Positive and 1 map to confirmed meteor, while Negative and 0 map to not meteor.",

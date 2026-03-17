@@ -38,7 +38,7 @@ def test_login_and_user_reads(client, db_session, monkeypatch):
     db_session.commit()
 
     login = client.post(
-        "/api/login",
+        "/api/auth/login",
         json={"username": "test@example.com", "password": "test"},
     )
     assert login.status_code == 200
@@ -48,13 +48,9 @@ def test_login_and_user_reads(client, db_session, monkeypatch):
 
     headers = {"Authorization": f"Bearer {payload['accessToken']}"}
 
-    get_user = client.get(f"/api/user/{user.id}", headers=headers)
+    get_user = client.get(f"/api/users/{user.id}", headers=headers)
     assert get_user.status_code == 200
     assert get_user.json()["id"] == user.id
-
-    get_details = client.get(f"/api/user/{user.id}/details", headers=headers)
-    assert get_details.status_code == 200
-    assert get_details.json()["username"] == "test@example.com"
 
     get_users = client.get("/api/users", headers=headers)
     assert get_users.status_code == 200
@@ -75,7 +71,7 @@ def test_password_reset_request_shape(client, db_session, monkeypatch):
     db_session.commit()
 
     response = client.post(
-        "/api/passwordresetrequest",
+        "/api/auth/password-reset/request",
         json={"email": "reset@example.com"},
     )
     assert response.status_code == 200
@@ -103,16 +99,16 @@ def test_tutorialcomplete_authorization_and_update(client, db_session):
     db_session.commit()
 
     forbidden = client.put(
-        f"/api/user/{owner.id}/tutorialcomplete",
+        f"/api/users/{owner.id}/tutorial-completion",
         headers=_auth_header(other),
-        json={"tutorialComplete": True},
+        json={"completed": True},
     )
     assert forbidden.status_code == 403
 
     ok = client.put(
-        f"/api/user/{owner.id}/tutorialcomplete",
+        f"/api/users/{owner.id}/tutorial-completion",
         headers=_auth_header(owner),
-        json={"tutorialComplete": True},
+        json={"completed": True},
     )
     assert ok.status_code == 200
     assert ok.json()["tutorial_completed"] is True
@@ -175,7 +171,7 @@ def test_event_list_search_filter_and_get(client, db_session):
     assert isinstance(filtered.json(), dict)
     assert len(filtered.json()["events"]) >= 1
 
-    get_one = client.get(f"/api/event/{event_a.id}")
+    get_one = client.get(f"/api/events/{event_a.id}")
     assert get_one.status_code == 200
     assert get_one.json()["id"] == event_a.id
     assert get_one.json()["event_path"] == "20211101/010101"
@@ -195,7 +191,7 @@ def test_event_list_search_filter_and_get(client, db_session):
     assert "media" not in get_one.json()
     assert "observation_cam_data" not in get_one.json()
 
-    get_by_tag = client.get("/api/event/20211101/010101")
+    get_by_tag = client.get("/api/events/by-path/20211101/010101")
     assert get_by_tag.status_code == 200
     assert get_by_tag.json()["id"] == event_a.id
 
@@ -231,7 +227,7 @@ def test_event_filter_options_and_coordinate_report(client, db_session):
     assert "larvik" in payload["stations"]
     assert "Krysspeilet" in payload["eventTypes"]
 
-    coordinates = client.get("/api/report/coordinates")
+    coordinates = client.get("/api/insights/coordinates")
     assert coordinates.status_code == 200
     assert coordinates.json()[0]["lat"] == 59.1
     assert coordinates.json()[0]["lng"] == 10.2
@@ -259,12 +255,12 @@ def test_insight_cam_and_station(client, db_session):
     )
     db_session.commit()
 
-    cam_report = client.get("/api/insight/cam")
+    cam_report = client.get("/api/insights/cam")
     assert cam_report.status_code == 200
     assert isinstance(cam_report.json(), list)
     assert "Kameranavn" in cam_report.json()[0]
 
-    station_report = client.get("/api/insight/station")
+    station_report = client.get("/api/insights/station")
     assert station_report.status_code == 200
     assert isinstance(station_report.json(), list)
     assert "Stasjonsnavn" in station_report.json()[0]
@@ -309,7 +305,7 @@ def test_explore_and_csv_export(client, db_session):
     assert payload["events"][0]["candidate"]["is_candidate"] is True
     assert payload["events"][0]["ground"]["lat"] == 69.9
 
-    csv_response = client.get("/api/explore/export.csv?candidate=true")
+    csv_response = client.get("/api/explore/export?format=csv&candidate=true")
     assert csv_response.status_code == 200
     assert "event_path,title,utc_time,local_time" in csv_response.text
     assert "20260203/040506" in csv_response.text

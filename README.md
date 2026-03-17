@@ -117,7 +117,7 @@ The test suite uses SQLite and does not need your local MySQL database.
 
 - The new API supports meteor import from file data.
 - The import can create thumbnails from `image.jpg`.
-- Event import is done through `/api/eventload`.
+- Event import is done through `/api/admin/event-imports`.
 - The import upserts existing events and observations when it finds the same
   data again.
 - Missing events and observations are soft-deleted, not hard-deleted.
@@ -125,7 +125,7 @@ The test suite uses SQLite and does not need your local MySQL database.
 
 ## Import Behavior
 
-`/api/eventload` reads event folders from `DATA_DIRECTORY`.
+`/api/admin/event-imports` reads event folders from `DATA_DIRECTORY`.
 
 What it does:
 

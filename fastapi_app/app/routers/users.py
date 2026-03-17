@@ -19,7 +19,7 @@ user_service = UserService()
 
 
 @router.post(
-    "/user",
+    "/users",
     status_code=201,
     summary="Create user",
     description="Creates a new user account.",
@@ -30,7 +30,7 @@ def create_user(payload: UserCreate, session: Session = Depends(get_session)):
 
 
 @router.get(
-    "/user/{user_id}",
+    "/users/{user_id}",
     summary="Get user",
     description="Returns account fields for one authenticated user. This is not a public profile endpoint.",
 )
@@ -45,32 +45,25 @@ def get_user(
     return serialize_user(user)
 
 
-@router.get(
-    "/user/{user_id}/details",
-    summary="Get user details",
-    description="Returns account fields for one authenticated user from the legacy details route. It currently returns the same shape as `/api/user/{user_id}`.",
+@router.patch(
+    "/users/{user_id}",
+    summary="Patch user",
+    description=(
+        "Admin-only partial update for account fields. "
+        "Current supported fields are `role`, `user_level`, `confirmed`, and `tutorial_completed`. "
+        "Regular users should use the dedicated tutorial and password routes for self-service actions."
+    ),
 )
-def get_user_details(
-    user_id: int,
-    session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
-):
-    user = session.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return serialize_user(user)
-
-
-@router.patch("/user/{user_id}")
 def patch_user(
     user_id: int,
     payload: UserPatch,
     session: Session = Depends(get_session),
     __: User = Depends(enforce_role(["ROLE_ADMIN"])),
 ):
-    if payload.id != user_id:
-        raise HTTPException(status_code=400, detail="Payload id mismatch")
-    user = user_service.patch_user(session, payload.dict(exclude_unset=True))
+    user = user_service.patch_user(
+        session,
+        {"id": user_id, **payload.dict(exclude_unset=True)},
+    )
     return serialize_user(user)
 
 
@@ -97,7 +90,11 @@ def list_users(
     return {"message": "User list created", "users": payload}
 
 
-@router.put("/user/{user_id}/tutorialcomplete")
+@router.put(
+    "/users/{user_id}/tutorial-completion",
+    summary="Mark tutorial completion",
+    description="Marks the user tutorial as completed or not completed. This remains a separate action because it can also lift the user's level from 0 to 1.",
+)
 def update_tutorial(
     user_id: int,
     payload: TutorialUpdate,
@@ -106,11 +103,15 @@ def update_tutorial(
 ):
     if current_user.id != user_id and current_user.role != "ROLE_ADMIN":
         raise HTTPException(status_code=403, detail="Not authorized")
-    user = user_service.tutorial_performed(session, user_id, payload.tutorialComplete)
+    user = user_service.tutorial_performed(session, user_id, payload.completed)
     return serialize_user(user)
 
 
-@router.put("/user/{user_id}/password")
+@router.patch(
+    "/users/{user_id}/password",
+    summary="Change user password",
+    description="Partially updates the authenticated user's password.",
+)
 def update_password(
     user_id: int,
     payload: PasswordChangeRequest,
@@ -125,52 +126,3 @@ def update_password(
         )
     user_service.update_password(session, current_user, payload.new_password)
     return {"message": "Passord oppdatert"}
-
-
-@router.put("/user/{user_id}/userlevel")
-def set_user_level(
-    user_id: int,
-    payload: UserPatch,
-    session: Session = Depends(get_session),
-    __: User = Depends(enforce_role(["ROLE_ADMIN"])),
-):
-    user = session.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if payload.user_level is None:
-        raise HTTPException(status_code=400, detail="user_level missing")
-    user.user_level = str(payload.user_level)
-    session.add(user)
-    return serialize_user(user)
-
-
-@router.put("/user/{user_id}/userrole")
-def set_user_role(
-    user_id: int,
-    payload: UserPatch,
-    session: Session = Depends(get_session),
-    __: User = Depends(enforce_role(["ROLE_ADMIN"])),
-):
-    user = session.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if not payload.role:
-        raise HTTPException(status_code=400, detail="role missing")
-    user.role = payload.role
-    session.add(user)
-    return serialize_user(user)
-
-
-@router.put("/user/{user_id}/active")
-def set_user_active(
-    user_id: int,
-    payload: TutorialUpdate,
-    session: Session = Depends(get_session),
-    __: User = Depends(enforce_role(["ROLE_ADMIN"])),
-):
-    user = session.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    user.confirmed = payload.tutorialComplete
-    session.add(user)
-    return serialize_user(user)
