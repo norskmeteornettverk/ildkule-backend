@@ -296,7 +296,33 @@ def test_event_review_messages_and_alias_routes(client, db_session, monkeypatch)
     monkeypatch.setattr(
         events_router.event_service,
         "get_insight",
-        lambda session, report_name: [{"report": report_name}],
+        lambda session, report_name: (
+            [
+                {
+                    "id": 10,
+                    "datetimetag": "20240101010203",
+                    "station_cam": "cam1@ski",
+                    "number_of_stations": 1,
+                    "lat": 59.9,
+                    "lng": 10.7,
+                    "slat": 60.1,
+                    "slng": 10.8,
+                    "radiant_ra": None,
+                    "radiant_dec": None,
+                    "radiant_ecl_lat": None,
+                    "radiant_ecl_long": None,
+                    "track_speed": None,
+                    "track_endheight": None,
+                    "radiant_shower": None,
+                    "date": None,
+                    "triangulation": False,
+                    "proper_triangulation": None,
+                    "ai_score": None,
+                }
+            ]
+            if report_name == "coordinates"
+            else [{"report": report_name}]
+        ),
     )
     monkeypatch.setattr(
         events_router.event_service,
@@ -342,7 +368,7 @@ def test_event_review_messages_and_alias_routes(client, db_session, monkeypatch)
 
     coordinates = client.get("/api/insights/coordinates")
     assert coordinates.status_code == 200
-    assert coordinates.json()[0]["report"] == "coordinates"
+    assert coordinates.json()[0]["datetimetag"] == "20240101010203"
 
     by_path = client.get("/api/events/by-path/20240101/010203", params={"includeDeleted": True})
     assert by_path.status_code == 200

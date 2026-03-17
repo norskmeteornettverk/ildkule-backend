@@ -118,6 +118,22 @@ class EventService:
             ObservationCamData.cam
         ).selectinload(Cam.station)
 
+    def _proper_triangulation(self, event: Event) -> Optional[bool]:
+        if (
+            event.track_speed is None
+            or event.track_endheight is None
+            or event.track_startheight is None
+        ):
+            return None
+        return bool(
+            event.track_speed > 0
+            and event.track_speed < 1000
+            and event.track_endheight > 0
+            and event.track_startheight > 0
+            and event.track_startheight < 1000
+            and event.track_startheight > event.track_endheight
+        )
+
     def list_events(
         self,
         session: Session,
@@ -454,11 +470,70 @@ class EventService:
             left outer join event as m on d.event_id = m.id
             """
         elif report_name == "coordinates":
-            sql = """
-            SELECT track_endlat as lat, track_endlong as lng
-            FROM event
-            WHERE track_endlat IS NOT NULL
-            """
+            stmt = (
+                select(Event)
+                .options(self._event_list_load_options())
+                .where(
+                    self._base_filter(False),
+                    Event.track_endlat.isnot(None),
+                    Event.track_endlong.isnot(None),
+                )
+                .order_by(Event.date.desc().nullslast(), Event.id.desc())
+            )
+            events = session.scalars(stmt).unique().all()
+            rows: list[dict] = []
+            for event in events:
+                observations = event.observation_data or []
+                station_names = sorted(
+                    {
+                        record.cam.station.station_name
+                        for record in observations
+                        if record.cam and record.cam.station and record.cam.station.station_name
+                    }
+                )
+                camera_labels = sorted(
+                    {
+                        f"{record.cam.cam_name}@{record.cam.station.station_name}"
+                        for record in observations
+                        if record.cam and record.cam.cam_name and record.cam.station and record.cam.station.station_name
+                    }
+                )
+                ai_scores = [
+                    float(record.summary_meteor_probability)
+                    for record in observations
+                    if record.summary_meteor_probability is not None
+                ]
+                rows.append(
+                    {
+                        "id": event.id,
+                        "datetimetag": event.datetimetag,
+                        "station_cam": ", ".join(camera_labels),
+                        "number_of_stations": len(station_names),
+                        "lat": event.track_endlat,
+                        "lng": event.track_endlong,
+                        "slat": event.track_startlat,
+                        "slng": event.track_startlong,
+                        "radiant_ra": event.radiant_ra,
+                        "radiant_dec": event.radiant_dec,
+                        "radiant_ecl_lat": event.radiant_ecl_lat,
+                        "radiant_ecl_long": event.radiant_ecl_long,
+                        "track_speed": event.track_speed,
+                        "track_endheight": event.track_endheight,
+                        "radiant_shower": event.radiant_shower,
+                        "date": event.date.isoformat() if event.date else None,
+                        "triangulation": bool(
+                            event.radiant_ra is not None
+                            and event.radiant_dec is not None
+                            and event.radiant_ecl_lat is not None
+                            and event.radiant_ecl_long is not None
+                            and event.track_speed is not None
+                            and event.track_endheight is not None
+                        ),
+                        "proper_triangulation": self._proper_triangulation(event),
+                        "ai_score": max(ai_scores) if ai_scores else None,
+                    }
+                )
+            return rows
         else:
             raise HTTPException(status_code=404, detail="Unknown insight report")
 
@@ -589,8 +664,8 @@ class EventService:
                     "ground": {
                         "lat": event_payload["track_endlat"],
                         "lng": event_payload["track_endlong"],
-                        "slat": None,
-                        "slng": None,
+                        "slat": event_payload["track_startlat"],
+                        "slng": event_payload["track_startlong"],
                     },
                     "final_classification": event_payload["final_classification"],
                 }

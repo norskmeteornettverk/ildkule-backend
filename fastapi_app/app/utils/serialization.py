@@ -429,11 +429,25 @@ def _station_summary(observations: List[ObservationCamData]) -> dict:
 
 
 def _technical_validity(event: Event) -> dict:
+    proper_triangulation = None
+    if (
+        event.track_speed is not None
+        and event.track_endheight is not None
+        and event.track_startheight is not None
+    ):
+        proper_triangulation = bool(
+            event.track_speed > 0
+            and event.track_speed < 1000
+            and event.track_endheight > 0
+            and event.track_startheight > 0
+            and event.track_startheight < 1000
+            and event.track_startheight > event.track_endheight
+        )
     return {
         "is_valid": event.is_deleted is False and event.user_confirmed != 0,
         "is_deleted": bool(event.is_deleted),
         "source_bad_detection": None,
-        "proper_triangulation": bool(event.camera_confirmed) if event.camera_confirmed is not None else None,
+        "proper_triangulation": proper_triangulation,
     }
 
 
@@ -486,6 +500,17 @@ def _analysis_payload(event: Event, observations: List[ObservationCamData], even
         },
         "artifacts": event_artifacts,
     }
+
+
+def _ai_score(observations: List[ObservationCamData]) -> Optional[float]:
+    scores = [
+        float(record.summary_meteor_probability)
+        for record in observations
+        if record.summary_meteor_probability is not None
+    ]
+    if not scores:
+        return None
+    return max(scores)
 
 
 def _prune_observation_public_payload(payload: dict) -> dict:
@@ -627,7 +652,7 @@ def serialize_event(
     payload["station_count"] = station_summary["station_count"]
     payload["observation_count"] = station_summary["observation_count"]
     payload["shower"] = event.radiant_shower
-    payload["ai_score"] = None
+    payload["ai_score"] = _ai_score(observations)
     payload["technical_validity"] = _technical_validity(event)
     payload["header"] = {
         "id": event.id,

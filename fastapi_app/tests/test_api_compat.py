@@ -1,8 +1,15 @@
 from datetime import datetime
 
 from fastapi_app.app.services import contact_service
-from fastapi_app.app.models import Event, User, UserReview
+from fastapi_app.app.models import Cam, Event, ObservationCamData, Station, User, UserReview
 from fastapi_app.app.security import create_access_token
+
+
+def _observation_kwargs(key: str) -> dict:
+    return {
+        "observation_key": key,
+        "source_hash": f"hash-{key}",
+    }
 
 
 def _auth_header(user_id: int, role: str = "ROLE_USER", user_level: str = "1") -> dict:
@@ -73,6 +80,67 @@ def test_eventboard_accepts_pagination_params(client, db_session):
     payload = response.json()
     assert payload["currentPage"] == 1
     assert len(payload["events"]) == 2
+
+
+def test_eventboard_returns_admin_fields_and_public_card_fields(client, db_session):
+    admin = User(
+        username="admin-board@example.com",
+        password="not-used-in-this-test",
+        role="ROLE_ADMIN",
+        user_level="10",
+        confirmed=True,
+    )
+    reviewer = User(
+        username="reviewer-board@example.com",
+        password="not-used-in-this-test",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=True,
+    )
+    station = Station(station_name="harestua")
+    cam = Cam(station=station, cam_name="cam1")
+    event = Event(
+        datetimetag="20240203040506",
+        location="Innlandet",
+        date=datetime(2024, 2, 3, 4, 5, 6),
+        user_confirmed=1,
+        camera_confirmed=1,
+        track_endheight=45.0,
+    )
+    db_session.add_all([admin, reviewer, station, cam, event])
+    db_session.commit()
+    db_session.add(
+        ObservationCamData(
+            event_id=event.id,
+            cam_id=cam.id,
+            trail_frames=10,
+            **_observation_kwargs("harestua:cam1:2024-02-03T04:05:06.000"),
+        )
+    )
+    db_session.add_all(
+        [
+            UserReview(user_id=admin.id, event_id=event.id, confirmed=1),
+            UserReview(user_id=reviewer.id, event_id=event.id, confirmed=0),
+        ]
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/admin/events?page=1&limit=10&orderby=ratings&order=desc",
+        headers=_auth_header(admin.id, role="ROLE_ADMIN", user_level="10"),
+    )
+
+    assert response.status_code == 200
+    item = response.json()["events"][0]
+    assert "preview" in item
+    assert "times" in item
+    assert "cross_station_confirmed" in item
+    assert "station_summary" in item
+    assert item["ratings"] == 2
+    assert item["positive_ratings"] == 1
+    assert item["negative_ratings"] == 1
+    assert item["classification"]["final_classification"] == "Meteor"
+    assert item["classification"]["user_confirmed"] == 1
 
 
 def test_forms_recaptcha_failure_has_legacy_message_shape(client, monkeypatch):

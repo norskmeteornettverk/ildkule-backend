@@ -63,6 +63,23 @@ def test_openapi_exposes_filters_station_logs_and_path_lookup(client):
     assert descriptions["date_tag"] == "Event date folder in `YYYYMMDD` format."
     assert descriptions["time_tag"] == "Event time folder in `HHMMSS` format."
 
+    insight_parameters = paths["/api/insights/{report_name}"]["get"]["parameters"]
+    report_name_schema = next(
+        item["schema"] for item in insight_parameters if item["name"] == "report_name"
+    )
+    report_name_ref = report_name_schema["allOf"][0]["$ref"].split("/")[-1]
+    assert payload["components"]["schemas"][report_name_ref]["enum"] == [
+        "cam",
+        "station",
+        "total",
+        "coordinates",
+    ]
+
+    coordinates_response = (
+        paths["/api/insights/coordinates"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+    )
+    assert coordinates_response["items"]["$ref"].endswith("/InsightCoordinateRow")
+
 
 def test_openapi_exposes_verification_tutorial_reviews_and_station_network(client):
     response = client.get("/openapi.json")
@@ -81,3 +98,6 @@ def test_openapi_exposes_verification_tutorial_reviews_and_station_network(clien
     assert "StationNetworkResponse" in schemas
     assert "TutorialMetadataResponse" in schemas
     assert "UserReviewHistoryResponse" in schemas
+
+    classification = schemas["MeteorEventClassification"]["properties"]
+    assert "user_confirmed" in classification

@@ -206,9 +206,18 @@ def test_event_filter_options_and_coordinate_report(client, db_session):
         date=datetime(2024, 1, 2, 3, 4, 5),
         user_confirmed=1,
         camera_confirmed=1,
+        track_startheight=70.0,
         track_endheight=55.0,
+        track_speed=18.5,
+        track_startlat=61.2,
+        track_startlong=11.3,
         track_endlat=59.1,
         track_endlong=10.2,
+        radiant_ra=15.5,
+        radiant_dec=-2.5,
+        radiant_ecl_lat=4.1,
+        radiant_ecl_long=200.2,
+        radiant_shower="Perseids",
     )
     db_session.add_all([station, cam, event])
     db_session.commit()
@@ -217,6 +226,7 @@ def test_event_filter_options_and_coordinate_report(client, db_session):
             event_id=event.id,
             cam_id=cam.id,
             trail_frames=10,
+            summary_meteor_probability=87.5,
             **_observation_kwargs("larvik:cam1:2024-01-02T03:04:05.000"),
         )
     )
@@ -233,6 +243,12 @@ def test_event_filter_options_and_coordinate_report(client, db_session):
     assert coordinates.status_code == 200
     assert coordinates.json()[0]["lat"] == 59.1
     assert coordinates.json()[0]["lng"] == 10.2
+    assert coordinates.json()[0]["slat"] == 61.2
+    assert coordinates.json()[0]["slng"] == 11.3
+    assert coordinates.json()[0]["track_speed"] == 18.5
+    assert coordinates.json()[0]["radiant_shower"] == "Perseids"
+    assert coordinates.json()[0]["proper_triangulation"] is True
+    assert coordinates.json()[0]["ai_score"] == 87.5
 
 
 def test_insight_cam_and_station(client, db_session):
@@ -277,6 +293,9 @@ def test_explore_and_csv_export(client, db_session):
         date=datetime(2026, 2, 3, 4, 5, 6),
         user_confirmed=1,
         camera_confirmed=1,
+        track_startlat=70.4,
+        track_startlong=24.2,
+        track_startheight=90.0,
         track_endheight=22.0,
         track_speed=20.0,
         radiant_ra=12.3,
@@ -293,6 +312,7 @@ def test_explore_and_csv_export(client, db_session):
             summary_latitude=69.6,
             summary_longitude=23.1,
             summary_elevation=20,
+            summary_meteor_probability=73.2,
             **_observation_kwargs("alta:cam9:2026-02-03T04:05:06.000"),
         )
     )
@@ -306,6 +326,9 @@ def test_explore_and_csv_export(client, db_session):
     assert payload["kpi"]["total_events"] == 1
     assert payload["events"][0]["candidate"]["is_candidate"] is True
     assert payload["events"][0]["ground"]["lat"] == 69.9
+    assert payload["events"][0]["ground"]["slat"] == 70.4
+    assert payload["events"][0]["ground"]["slng"] == 24.2
+    assert payload["events"][0]["ai_score"] == 73.2
 
     csv_response = client.get("/api/explore/export?format=csv&candidate=true")
     assert csv_response.status_code == 200

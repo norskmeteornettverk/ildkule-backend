@@ -154,6 +154,71 @@ def test_verification_confirm_and_resend(client, db_session, monkeypatch):
     assert invalid.status_code == 401
 
 
+def test_account_flow_end_to_end(client, db_session, monkeypatch):
+    sent = {}
+    monkeypatch.setattr(user_service_module, "get_password_hash", lambda password: f"hashed::{password}")
+    monkeypatch.setattr(user_service_module, "verify_password", lambda plain, stored: stored == f"hashed::{plain}")
+    monkeypatch.setattr(
+        user_service_module,
+        "send_mail",
+        lambda recipient, subject, html_body, alt_body=None, attachments=None: sent.update(
+            {"recipient": recipient, "subject": subject, "body": html_body}
+        ),
+    )
+
+    created = client.post(
+        "/api/users",
+        json={"identifier": "flow@example.com", "password": "password-123"},
+    )
+    assert created.status_code == 201
+    assert created.json()["identifier"] == "flow@example.com"
+    created_user = db_session.query(User).filter(User.username == "flow@example.com").one()
+    assert created_user.confirmed is False
+    assert created_user.confirm_token is not None
+    assert sent["recipient"] == "flow@example.com"
+
+    resent = client.post("/api/auth/verification/resend", json={"email": "flow@example.com"})
+    assert resent.status_code == 200
+    db_session.refresh(created_user)
+    token = created_user.confirm_token
+    assert token is not None
+
+    confirmed = client.get("/api/auth/verification/confirm", params={"token": token})
+    assert confirmed.status_code == 200
+    assert confirmed.json()["account_confirmed"] is True
+
+    login = client.post(
+        "/api/auth/login",
+        json={"identifier": "flow@example.com", "password": "password-123"},
+    )
+    assert login.status_code == 200
+    access_token = login.json()["accessToken"]
+    auth_headers = {"Authorization": f"Bearer {access_token}"}
+
+    tutorial = client.put(
+        f"/api/users/{created_user.id}/tutorial-completion",
+        headers=auth_headers,
+        json={"completed": True},
+    )
+    assert tutorial.status_code == 200
+    assert tutorial.json()["tutorial_completed"] is True
+
+    event = Event(
+        datetimetag="20240102030405",
+        location="Oslo",
+        date=datetime(2024, 1, 2, 3, 4, 5),
+        user_confirmed=1,
+    )
+    db_session.add(event)
+    db_session.commit()
+    db_session.add(UserReview(user_id=created_user.id, event_id=event.id, confirmed=1))
+    db_session.commit()
+
+    history = client.get(f"/api/users/{created_user.id}/reviews", headers=auth_headers)
+    assert history.status_code == 200
+    assert history.json()["reviews"][0]["review_label"] == "Ja"
+
+
 def test_user_route_requires_auth_and_rejects_invalid_or_stale_token(client):
     no_header = client.get("/api/users/1")
     assert no_header.status_code == 401

@@ -10,7 +10,7 @@ class UserCreate(BaseModel):
     )
     password: str = Field(min_length=8)
 
-    @root_validator(pre=True)
+    @root_validator(pre=True, allow_reuse=True)
     def _accept_legacy_username(cls, values):
         if "identifier" not in values and "username" in values:
             values["identifier"] = values["username"]

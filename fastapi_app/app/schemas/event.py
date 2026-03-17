@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -56,6 +57,13 @@ class EventClassificationUpdate(BaseModel):
         default=None,
         description="Classification input. Accepted values today are Positive, Negative, 1, and 0. Positive and 1 map to confirmed meteor, while Negative and 0 map to not meteor.",
     )
+
+
+class InsightReportName(str, Enum):
+    cam = "cam"
+    station = "station"
+    total = "total"
+    coordinates = "coordinates"
 
 
 class EventTimes(MeteorSchema):
@@ -289,6 +297,10 @@ class MeteorEventClassification(MeteorSchema):
         description="Public final classification. Current values are Meteor, Ikke meteor, and Usikker.",
     )
     cross_station_confirmed: bool = Field(..., description="Public cross-station status.")
+    user_confirmed: Optional[int] = Field(
+        default=None,
+        description="Stored moderation value used by the backend. Current runtime uses 1 for meteor, 0 for ikke meteor, and -1 or null for unclear.",
+    )
 
 
 class AtmosphericPath(MeteorSchema):
@@ -426,7 +438,7 @@ class MeteorEvent(MeteorSchema):
     )
     ai_score: Optional[float] = Field(
         default=None,
-        description="Null means this backend does not yet expose a public AI score source.",
+        description="Highest available observation-side meteor probability when the backend has one. Null means no usable probability was available in the current event data.",
     )
     technical_validity: TechnicalValidity
     header: MeteorEventHeader
@@ -575,11 +587,11 @@ class ExploreGround(MeteorSchema):
     )
     slat: Optional[float] = Field(
         default=None,
-        description="Connected start-point or station-line latitude when that source is available. Null means the current runtime does not yet expose this value.",
+        description="Solved start latitude when available from the cross-station event geometry.",
     )
     slng: Optional[float] = Field(
         default=None,
-        description="Connected start-point or station-line longitude when that source is available. Null means the current runtime does not yet expose this value.",
+        description="Solved start longitude when available from the cross-station event geometry.",
     )
 
 
@@ -639,7 +651,7 @@ class ExploreMeteorEvent(MeteorSchema):
     )
     ai_score: Optional[float] = Field(
         default=None,
-        description="Null means this backend does not yet expose a public AI score source.",
+        description="Highest available observation-side meteor probability when the backend has one. Null means no usable probability was available in the current event data.",
     )
     technical_validity: TechnicalValidity
     station_summary: StationSummary
@@ -647,7 +659,7 @@ class ExploreMeteorEvent(MeteorSchema):
     radiant: RadiantPayload
     ground: ExploreGround = Field(
         ...,
-        description="Ground and station coordinate basis for Utforsk. In current runtime `lat` and `lng` come from event end-point coordinates, while `slat` and `slng` are reserved for connected start-point or station-line sources and may be null.",
+        description="Ground-coordinate basis for Utforsk. In current runtime `lat` and `lng` come from event end-point coordinates, while `slat` and `slng` come from solved start coordinates when the event has them.",
     )
     final_classification: str
 
@@ -668,4 +680,71 @@ class ExploreResponse(MeteorSchema):
     events: List[ExploreMeteorEvent] = Field(
         ...,
         description="Filtered Utforsk event cards.",
+    )
+
+
+class InsightCoordinateRow(MeteorSchema):
+    id: int = Field(..., description="Event database id.")
+    datetimetag: str = Field(..., description="Event date and time tag in `YYYYMMDDHHMMSS` form.")
+    station_cam: str = Field(
+        ...,
+        description="Comma-separated `cam@station` labels for observations linked to the event.",
+    )
+    number_of_stations: int = Field(
+        ...,
+        description="Number of unique stations represented in the solved event.",
+    )
+    lat: float = Field(..., description="Solved end latitude.")
+    lng: float = Field(..., description="Solved end longitude.")
+    slat: Optional[float] = Field(
+        default=None,
+        description="Solved start latitude when available.",
+    )
+    slng: Optional[float] = Field(
+        default=None,
+        description="Solved start longitude when available.",
+    )
+    radiant_ra: Optional[float] = Field(
+        default=None,
+        description="Solved radiant right ascension when available.",
+    )
+    radiant_dec: Optional[float] = Field(
+        default=None,
+        description="Solved radiant declination when available.",
+    )
+    radiant_ecl_lat: Optional[float] = Field(
+        default=None,
+        description="Solved radiant ecliptic latitude when available.",
+    )
+    radiant_ecl_long: Optional[float] = Field(
+        default=None,
+        description="Solved radiant ecliptic longitude when available.",
+    )
+    track_speed: Optional[float] = Field(
+        default=None,
+        description="Solved speed in km/s when available.",
+    )
+    track_endheight: Optional[float] = Field(
+        default=None,
+        description="Solved end height in km when available.",
+    )
+    radiant_shower: Optional[str] = Field(
+        default=None,
+        description="Meteor shower assignment when available.",
+    )
+    date: Optional[str] = Field(
+        default=None,
+        description="Event time serialised as ISO timestamp when available.",
+    )
+    triangulation: bool = Field(
+        ...,
+        description="True when the backend has a basic solved radiant and trajectory set for the event.",
+    )
+    proper_triangulation: Optional[bool] = Field(
+        default=None,
+        description="True when the solved event geometry passes the backend's basic sanity checks. Null means not enough source data.",
+    )
+    ai_score: Optional[float] = Field(
+        default=None,
+        description="Highest available observation-side meteor probability when present.",
     )
