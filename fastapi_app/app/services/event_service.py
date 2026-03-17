@@ -47,6 +47,27 @@ settings = get_settings()
 
 class EventService:
     MISSING_FROM_IMPORT = "missing_from_import"
+    EVENT_IMPORT_PRESERVED_COLUMNS = {
+        "id",
+        "datetimetag",
+        "create_time",
+        "user_confirmed",
+        "first_seen_at",
+        "last_seen_at",
+        "deleted_at",
+        "is_deleted",
+        "deletion_reason",
+    }
+    OBSERVATION_IMPORT_PRESERVED_COLUMNS = {
+        "id",
+        "observation_key",
+        "created",
+        "first_seen_at",
+        "last_seen_at",
+        "deleted_at",
+        "is_deleted",
+        "deletion_reason",
+    }
 
     def _visibility_filter(self, include_deleted: bool):
         if include_deleted:
@@ -729,8 +750,12 @@ class EventService:
             if key in event_columns
         }
         if event:
-            for key, value in payload.items():
-                setattr(event, key, value)
+            self._sync_import_columns(
+                event,
+                event_columns,
+                payload,
+                self.EVENT_IMPORT_PRESERVED_COLUMNS,
+            )
         else:
             event = Event(**payload)
             event.first_seen_at = import_started_at
@@ -809,8 +834,12 @@ class EventService:
         payload["event_start_utc"] = observation.event_start_utc
 
         if existing:
-            for key, value in payload.items():
-                setattr(existing, key, value)
+            self._sync_import_columns(
+                existing,
+                columns,
+                payload,
+                self.OBSERVATION_IMPORT_PRESERVED_COLUMNS,
+            )
         else:
             existing = ObservationCamData(**payload)
             existing.first_seen_at = import_started_at
@@ -936,6 +965,14 @@ class EventService:
                 for point in observation.trail_points
             ]
         )
+
+    def _sync_import_columns(self, target, columns, payload, preserved_columns: set[str]) -> None:
+        """Keep source-derived columns in sync, clearing values that disappeared on reimport."""
+
+        for key in columns:
+            if key in preserved_columns:
+                continue
+            setattr(target, key, payload.get(key))
 
     def _coerce_column_value(self, column, value):
         """Normalise file-derived values to the SQLAlchemy column type."""

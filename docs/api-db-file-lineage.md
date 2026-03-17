@@ -315,6 +315,7 @@ flowchart LR
 | `_build_observation_key` | bruker `station:cam:event_start_utc` hvis mulig, ellers `fallback:<sha256>` | `fastapi_app/app/services/file_mapper.py:455` |
 | `_build_source_hash` | hasher station, cam, `video_start`, `trail_timestamps`, `trail_positions` | `fastapi_app/app/services/file_mapper.py:471` |
 | `_build_trail_points` | lager radvis trail-data med `common_length = min(len(seq))` for tilgjengelige sekvenser | `fastapi_app/app/services/file_mapper.py:487` |
+| `_sync_import_columns` | ved reimport overskrives alle kildeavledede `event`- og `observation_cam_data`-felter; verdier som ikke lenger finnes i filene settes til `NULL` i stedet for å bli hengende igjen | `fastapi_app/app/services/event_service.py:938` |
 | `_mark_missing_events_deleted`, `_mark_missing_observations_deleted` | markerer rader som ikke finnes i siste importvindu som `is_deleted = true` og `deletion_reason = missing_from_import` | `fastapi_app/app/services/event_service.py:830`, `854` |
 
 ## Appendix C: PHP parity notes
