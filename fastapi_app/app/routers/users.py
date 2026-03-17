@@ -5,12 +5,12 @@ from ..db import get_session
 from ..models import User
 from ..schemas.user import (
     PasswordChangeRequest,
+    TutorialMetadataResponse,
     TutorialUpdate,
     UserCreate,
     UserListResponse,
     UserPatch,
     UserReviewHistoryResponse,
-    TutorialContentResponse,
 )
 from ..security import enforce_role, get_current_user, verify_password
 from ..services.user_service import UserService
@@ -19,70 +19,13 @@ from ..utils.serialization import serialize_user
 router = APIRouter(tags=["users"])
 user_service = UserService()
 
-TUTORIAL_CONTENT = TutorialContentResponse(
-    title="Meteorvurderingstutorial",
-    intro="Kort veiledning for aa kjenne igjen en mulig ildkule og forstaa hva som er nyttig aa rapportere eller vurdere.",
-    sections=[
-        {
-            "id": "checklist",
-            "title": "Sjekkliste for mulig ildkule",
-            "bullets": [
-                "Beveger seg raskt over himmelen, klart raskere enn et fly.",
-                "Beveger seg i rett linje og snur eller svinger ikke.",
-                "Lyser sterkere enn klare stjerner eller planeter.",
-                "Er ikke synlig foran terreng, traer eller tett skydekke.",
-                "Er vanligvis synlig kort tid, ofte 1 til 10 sekunder og sjelden mer enn et halvt minutt.",
-            ],
-        },
-        {
-            "id": "other-signs",
-            "title": "Andre tegn som kan vaere nyttige",
-            "bullets": [
-                "Plutselig opplysning av terrenget eller tydelige skygger kan vaere et viktig tegn.",
-                "En lysende stripe eller flekk paa himmelen som gradvis blir svakere kan hoere til samme hendelse.",
-                "Droenn eller smell kan vaere relevante hvis de ikke passer med torden eller menneskelig aktivitet.",
-                "Et droenn etter en ildkule kommer ofte lenge etter lyset, gjerne over ett minutt senere.",
-            ],
-        },
-        {
-            "id": "distance",
-            "title": "Hvor den ser ut til aa lande",
-            "bullets": [
-                "Mange opplever at ildkula faller rett bak en aas eller like ved, men den er ofte mye lenger unna.",
-                "Ildkuler slokner typisk 20 til 60 kilometer over bakken.",
-                "Beskrivelsen av hvor den ser ut til aa lande er fortsatt nyttig, selv om inntrykket av avstand ofte er feil.",
-            ],
-        },
-        {
-            "id": "what-is-fireball",
-            "title": "Hva en ildkule er",
-            "bullets": [
-                "Små stein- eller isbiter i solsystemet kalles meteoroider eller mikrometeoroider.",
-                "De begynner ofte aa lyse rundt 100 kilometer over bakken og er ofte borte innen de kommer ned til rundt 50 kilometer.",
-                "Ildkuler er meteorer som lyser sterkere enn Venus, og spesielt kraftige hendelser kalles ofte bolider.",
-                "Noen rester kan overleve helt ned til bakken og kalles da meteoritter.",
-            ],
-        },
-        {
-            "id": "strong-fireballs",
-            "title": "Kraftige ildkuler og varighet",
-            "bullets": [
-                "Svaert kraftige ildkuler kan lyse helt ned til 20 til 30 kilometer over bakken.",
-                "De kan gi overlydssmell og i noen tilfeller etterlate meteoritter paa bakken.",
-                "De fleste ildkuler lyser i noen faa sekunder, men noen kan vare over 10 sekunder ved lav innfallsvinkel.",
-                "Meteorer kan ogsaa observeres om dagen, men da maa de vanligvis vaere ekstra kraftige.",
-            ],
-        },
-        {
-            "id": "quality-and-level",
-            "title": "Hvorfor tutorialen betyr noe",
-            "bullets": [
-                "Gjennomgaatt tutorial kan loefte brukernivaaet fra 0 til 1.",
-                "Tutorialen er del av kvalitetssystemet, ikke bare onboarding.",
-                "Frontend-modalen har ogsaa bilder, eksempelvideoer og en publiseringsfot som ikke ennaa er egne felter i API-responsen.",
-            ],
-        },
-    ],
+TUTORIAL_METADATA = TutorialMetadataResponse(
+    version="frontend-modal-2026-03",
+    content_owner="frontend",
+    delivery_surface="frontend_i18n",
+    status_field="tutorial_completed",
+    completion_route="/api/users/{user_id}/tutorial-completion",
+    minimum_level_after_completion=1,
 )
 
 
@@ -185,12 +128,12 @@ def get_user_reviews(
 
 @router.get(
     "/tutorial",
-    response_model=TutorialContentResponse,
-    summary="Get tutorial content",
-    description="Returns the current tutorial content used for the review guide. The runtime keeps tutorial content and tutorial status as separate API surfaces. This API now mirrors the main text sections from the frontend tutorial modal, but does not yet expose the modal's image, example video links, or publication footer as separate fields.",
+    response_model=TutorialMetadataResponse,
+    summary="Get tutorial metadata",
+    description="Returns backend-owned tutorial metadata. The current runtime keeps tutorial text, media, and translations in the frontend, while the backend owns completion status and the current tutorial version identifier.",
 )
 def get_tutorial_content(_: User = Depends(get_current_user)):
-    return TUTORIAL_CONTENT
+    return TUTORIAL_METADATA
 
 
 @router.put(

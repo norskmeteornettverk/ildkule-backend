@@ -231,7 +231,7 @@ def test_patch_user_updates_admin_fields(client, db_session):
     assert payload["tutorial_completed"] is True
 
 
-def test_user_review_history_and_tutorial_content(client, db_session):
+def test_user_review_history_and_tutorial_metadata(client, db_session):
     owner = User(
         username="history@example.com",
         password="pw",
@@ -261,10 +261,12 @@ def test_user_review_history_and_tutorial_content(client, db_session):
     tutorial = client.get("/api/tutorial", headers=_auth_header(owner))
     assert tutorial.status_code == 200
     payload = tutorial.json()
-    assert payload["title"] == "Meteorvurderingstutorial"
-    assert len(payload["sections"]) >= 6
-    assert payload["sections"][0]["title"] == "Sjekkliste for mulig ildkule"
-    assert payload["sections"][-1]["title"] == "Hvorfor tutorialen betyr noe"
+    assert payload["version"] == "frontend-modal-2026-03"
+    assert payload["content_owner"] == "frontend"
+    assert payload["delivery_surface"] == "frontend_i18n"
+    assert payload["status_field"] == "tutorial_completed"
+    assert payload["completion_route"] == "/api/users/{user_id}/tutorial-completion"
+    assert payload["minimum_level_after_completion"] == 1
 
 
 def test_user_review_history_rejects_other_non_admin(client, db_session):

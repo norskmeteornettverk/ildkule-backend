@@ -96,19 +96,28 @@ class UserReviewHistoryResponse(BaseModel):
     reviews: List[UserReviewHistoryItem]
 
 
-class TutorialContentSection(BaseModel):
-    id: str = Field(..., description="Stable tutorial section id.")
-    title: str = Field(..., description="Tutorial section title.")
-    bullets: List[str] = Field(
+class TutorialMetadataResponse(BaseModel):
+    version: str = Field(
         ...,
-        description="Short bullet points for this tutorial section.",
+        description="Current tutorial version identifier owned by the backend.",
     )
-
-
-class TutorialContentResponse(BaseModel):
-    title: str = Field(..., description="Tutorial title used in the client.")
-    intro: str = Field(..., description="Short tutorial introduction.")
-    sections: List[TutorialContentSection] = Field(
+    content_owner: str = Field(
         ...,
-        description="Ordered tutorial content sections.",
+        description="Which layer owns the tutorial text and translations. The current runtime uses `frontend`.",
+    )
+    delivery_surface: str = Field(
+        ...,
+        description="How tutorial content is delivered. The current runtime uses `frontend_i18n` because text and language handling live in the frontend.",
+    )
+    status_field: str = Field(
+        ...,
+        description="User field that stores tutorial completion status.",
+    )
+    completion_route: str = Field(
+        ...,
+        description="Route used to update tutorial completion status.",
+    )
+    minimum_level_after_completion: int = Field(
+        ...,
+        description="Minimum user level reached when tutorial completion lifts the account from level 0.",
     )

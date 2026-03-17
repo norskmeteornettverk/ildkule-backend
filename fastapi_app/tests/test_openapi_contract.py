@@ -79,5 +79,5 @@ def test_openapi_exposes_verification_tutorial_reviews_and_station_network(clien
 
     schemas = payload["components"]["schemas"]
     assert "StationNetworkResponse" in schemas
-    assert "TutorialContentResponse" in schemas
+    assert "TutorialMetadataResponse" in schemas
     assert "UserReviewHistoryResponse" in schemas
