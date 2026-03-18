@@ -113,6 +113,22 @@ pytest -q fastapi_app/tests
 
 The test suite uses SQLite and does not need your local MySQL database.
 
+## Orbit Validation
+
+To compare the current orbit runtime against published `tables.html` files, run:
+
+```bash
+py -3.10 scripts/validate_orbit_against_tables.py --data-root "D:\\My files\\Coding\\ildkule backup\\prod\\data" --date-from 20220101 --date-to 20220131
+```
+
+This command prints:
+
+- how many events were checked
+- how many observation solves were built
+- how often runtime beats fallback
+- median orbit error for observed, fallback, and runtime payloads
+- the worst remaining cases
+
 ## Notes
 
 - The new API supports meteor import from file data.

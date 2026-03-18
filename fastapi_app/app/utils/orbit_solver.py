@@ -35,6 +35,11 @@ _MAX_ORBIT_SPEED_KMS = 100.0
 _MAX_OBSERVED_MEAN_ANOMALY_DELTA_DEG = 15.0
 _MAX_OBSERVED_MEDIAN_RESIDUAL_KM = 0.3
 _MAX_OBSERVED_MAX_RESIDUAL_KM = 0.8
+_MAX_STABLE_Q_DELTA_AU = 0.01
+_MAX_STABLE_ECCENTRICITY_DELTA = 0.12
+_MAX_STABLE_INCLINATION_DELTA_DEG = 3.0
+_MAX_STABLE_NODE_DELTA_DEG = 2.0
+_MAX_STABLE_ARGUMENT_DELTA_DEG = 4.0
 
 
 @dataclass(frozen=True)
@@ -169,6 +174,82 @@ def _is_reasonable_observed_payload(
     ):
         return False
     return True
+
+
+def _can_stabilize_mean_anomaly(
+    observed: dict,
+    fallback: dict,
+    diagnostics: Optional[_PathFitDiagnostics],
+) -> bool:
+    if diagnostics is None:
+        return False
+    if diagnostics.track_count < _MIN_TRACKS or diagnostics.fit_point_count < _MIN_FIT_POINTS:
+        return False
+    if diagnostics.median_residual_km > _MAX_OBSERVED_MEDIAN_RESIDUAL_KM:
+        return False
+    if diagnostics.max_residual_km > _MAX_OBSERVED_MAX_RESIDUAL_KM:
+        return False
+    required_keys = (
+        "perihelion_distance_au",
+        "eccentricity",
+        "inclination_deg",
+        "ascending_node_deg",
+        "argument_of_perihelion_deg",
+        "mean_anomaly_deg",
+    )
+    if any(observed.get(key) is None or fallback.get(key) is None for key in required_keys):
+        return False
+    if (
+        abs(float(observed["perihelion_distance_au"]) - float(fallback["perihelion_distance_au"]))
+        > _MAX_STABLE_Q_DELTA_AU
+    ):
+        return False
+    if (
+        abs(float(observed["eccentricity"]) - float(fallback["eccentricity"]))
+        > _MAX_STABLE_ECCENTRICITY_DELTA
+    ):
+        return False
+    if (
+        abs(float(observed["inclination_deg"]) - float(fallback["inclination_deg"]))
+        > _MAX_STABLE_INCLINATION_DELTA_DEG
+    ):
+        return False
+    if (
+        _wrapped_angle_delta(
+            float(observed["ascending_node_deg"]),
+            float(fallback["ascending_node_deg"]),
+        )
+        > _MAX_STABLE_NODE_DELTA_DEG
+    ):
+        return False
+    if (
+        _wrapped_angle_delta(
+            float(observed["argument_of_perihelion_deg"]),
+            float(fallback["argument_of_perihelion_deg"]),
+        )
+        > _MAX_STABLE_ARGUMENT_DELTA_DEG
+    ):
+        return False
+    return (
+        _wrapped_angle_delta(
+            float(observed["mean_anomaly_deg"]),
+            float(fallback["mean_anomaly_deg"]),
+        )
+        > _MAX_OBSERVED_MEAN_ANOMALY_DELTA_DEG
+    )
+
+
+def _stabilize_observed_payload(
+    observed: dict,
+    fallback: dict,
+    diagnostics: Optional[_PathFitDiagnostics],
+) -> dict:
+    if not _can_stabilize_mean_anomaly(observed, fallback, diagnostics):
+        return observed
+    stabilized = dict(observed)
+    stabilized["mean_anomaly_deg"] = fallback["mean_anomaly_deg"]
+    stabilized["epoch"] = fallback["epoch"]
+    return stabilized
 
 
 def _state_to_payload(position_km: np.ndarray, velocity_kms: np.ndarray, when: datetime) -> dict:
@@ -843,10 +924,15 @@ def build_orbit_payload(
 ) -> dict:
     fallback_payload = fallback_factory(event) if fallback_factory is not None else _legacy_stat_orbit(event)
     candidate = _solve_observation_candidate(event, observations)
-    if candidate is not None and _is_reasonable_observed_payload(
-        candidate.payload,
+    observed_payload = (
+        _stabilize_observed_payload(candidate.payload, fallback_payload, candidate.diagnostics)
+        if candidate is not None
+        else None
+    )
+    if observed_payload is not None and _is_reasonable_observed_payload(
+        observed_payload,
         fallback_payload,
-        candidate.diagnostics,
+        candidate.diagnostics if candidate is not None else None,
     ):
-        return candidate.payload
+        return observed_payload
     return fallback_payload

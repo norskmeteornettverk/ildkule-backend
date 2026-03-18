@@ -481,7 +481,7 @@ class OrbitPayload(MeteorSchema):
     )
     epoch: Optional[str] = Field(
         default=None,
-        description="ISO-8601 timestamp used as orbital epoch when the backend derived orbit values. Observation-driven solves use the earliest fitted trail timestamp; stat-based fallback uses the stored event timestamp. Null means the backend could not derive an orbit from current event data.",
+        description="ISO-8601 timestamp used as orbital epoch when the backend derived orbit values. Observation-driven solves normally use the earliest fitted trail timestamp, but runtime reuses the fallback epoch when it keeps the observed geometry and only stabilizes mean anomaly from the fallback line. Stat-based fallback uses the stored event timestamp. Null means the backend could not derive an orbit from current event data.",
     )
 
 

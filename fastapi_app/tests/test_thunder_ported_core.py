@@ -446,6 +446,57 @@ def test_build_orbit_payload_falls_back_when_validation_metrics_are_weak(monkeyp
     assert orbit == fallback
 
 
+def test_build_orbit_payload_reuses_fallback_mean_anomaly_when_only_epoch_cluster_is_unstable(
+    monkeypatch,
+):
+    event = Event(
+        track_speed=41.3,
+        radiant_ra=230.92,
+        radiant_dec=50.30,
+        radiant_ecl_long=200.28,
+        radiant_ecl_lat=64.57,
+        date=datetime(2022, 1, 3, 18, 18, 52),
+    )
+    fallback = orbit_solver._legacy_stat_orbit(event)
+    observed = {
+        **fallback,
+        "perihelion_distance_au": round(fallback["perihelion_distance_au"] + 0.003, 6),
+        "eccentricity": round(fallback["eccentricity"] + 0.03, 6),
+        "inclination_deg": round(fallback["inclination_deg"] + 0.9, 3),
+        "ascending_node_deg": round(fallback["ascending_node_deg"] + 0.7, 3),
+        "argument_of_perihelion_deg": round(fallback["argument_of_perihelion_deg"] + 1.4, 3),
+        "mean_anomaly_deg": round(fallback["mean_anomaly_deg"] + 28.0, 3),
+        "epoch": "2022-01-03T18:18:52.500000+00:00",
+    }
+    monkeypatch.setattr(
+        orbit_solver,
+        "_solve_observation_candidate",
+        lambda *_args, **_kwargs: orbit_solver._ObservationOrbitCandidate(
+            payload=observed,
+            diagnostics=orbit_solver._PathFitDiagnostics(
+                track_count=2,
+                fit_point_count=14,
+                median_residual_km=0.18,
+                max_residual_km=0.44,
+            ),
+        ),
+    )
+
+    orbit = orbit_solver.build_orbit_payload(
+        event,
+        [ObservationCamData(**_observation_kwargs("guard:mean-anomaly"))],
+        fallback_factory=orbit_solver._legacy_stat_orbit,
+    )
+
+    assert orbit["perihelion_distance_au"] == observed["perihelion_distance_au"]
+    assert orbit["eccentricity"] == observed["eccentricity"]
+    assert orbit["inclination_deg"] == observed["inclination_deg"]
+    assert orbit["ascending_node_deg"] == observed["ascending_node_deg"]
+    assert orbit["argument_of_perihelion_deg"] == observed["argument_of_perihelion_deg"]
+    assert orbit["mean_anomaly_deg"] == fallback["mean_anomaly_deg"]
+    assert orbit["epoch"] == fallback["epoch"]
+
+
 def test_event_detail_exposes_sampled_geometry_points_when_solved_path_exists(client, db_session):
     station = Station(station_name="alta")
     cam = Cam(station=station, cam_name="cam7")
