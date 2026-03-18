@@ -35,6 +35,7 @@ from ..models import (
     UserReview,
 )
 from .file_mapper import FileToObjectMapper, EventRecord, ObservationRecord
+from ..utils.sql_ordering import desc_nulls_last
 from ..utils.serialization import (
     serialize_event,
     serialize_event_list,
@@ -200,7 +201,7 @@ class EventService:
             cross_station_confirmed=cross_station_confirmed,
             candidate_only=candidate_only,
             require_coordinates=True,
-        ).order_by(Event.date.desc().nullslast(), Event.id.desc())
+        ).order_by(*desc_nulls_last(Event.date), Event.id.desc())
         events = session.scalars(stmt).unique().all()
         rows: list[dict] = []
         for event in events:
@@ -526,6 +527,8 @@ class EventService:
             "limit": limit,
             "offset": offset,
             "has_ams_coords": bool(getattr(observation, "trail_ams_coords", None)),
+            "has_centroid": bool(getattr(observation, "trail_centroid", None)),
+            "has_centroid2": bool(getattr(observation, "trail_centroid2", None)),
             "trailPoints": [serialize_trail_point(point) for point in points],
         }
 
@@ -1106,6 +1109,10 @@ class EventService:
                     coord_lat=point.coord_lat,
                     ams_coord_long=point.ams_coord_long,
                     ams_coord_lat=point.ams_coord_lat,
+                    centroid_coord_long=point.centroid_coord_long,
+                    centroid_coord_lat=point.centroid_coord_lat,
+                    centroid2_coord_long=point.centroid2_coord_long,
+                    centroid2_coord_lat=point.centroid2_coord_lat,
                     gnomonic_x=point.gnomonic_x,
                     gnomonic_y=point.gnomonic_y,
                     brightness=point.brightness,

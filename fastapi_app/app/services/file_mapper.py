@@ -4,7 +4,7 @@ import hashlib
 from math import isfinite
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
@@ -23,12 +23,29 @@ class TrailPointRecord:
     coord_lat: Optional[float] = None
     ams_coord_long: Optional[float] = None
     ams_coord_lat: Optional[float] = None
+    centroid_coord_long: Optional[float] = None
+    centroid_coord_lat: Optional[float] = None
+    centroid2_coord_long: Optional[float] = None
+    centroid2_coord_lat: Optional[float] = None
     gnomonic_x: Optional[float] = None
     gnomonic_y: Optional[float] = None
     brightness: Optional[float] = None
     dct: Optional[float] = None
     size: Optional[float] = None
     frame_brightness: Optional[float] = None
+
+
+@dataclass
+class CentroidPointRecord:
+    """Represents one parsed row from centroid.txt or centroid2.txt."""
+
+    row_index: int
+    seconds_from_start: Optional[float] = None
+    coord_long: Optional[float] = None
+    coord_lat: Optional[float] = None
+    quality: Optional[float] = None
+    station_code: Optional[str] = None
+    event_timestamp: Optional[float] = None
 
 
 @dataclass
@@ -423,6 +440,12 @@ class FileToObjectMapper:
                             if mapped:
                                 values[mapped] = value.strip()
                     if values:
+                        centroid_text = self._read_optional_text(cam_path / "centroid.txt")
+                        centroid2_text = self._read_optional_text(cam_path / "centroid2.txt")
+                        if centroid_text is not None:
+                            values["trail_centroid"] = centroid_text
+                        if centroid2_text is not None:
+                            values["trail_centroid2"] = centroid2_text
                         event_start_utc = self._extract_event_start_utc(values)
                         observation_key = self._build_observation_key(
                             station_name, cam_name, event_start_utc, values
@@ -437,7 +460,11 @@ class FileToObjectMapper:
                                 source_hash=self._build_source_hash(
                                     station_name, cam_name, values
                                 ),
-                                trail_points=self._build_trail_points(values),
+                                trail_points=self._build_trail_points(
+                                    values,
+                                    centroid_text=centroid_text,
+                                    centroid2_text=centroid2_text,
+                                ),
                             )
                         )
                 except OSError:
@@ -496,7 +523,12 @@ class FileToObjectMapper:
         )
         return hashlib.sha256(signature.encode("utf-8")).hexdigest()
 
-    def _build_trail_points(self, values: Dict[str, object]) -> List[TrailPointRecord]:
+    def _build_trail_points(
+        self,
+        values: Dict[str, object],
+        centroid_text: Optional[str] = None,
+        centroid2_text: Optional[str] = None,
+    ) -> List[TrailPointRecord]:
         """Normalise parallel [trail] arrays into frame-based rows."""
 
         positions = self._parse_pair_series(values.get("trail_positions"))
@@ -563,7 +595,129 @@ class FileToObjectMapper:
                     else None,
                 )
             )
+        self._apply_centroid_points(
+            points,
+            self._parse_centroid_points(centroid_text),
+            long_key="centroid_coord_long",
+            lat_key="centroid_coord_lat",
+        )
+        self._apply_centroid_points(
+            points,
+            self._parse_centroid_points(centroid2_text),
+            long_key="centroid2_coord_long",
+            lat_key="centroid2_coord_lat",
+        )
         return points
+
+    @staticmethod
+    def _read_optional_text(path: Path) -> Optional[str]:
+        try:
+            if not path.is_file():
+                return None
+            return path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+
+    def _parse_centroid_points(self, raw_text: object) -> List[CentroidPointRecord]:
+        if not isinstance(raw_text, str):
+            return []
+
+        points: List[CentroidPointRecord] = []
+        for raw_line in raw_text.splitlines():
+            stripped = raw_line.strip()
+            if not stripped:
+                continue
+            parts = stripped.split()
+            if len(parts) < 9:
+                continue
+            row_index = self._safe_int(parts[0])
+            seconds_from_start = self._safe_float(parts[1])
+            coord_lat = self._safe_float(parts[2])
+            coord_long = self._safe_float(parts[3])
+            quality = self._safe_float(parts[4])
+            station_code = parts[5]
+            timestamp = self._parse_centroid_timestamp(parts[6], parts[7], parts[8])
+            if row_index is None:
+                row_index = len(points)
+            points.append(
+                CentroidPointRecord(
+                    row_index=row_index,
+                    seconds_from_start=seconds_from_start,
+                    coord_long=coord_long,
+                    coord_lat=coord_lat,
+                    quality=quality,
+                    station_code=station_code,
+                    event_timestamp=timestamp,
+                )
+            )
+        return points
+
+    def _apply_centroid_points(
+        self,
+        points: List[TrailPointRecord],
+        centroid_points: List[CentroidPointRecord],
+        *,
+        long_key: str,
+        lat_key: str,
+    ) -> None:
+        if not points or not centroid_points:
+            return
+
+        matches = self._match_centroid_points(points, centroid_points)
+        for index, centroid_point in matches.items():
+            setattr(points[index], long_key, centroid_point.coord_long)
+            setattr(points[index], lat_key, centroid_point.coord_lat)
+
+    def _match_centroid_points(
+        self,
+        trail_points: List[TrailPointRecord],
+        centroid_points: List[CentroidPointRecord],
+    ) -> Dict[int, CentroidPointRecord]:
+        centroid_by_timestamp: Dict[int, List[CentroidPointRecord]] = {}
+        for point in centroid_points:
+            key = self._timestamp_match_key(point.event_timestamp)
+            if key is None:
+                continue
+            centroid_by_timestamp.setdefault(key, []).append(point)
+
+        matches: Dict[int, CentroidPointRecord] = {}
+        for index, trail_point in enumerate(trail_points):
+            key = self._timestamp_match_key(trail_point.event_timestamp)
+            if key is None:
+                continue
+            candidates = centroid_by_timestamp.get(key)
+            if candidates:
+                matches[index] = candidates.pop(0)
+
+        if matches:
+            return matches
+        if len(trail_points) != len(centroid_points):
+            return {}
+        return {index: centroid_point for index, centroid_point in enumerate(centroid_points)}
+
+    @staticmethod
+    def _timestamp_match_key(timestamp: Optional[float]) -> Optional[int]:
+        if timestamp is None:
+            return None
+        return int(round(timestamp * 1_000_000))
+
+    @staticmethod
+    def _parse_centroid_timestamp(
+        date_part: str, time_part: str, timezone_part: str
+    ) -> Optional[float]:
+        if timezone_part.upper() != "UTC":
+            return None
+        candidate = f"{date_part} {time_part}"
+        for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
+            try:
+                return (
+                    datetime.strptime(candidate, fmt)
+                    .replace(tzinfo=timezone.utc)
+                    .timestamp()
+                )
+            except ValueError:
+                continue
+        return None
 
     @staticmethod
     def _parse_event_datetime(raw_value: str) -> datetime | None:
@@ -615,6 +769,13 @@ class FileToObjectMapper:
         except (TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _safe_int(raw_value: object) -> int | None:
+        try:
+            return int(raw_value)
+        except (TypeError, ValueError):
+            return None
+
     def _process_event_folder(
         self, date_folder: str, event_folder: str, event_path: Path
     ) -> EventRecord | None:
@@ -625,7 +786,9 @@ class FileToObjectMapper:
         datetimetag = f"{date_folder}{event_folder}"
         event_payload: Dict[str, object] = {"datetimetag": datetimetag}
         try:
-            event_payload["date"] = datetime.strptime(datetimetag, "%Y%m%d%H%M%S")
+            event_payload["date"] = datetime.strptime(
+                datetimetag[:14], "%Y%m%d%H%M%S"
+            )
         except ValueError:
             event_payload["date"] = None
 

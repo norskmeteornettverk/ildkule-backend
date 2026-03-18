@@ -12,6 +12,7 @@ from ..config import get_settings
 from ..models import Event, User, UserReview
 from ..security import get_password_hash, verify_password
 from ..utils.emailer import send_mail
+from ..utils.sql_ordering import desc_nulls_last
 
 settings = get_settings()
 
@@ -143,7 +144,7 @@ class UserService:
             select(UserReview, Event)
             .join(Event, UserReview.event_id == Event.id)
             .where(UserReview.user_id == user_id)
-            .order_by(Event.date.desc().nullslast(), UserReview.event_id.desc())
+            .order_by(*desc_nulls_last(Event.date), UserReview.event_id.desc())
         )
         rows = session.execute(stmt).all()
         reviews: list[dict] = []

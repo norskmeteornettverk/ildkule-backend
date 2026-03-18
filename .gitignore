@@ -15,3 +15,5 @@ fastapi_app/.env
 *.pyc
 AGENTS.md
 PORTING_PARITY_REPORT.md
+.tmp/
+fastapi_app/logs/

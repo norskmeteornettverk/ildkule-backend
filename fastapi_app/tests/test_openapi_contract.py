@@ -102,16 +102,24 @@ def test_openapi_exposes_identifier_account_and_explore_shapes(client):
 
     orbit = schemas["OrbitPayload"]["properties"]
     assert "0..360" in orbit["mean_anomaly_deg"]["description"]
+    assert "fallback" in orbit["mean_anomaly_deg"]["description"].lower()
+    assert "fallback" in orbit["epoch"]["description"].lower()
 
     observation = schemas["MeteorObservation"]["properties"]
     assert "has_ams_coords" in observation
 
     trail_response = schemas["MeteorObservationTrailResponse"]["properties"]
     assert "has_ams_coords" in trail_response
+    assert "has_centroid" in trail_response
+    assert "has_centroid2" in trail_response
     trail_points = _resolve_schema(payload, trail_response["trailPoints"])
     trail_item = _resolve_schema(payload, trail_points["items"])
     assert "ams_coord_long" in trail_item["properties"]
     assert "ams_coord_lat" in trail_item["properties"]
+    assert "centroid_coord_long" in trail_item["properties"]
+    assert "centroid_coord_lat" in trail_item["properties"]
+    assert "centroid2_coord_long" in trail_item["properties"]
+    assert "centroid2_coord_lat" in trail_item["properties"]
 
 
 def test_openapi_exposes_filters_station_logs_and_path_lookup(client):

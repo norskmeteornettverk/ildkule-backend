@@ -63,6 +63,14 @@ class Settings(BaseSettings):
     )
     contact_recipient: Optional[str] = None
     meteor_report_recipient: Optional[str] = None
+    app_log_level: str = Field(
+        default="INFO",
+        description="Application log level for FastAPI runtime logging.",
+    )
+    app_log_file: str = Field(
+        default=str(Path(__file__).resolve().parents[1] / "logs" / "fastapi.log"),
+        description="File path where FastAPI runtime logs are written.",
+    )
     public_timezone: str = Field(
         default="Europe/Oslo",
         description="IANA timezone used for public local-time serialisation",

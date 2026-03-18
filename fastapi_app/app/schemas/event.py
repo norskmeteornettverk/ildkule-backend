@@ -423,7 +423,7 @@ class AtmosphericPath(MeteorSchema):
     )
     speed_source: Optional[str] = Field(
         default=None,
-        description="Raw source label for the solved speed, for example `average` when the stat file does not claim an entry-speed solution.",
+        description="Raw source label for the solved speed, for example `average` when the stat file does not claim an entry-speed solution. The orbit line uses this as provenance for the fallback speed path, not as a promise that the observed fit won.",
     )
     geometry_points: Optional[List[AtmosphericGeometryPoint]] = Field(
         default=None,
@@ -457,7 +457,7 @@ class RadiantPayload(MeteorSchema):
 class OrbitPayload(MeteorSchema):
     perihelion_distance_au: Optional[float] = Field(
         default=None,
-        description="Calculated perihelion distance in AU. Cross-station events first try an observation-driven solve from trail timestamps and coordinates, including AMS coordinates when present. Runtime keeps that solve only when the trail fit stays stable and close to the stat-based fallback; otherwise it falls back to the older stat solve. Null means the backend could not derive an orbit from current event data.",
+        description="Calculated perihelion distance in AU. Cross-station events first try an observation-driven solve from trail timestamps and coordinates, including AMS coordinates when present. That solve gives late trail points lower weight, keeps per-camera timing offsets, and can be benchmarked against a weak deceleration candidate along the same straight path. Runtime keeps the observed solve only when the trail fit stays stable and close to the stat-based fallback; otherwise it falls back to the older stat solve. Null means the backend could not derive an orbit from current event data.",
     )
     eccentricity: Optional[float] = Field(
         default=None,
@@ -477,11 +477,11 @@ class OrbitPayload(MeteorSchema):
     )
     mean_anomaly_deg: Optional[float] = Field(
         default=None,
-        description="Calculated mean anomaly in degrees from the same orbit solve path as `perihelion_distance_au`. Elliptic solutions are reported in the standard `0..360` range; hyperbolic solutions keep the direct solved value. Observation-driven solves are kept only when the fitted trail geometry and anomaly stay close to the fallback solve. Null means the backend could not derive an orbit from current event data.",
+        description="Calculated mean anomaly in degrees from the same orbit solve path as `perihelion_distance_au`. Elliptic solutions are reported in the standard `0..360` range; hyperbolic solutions keep the direct solved value. Observation-driven solves are kept only when the fitted trail geometry stays stable after late-point handling and per-camera timing treatment. When geometry is good enough but mean anomaly still drifts, runtime reuses the fallback mean anomaly from the older stat-based line. Null means the backend could not derive an orbit from current event data.",
     )
     epoch: Optional[str] = Field(
         default=None,
-        description="ISO-8601 timestamp used as orbital epoch when the backend derived orbit values. Observation-driven solves normally use the earliest fitted trail timestamp, but runtime reuses the fallback epoch when it keeps the observed geometry and only stabilizes mean anomaly from the fallback line. Stat-based fallback uses the stored event timestamp. Null means the backend could not derive an orbit from current event data.",
+        description="ISO-8601 timestamp used as orbital epoch when the backend derived orbit values. Observation-driven solves normally use the earliest fitted trail timestamp after the per-camera timing fit, but runtime reuses the fallback epoch when it keeps the observed geometry and only stabilizes mean anomaly from the fallback line. Stat-based fallback uses the stored event timestamp. Null means the backend could not derive an orbit from current event data.",
     )
 
 
@@ -556,7 +556,7 @@ class MeteorEventListResponse(MeteorSchema):
 class AdminMeteorEvent(MeteorEvent):
     datetimetag: str = Field(
         ...,
-        description="Event date and time tag in `YYYYMMDDHHMMSS` form.",
+        description="Event folder tag. Usually `YYYYMMDDHHMMSS`, but some imported events also have a suffix such as `YYYYMMDDHHMMSSb`.",
     )
     date: Optional[str] = Field(
         default=None,
@@ -653,6 +653,22 @@ class MeteorTrailPoint(MeteorSchema):
         default=None,
         description="AMS trail latitude when that alternative coordinate series exists for this frame.",
     )
+    centroid_coord_long: Optional[float] = Field(
+        default=None,
+        description="Longitude from `centroid.txt` when that file exists and the row could be matched to this frame.",
+    )
+    centroid_coord_lat: Optional[float] = Field(
+        default=None,
+        description="Latitude from `centroid.txt` when that file exists and the row could be matched to this frame.",
+    )
+    centroid2_coord_long: Optional[float] = Field(
+        default=None,
+        description="Longitude from `centroid2.txt` when that file exists and the row could be matched to this frame.",
+    )
+    centroid2_coord_lat: Optional[float] = Field(
+        default=None,
+        description="Latitude from `centroid2.txt` when that file exists and the row could be matched to this frame.",
+    )
     gnomonic_x: Optional[float] = Field(
         default=None,
         description="Frame-aligned gnomonic x value when available from the raw trail series.",
@@ -686,6 +702,14 @@ class MeteorObservationTrailResponse(MeteorSchema):
     has_ams_coords: bool = Field(
         False,
         description="True when the stored observation contains AMS trail coordinates for at least one frame.",
+    )
+    has_centroid: bool = Field(
+        False,
+        description="True when the stored observation contains raw data from `centroid.txt`.",
+    )
+    has_centroid2: bool = Field(
+        False,
+        description="True when the stored observation contains raw data from `centroid2.txt`.",
     )
     trailPoints: List[MeteorTrailPoint] = Field(
         ...,
@@ -883,7 +907,10 @@ class InsightTotalRow(InsightReportRowBase):
 
 class InsightCoordinateRow(MeteorSchema):
     id: int = Field(..., description="Event database id.")
-    datetimetag: str = Field(..., description="Event date and time tag in `YYYYMMDDHHMMSS` form.")
+    datetimetag: str = Field(
+        ...,
+        description="Event folder tag. Usually `YYYYMMDDHHMMSS`, but some imported events also have a suffix such as `YYYYMMDDHHMMSSb`.",
+    )
     station_cam: str = Field(
         ...,
         description="Comma-separated `cam@station` labels for observations linked to the event.",

@@ -24,7 +24,7 @@ A physical place that runs one or more cameras.
 One camera on a station, for example `cam1` or `cam4`.
 
 `datetimetag`
-A string made from the date folder and time folder, for example `20240512235404`. It works as a file-based meteor key.
+A string made from the date folder and time folder, for example `20240512235404`. Some folders also keep a short suffix, for example `20221030035410b`. It works as a file-based meteor key.
 
 `location`
 A text value that tells where the meteor was seen or calculated to be.
@@ -227,11 +227,13 @@ These terms come from the frontend UI text. They are listed here without dependi
 | --- | --- | --- | --- | --- |
 | observation camera data | observasjonsdata fra kamera | observation_cam_data |  | One stored camera observation for a meteor. |
 | trail values | sporverdier | trail_* |  | Per-observation trail data from `event.txt`, such as frames, timestamps, coordinates, and brightness. |
+| centroid values | centroid-verdier | trail_centroid, trail_centroid2 |  | Raw centroid rows stored per observation from `centroid.txt` and `centroid2.txt`. |
 | video values | videodata | video_* |  | Video timing and video metadata from `event.txt`. |
 | config values | konfigurasjonsdata | config_* |  | Detection settings from `event.txt`, such as thresholds, limits, and file paths. |
 | summary values | sammendragsdata | summary_* |  | Summary values from `event.txt`, such as latitude, longitude, duration, and probability. |
 | meteor res entry | rad fra res-fil | meteor_res_entry |  | One stored row from a `.res` file. |
 | observation trail point | sporpunkt | observation_trail_point |  | One stored frame row from trail data in `event.txt`. |
+| centroid trail point values | centroid-verdier per sporpunkt | centroid_coord_*, centroid2_coord_* |  | Normalized centroid coordinates matched onto stored trail points. |
 | raw line | rålinje | raw_line |  | The original text from one `.res` line. |
 | res entry count | antall res-rader | res_entry_count |  | The number of stored `.res` rows for one meteor. |
 | trail point count | antall sporpunkter | trail_point_count |  | The number of stored frame rows for one observation. |

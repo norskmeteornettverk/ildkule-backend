@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+from datetime import datetime
 
 import pytest
 from PIL import Image
@@ -60,6 +61,26 @@ def sample_data_dir(tmp_path_factory):
         ),
         encoding="utf-8",
     )
+    (cam_dir / "centroid.txt").write_text(
+        "\n".join(
+            [
+                "0 0.0 10.21 60.11 1.0 STA 2024-05-11 23:54:04.000 UTC",
+                "1 0.04 10.31 60.21 1.0 STA 2024-05-11 23:54:04.040 UTC",
+                "2 0.08 10.41 60.31 1.0 STA 2024-05-11 23:54:04.080 UTC",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (cam_dir / "centroid2.txt").write_text(
+        "\n".join(
+            [
+                "0 0.0 10.22 60.12 1.0 STA 2024-05-11 23:54:04.000 UTC",
+                "1 0.04 10.32 60.22 1.0 STA 2024-05-11 23:54:04.040 UTC",
+                "2 0.08 10.42 60.32 1.0 STA 2024-05-11 23:54:04.080 UTC",
+            ]
+        ),
+        encoding="utf-8",
+    )
 
     settings = get_settings()
     settings.data_directory = str(base)
@@ -82,8 +103,14 @@ def test_file_mapper_reads_event(sample_data_dir):
     assert observation.observation_key == "stationalpha:cam01:2024-05-12T23:54:04.000"
     assert len(observation.trail_points) == 3
     assert observation.values["trail_ams_coords"] == "60.11,10.21 60.21,10.31 60.31,10.41"
+    assert observation.values["trail_centroid"].startswith("0 0.0 10.21 60.11 1.0 STA")
+    assert observation.values["trail_centroid2"].startswith("0 0.0 10.22 60.12 1.0 STA")
     assert observation.trail_points[0].ams_coord_long == 60.11
     assert observation.trail_points[0].ams_coord_lat == 10.21
+    assert observation.trail_points[0].centroid_coord_long == 60.11
+    assert observation.trail_points[0].centroid_coord_lat == 10.21
+    assert observation.trail_points[0].centroid2_coord_long == 60.12
+    assert observation.trail_points[0].centroid2_coord_lat == 10.22
 
     thumb = Path(sample_data_dir) / "20230101" / "010101" / "thumbnail.jpg"
     assert thumb.exists(), "Thumbnail should be generated for each event"
@@ -431,8 +458,14 @@ def test_eventload_endpoint_ingests_data(client, db_session, sample_data_dir):
     assert len(trail_points) == 3
     assert trail_points[0].pixel_x == 10.0
     assert observation.trail_ams_coords == "60.11,10.21 60.21,10.31 60.31,10.41"
+    assert observation.trail_centroid.startswith("0 0.0 10.21 60.11 1.0 STA")
+    assert observation.trail_centroid2.startswith("0 0.0 10.22 60.12 1.0 STA")
     assert trail_points[0].ams_coord_long == 60.11
     assert trail_points[0].ams_coord_lat == 10.21
+    assert trail_points[0].centroid_coord_long == 60.11
+    assert trail_points[0].centroid_coord_lat == 10.21
+    assert trail_points[0].centroid2_coord_long == 60.12
+    assert trail_points[0].centroid2_coord_lat == 10.22
 
     res_response = client.get(f"/api/events/{event.id}/res?limit=10&offset=0")
     assert res_response.status_code == 200
@@ -445,9 +478,262 @@ def test_eventload_endpoint_ingests_data(client, db_session, sample_data_dir):
     assert trail_response.status_code == 200
     assert trail_response.json()["totalItems"] == 3
     assert trail_response.json()["has_ams_coords"] is True
+    assert trail_response.json()["has_centroid"] is True
+    assert trail_response.json()["has_centroid2"] is True
     assert trail_response.json()["trailPoints"][0]["frame_index"] == 0
     assert trail_response.json()["trailPoints"][0]["ams_coord_long"] == 60.11
     assert trail_response.json()["trailPoints"][0]["ams_coord_lat"] == 10.21
+    assert trail_response.json()["trailPoints"][0]["centroid_coord_long"] == 60.11
+    assert trail_response.json()["trailPoints"][0]["centroid_coord_lat"] == 10.21
+    assert trail_response.json()["trailPoints"][0]["centroid2_coord_long"] == 60.12
+    assert trail_response.json()["trailPoints"][0]["centroid2_coord_lat"] == 10.22
+
+
+def test_eventload_ingests_centroid_without_centroid2(client, db_session, tmp_path_factory):
+    base = tmp_path_factory.mktemp("event_data_centroid_only")
+    event_dir = base / "20230101" / "010101"
+    cam_dir = event_dir / "StationAlpha" / "Cam01"
+    cam_dir.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (800, 600), "white").save(event_dir / "image.jpg")
+    (cam_dir / "event.txt").write_text(
+        "\n".join(
+            [
+                "[trail]",
+                "frames=2",
+                "positions=10,20 11,21",
+                "timestamps=1715471644.000 1715471644.040",
+                "coordinates=60.1,10.2 60.2,10.3",
+                "[video]",
+                "start=2024-05-12 23:54:04.000 UTC",
+                "[summary]",
+                "latitude=60.1",
+                "longitude=10.2",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (cam_dir / "centroid.txt").write_text(
+        "\n".join(
+            [
+                "0 0.0 10.25 60.15 1.0 STA 2024-05-11 23:54:04.000 UTC",
+                "1 0.04 10.35 60.25 1.0 STA 2024-05-11 23:54:04.040 UTC",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = get_settings()
+    settings.data_directory = str(base)
+
+    response = client.post(
+        "/api/admin/event-imports",
+        auth=("sys_admin", "secretpassword"),
+        json={"date_from": "20230101", "date_to": "20230102"},
+    )
+    assert response.status_code == 200, response.text
+
+    observation = db_session.scalars(select(ObservationCamData)).one()
+    trail_points = db_session.scalars(
+        select(ObservationTrailPoint).order_by(ObservationTrailPoint.frame_index.asc())
+    ).all()
+    assert observation.trail_centroid is not None
+    assert observation.trail_centroid2 is None
+    assert trail_points[0].centroid_coord_long == 60.15
+    assert trail_points[0].centroid2_coord_long is None
+
+    trail_response = client.get(f"/api/observations/{observation.id}/trail")
+    assert trail_response.status_code == 200
+    payload = trail_response.json()
+    assert payload["has_centroid"] is True
+    assert payload["has_centroid2"] is False
+    assert payload["trailPoints"][0]["centroid_coord_long"] == 60.15
+    assert payload["trailPoints"][0]["centroid2_coord_long"] is None
+
+
+def test_eventload_matches_centroid_rows_by_timestamp_and_keeps_raw_on_length_mismatch(
+    client, db_session, tmp_path_factory
+):
+    base = tmp_path_factory.mktemp("event_data_centroid_mismatch")
+    event_dir = base / "20230101" / "010101"
+    cam_dir = event_dir / "StationAlpha" / "Cam01"
+    cam_dir.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (800, 600), "white").save(event_dir / "image.jpg")
+    (cam_dir / "event.txt").write_text(
+        "\n".join(
+            [
+                "[trail]",
+                "frames=2",
+                "positions=10,20 11,21",
+                "timestamps=1715471644.000 1715471644.040",
+                "coordinates=60.1,10.2 60.2,10.3",
+                "[video]",
+                "start=2024-05-12 23:54:04.000 UTC",
+                "[summary]",
+                "latitude=60.1",
+                "longitude=10.2",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (cam_dir / "centroid.txt").write_text(
+        "\n".join(
+            [
+                "0 0.0 10.25 60.15 1.0 STA 2024-05-11 23:54:04.000 UTC",
+                "1 0.04 10.35 60.25 1.0 STA 2024-05-11 23:54:04.040 UTC",
+                "2 0.08 10.45 60.35 1.0 STA 2024-05-11 23:54:04.080 UTC",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = get_settings()
+    settings.data_directory = str(base)
+
+    response = client.post(
+        "/api/admin/event-imports",
+        auth=("sys_admin", "secretpassword"),
+        json={"date_from": "20230101", "date_to": "20230102"},
+    )
+    assert response.status_code == 200, response.text
+
+    observation = db_session.scalars(select(ObservationCamData)).one()
+    trail_points = db_session.scalars(
+        select(ObservationTrailPoint).order_by(ObservationTrailPoint.frame_index.asc())
+    ).all()
+    assert observation.trail_centroid is not None
+    assert len(trail_points) == 2
+    assert trail_points[0].centroid_coord_long == 60.15
+    assert trail_points[1].centroid_coord_long == 60.25
+
+
+def test_eventload_clears_centroid_fields_when_file_disappears(
+    client, db_session, tmp_path_factory
+):
+    base = tmp_path_factory.mktemp("event_data_centroid_reload")
+    event_dir = base / "20230101" / "010101"
+    cam_dir = event_dir / "StationAlpha" / "Cam01"
+    cam_dir.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (800, 600), "white").save(event_dir / "image.jpg")
+    event_txt = "\n".join(
+        [
+            "[trail]",
+            "frames=2",
+            "positions=10,20 11,21",
+            "timestamps=1715471644.000 1715471644.040",
+            "coordinates=60.1,10.2 60.2,10.3",
+            "[video]",
+            "start=2024-05-12 23:54:04.000 UTC",
+            "[summary]",
+            "latitude=60.1",
+            "longitude=10.2",
+        ]
+    )
+    (cam_dir / "event.txt").write_text(event_txt, encoding="utf-8")
+    centroid_path = cam_dir / "centroid.txt"
+    centroid_path.write_text(
+        "\n".join(
+            [
+                "0 0.0 10.25 60.15 1.0 STA 2024-05-11 23:54:04.000 UTC",
+                "1 0.04 10.35 60.25 1.0 STA 2024-05-11 23:54:04.040 UTC",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = get_settings()
+    settings.data_directory = str(base)
+
+    first = client.post(
+        "/api/admin/event-imports",
+        auth=("sys_admin", "secretpassword"),
+        json={"date_from": "20230101", "date_to": "20230102"},
+    )
+    assert first.status_code == 200
+
+    centroid_path.unlink()
+
+    second = client.post(
+        "/api/admin/event-imports",
+        auth=("sys_admin", "secretpassword"),
+        json={"date_from": "20230101", "date_to": "20230102"},
+    )
+    assert second.status_code == 200
+
+    db_session.expire_all()
+    observation = db_session.scalars(select(ObservationCamData)).one()
+    trail_points = db_session.scalars(
+        select(ObservationTrailPoint).order_by(ObservationTrailPoint.frame_index.asc())
+    ).all()
+    assert observation.trail_centroid is None
+    assert observation.trail_centroid2 is None
+    assert trail_points[0].centroid_coord_long is None
+    assert trail_points[0].centroid_coord_lat is None
+
+
+def test_eventload_accepts_event_folder_suffix_in_datetimetag(
+    client, db_session, tmp_path_factory
+):
+    base = tmp_path_factory.mktemp("event_data_suffix_tag")
+    event_dir = base / "20230101" / "010101b"
+    cam_dir = event_dir / "StationAlpha" / "Cam01"
+    cam_dir.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (800, 600), "white").save(event_dir / "image.jpg")
+    (cam_dir / "event.txt").write_text(
+        "\n".join(
+            [
+                "[trail]",
+                "frames=2",
+                "positions=10,20 11,21",
+                "timestamps=1715471644.000 1715471644.040",
+                "coordinates=60.1,10.2 60.2,10.3",
+                "[video]",
+                "start=2024-05-12 23:54:04.000 UTC",
+                "[summary]",
+                "latitude=60.1",
+                "longitude=10.2",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (cam_dir / "centroid.txt").write_text(
+        "\n".join(
+            [
+                "0 0.0 10.21 60.11 1.0 STA 2024-05-12 23:54:04.000 UTC",
+                "1 0.04 10.31 60.21 1.0 STA 2024-05-12 23:54:04.040 UTC",
+                "2 0.08 10.41 60.31 1.0 STA 2024-05-12 23:54:04.080 UTC",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (cam_dir / "centroid2.txt").write_text(
+        "\n".join(
+            [
+                "0 0.0 10.22 60.12 1.0 STA 2024-05-12 23:54:04.000 UTC",
+                "1 0.04 10.32 60.22 1.0 STA 2024-05-12 23:54:04.040 UTC",
+                "2 0.08 10.42 60.32 1.0 STA 2024-05-12 23:54:04.080 UTC",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = get_settings()
+    settings.data_directory = str(base)
+
+    response = client.post(
+        "/api/admin/event-imports",
+        auth=("sys_admin", "secretpassword"),
+        json={"date_from": "20230101", "date_to": "20230102"},
+    )
+    assert response.status_code == 200, response.text
+
+    db_session.expire_all()
+    event = db_session.scalars(select(Event)).one()
+    assert event.datetimetag == "20230101010101b"
+    assert event.date.isoformat() == "2023-01-01T01:01:01"
 
 
 def test_eventload_reloads_same_observation_without_duplicates(client, db_session, tmp_path_factory):
@@ -639,3 +925,49 @@ def test_eventload_marks_missing_observation_deleted(client, db_session, tmp_pat
     ]
     assert "cam3" in returned_cam_names
     assert "cam4" in returned_cam_names
+
+
+def test_eventload_accepts_suffix_in_event_folder_name(client, db_session, tmp_path_factory):
+    base = tmp_path_factory.mktemp("event_data_suffix_tag")
+    event_dir = base / "20230101" / "010101b"
+    cam_dir = event_dir / "Gaustatoppen" / "cam3"
+    cam_dir.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (800, 600), "white").save(event_dir / "image.jpg")
+    (cam_dir / "event.txt").write_text(
+        "\n".join(
+            [
+                "[trail]",
+                "frames=2",
+                "positions=100,200 110,210",
+                "timestamps=1715550000.000 1715550000.040",
+                "[video]",
+                "start=2024-05-12 23:54:04.000 UTC",
+                "[summary]",
+                "latitude=59.8",
+                "longitude=8.6",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    settings = get_settings()
+    settings.data_directory = str(base)
+
+    response = client.post(
+        "/api/admin/event-imports",
+        auth=("sys_admin", "secretpassword"),
+        json={"date_from": "20230101", "date_to": "20230102"},
+    )
+    assert response.status_code == 200, response.text
+
+    db_session.expire_all()
+    event = db_session.scalars(select(Event)).one()
+    assert event.datetimetag == "20230101010101b"
+    assert event.date == datetime(2023, 1, 1, 1, 1, 1)
+
+    detail_response = client.get("/api/events/by-path/20230101/010101b")
+    assert detail_response.status_code == 200, detail_response.text
+    payload = detail_response.json()
+    assert payload["datetimetag"] == "20230101010101b"
+    assert payload["event_path"] == "20230101/010101b"

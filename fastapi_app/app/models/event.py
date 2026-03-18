@@ -13,7 +13,7 @@ class Event(Base):
     __tablename__ = "event"
 
     id = Column(unsigned_int(), primary_key=True, autoincrement=True)
-    datetimetag = Column(String(14), unique=True, nullable=False)
+    datetimetag = Column(String(32), unique=True, nullable=False)
     location = Column(String(100), nullable=True)
     create_time = Column(DateTime, nullable=False, default=datetime.utcnow)
     track_startheight = Column(Float)

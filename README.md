@@ -121,13 +121,51 @@ To compare the current orbit runtime against published `tables.html` files, run:
 py -3.10 scripts/validate_orbit_against_tables.py --data-root "D:\\My files\\Coding\\ildkule backup\\prod\\data" --date-from 20220101 --date-to 20220131
 ```
 
-This command prints:
+The script has two run profiles:
 
-- how many events were checked
-- how many observation solves were built
+- `--profile dev` for short checks. This is the default. It scans a small sample and prints a short summary.
+- `--profile final` for a full run. It scans the full date range unless you also set `--limit`.
+
+It prints a human-readable report in Norwegian. The report explains:
+
+- what `q`, `e`, `i`, `node`, `argp`, and `M` mean
+- how many folders were skipped, and why
 - how often runtime beats fallback
 - median orbit error for observed, fallback, and runtime payloads
 - the worst remaining cases
+
+Use `--show-worst` to control how many bad cases are shown, and `--limit` to cap the number of folders in a dev run. For the final check, prefer `--profile final` and a large period that gives about 1000 or more comparable events when the data allows it.
+
+The script also supports policy labels for iterative benchmarking:
+
+- `--policy A|B|C` picks the policy used in the detailed report
+- `--compare-policies A,B,C` prints a short side-by-side summary
+- `--label` adds a free text tag for the run, so it is easier to compare iterations later
+- `--workers N` runs the validation in parallel across many events. Use this for large final runs.
+
+In this workflow:
+
+- `A` is the current runtime line with the safer linear path solve
+- `B` is the same base solve with stronger trimming of late trail points
+- `C` adds a weak deceleration model along the same straight path
+
+The script also prints where the time goes:
+
+- reading `tables.html`
+- loading event data
+- building observed solve candidates
+- building fallback solve
+- final runtime selection
+
+This matters because the slow part is still the per-event CPU work and coordinate math. GPU or CUDA is not the first choice here yet. CPU multiprocessing gives a more practical speed-up for the current workload.
+
+The report also makes the main product rule visible: for every cross-station solved event that already exists in the published solution, the new system should still try a cross-station solve. Small differences from `tables.html` are fine. Larger differences are only a problem when the published solution itself looks clearly wrong.
+
+The detailed report now splits observed results into three states:
+
+- no observed candidate built
+- observed candidate built, but rejected by the runtime guard
+- observed accepted in runtime
 
 ## Notes
 
@@ -148,6 +186,7 @@ What it does:
 - creates or updates events
 - creates or updates observations
 - stores raw trail data and raw `.res` rows
+- keeps the full event folder tag in `event.datetimetag`, including short suffixes like `010101b` when they exist
 - makes `thumbnail.jpg` from `image.jpg` when possible
 
 If a meteor or observation was in the database before, but is not found in the

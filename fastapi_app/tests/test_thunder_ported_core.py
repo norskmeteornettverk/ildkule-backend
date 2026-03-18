@@ -1,5 +1,7 @@
 from datetime import datetime
 
+import numpy as np
+
 from fastapi_app.app.models import Cam, Event, ObservationCamData, Station, User
 from fastapi_app.app.security import create_access_token
 from fastapi_app.app.services import user_service
@@ -495,6 +497,155 @@ def test_build_orbit_payload_reuses_fallback_mean_anomaly_when_only_epoch_cluste
     assert orbit["argument_of_perihelion_deg"] == observed["argument_of_perihelion_deg"]
     assert orbit["mean_anomaly_deg"] == fallback["mean_anomaly_deg"]
     assert orbit["epoch"] == fallback["epoch"]
+
+
+def test_build_orbit_payload_forwards_explicit_path_policy(monkeypatch):
+    event = Event(
+        track_speed=41.3,
+        radiant_ra=230.92,
+        radiant_dec=50.30,
+        radiant_ecl_long=200.28,
+        radiant_ecl_lat=64.57,
+        date=datetime(2022, 1, 3, 18, 18, 52),
+    )
+    fallback = orbit_solver._legacy_stat_orbit(event)
+    observed_path_policy = {}
+
+    def fake_solve_observation_candidate(_event, _observations, path_policy=orbit_solver._RUNTIME_PATH_POLICY):
+        observed_path_policy["value"] = path_policy
+        return orbit_solver._ObservationOrbitCandidate(
+            payload=fallback,
+            diagnostics=orbit_solver._PathFitDiagnostics(
+                track_count=2,
+                fit_point_count=8,
+                median_residual_km=0.18,
+                max_residual_km=0.42,
+            ),
+        )
+
+    monkeypatch.setattr(orbit_solver, "_solve_observation_candidate", fake_solve_observation_candidate)
+
+    orbit = orbit_solver.build_orbit_payload(
+        event,
+        [ObservationCamData(**_observation_kwargs("policy:explicit"))],
+        fallback_factory=orbit_solver._legacy_stat_orbit,
+        path_policy="policy_b",
+    )
+
+    assert observed_path_policy["value"] == "policy_b"
+    assert orbit == fallback
+
+
+def test_select_best_path_model_honors_preferred_policy_name(monkeypatch):
+    samples = [
+        orbit_solver._ProjectedPathSample(0, 0.0, 0.0, 0.10, 3),
+        orbit_solver._ProjectedPathSample(1, 1.0, 10.0, 0.10, 3),
+        orbit_solver._ProjectedPathSample(0, 2.0, 20.0, 0.10, 2),
+        orbit_solver._ProjectedPathSample(1, 3.0, 30.0, 0.10, 2),
+    ]
+
+    monkeypatch.setattr(orbit_solver, "_filter_samples_for_policy", lambda _samples, _policy: list(_samples))
+    monkeypatch.setattr(orbit_solver, "_estimate_track_weight_scales", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(orbit_solver, "_trim_temporal_outliers", lambda _samples, _model: list(_samples))
+
+    def fake_solve_linear_path_model(_samples, _track_count, policy_name, track_weight_scales=None):
+        residuals = {
+            "policy_a": (0.02, 0.04),
+            "policy_b": (0.50, 0.75),
+        }[policy_name]
+        return orbit_solver._PathModelSolution(
+            policy_name=policy_name,
+            speed_kms=42.0,
+            intercepts=np.array([0.0, 0.0]),
+            time_center=0.0,
+            scalar_residual_median_km=residuals[0],
+            scalar_residual_max_km=residuals[1],
+            timing_spread_seconds=0.0,
+        )
+
+    def fake_solve_quadratic_path_model(_samples, _track_count, track_weight_scales=None):
+        return orbit_solver._PathModelSolution(
+            policy_name="policy_c",
+            speed_kms=42.0,
+            intercepts=np.array([0.0, 0.0]),
+            time_center=0.0,
+            scalar_residual_median_km=0.25,
+            scalar_residual_max_km=0.35,
+            acceleration_kms2=0.12,
+            timing_spread_seconds=0.0,
+        )
+
+    monkeypatch.setattr(orbit_solver, "_solve_linear_path_model", fake_solve_linear_path_model)
+    monkeypatch.setattr(orbit_solver, "_solve_quadratic_path_model", fake_solve_quadratic_path_model)
+
+    selected = orbit_solver._select_best_path_model(samples, 2, preferred_policy_name="policy_b")
+
+    assert selected is not None
+    solved_model, selected_samples = selected
+    assert solved_model.policy_name == "policy_b"
+    assert selected_samples == samples
+
+
+def test_sample_weight_penalizes_edge_points_more_than_center_points():
+    edge = orbit_solver._ProjectedPathSample(
+        track_index=0,
+        timestamp=0.0,
+        scalar_km=10.0,
+        residual_km=0.2,
+        edge_distance=0,
+    )
+    near_edge = orbit_solver._ProjectedPathSample(
+        track_index=0,
+        timestamp=0.0,
+        scalar_km=10.0,
+        residual_km=0.2,
+        edge_distance=1,
+    )
+    center = orbit_solver._ProjectedPathSample(
+        track_index=0,
+        timestamp=0.0,
+        scalar_km=10.0,
+        residual_km=0.2,
+        edge_distance=3,
+    )
+
+    assert orbit_solver._sample_weight(edge) < orbit_solver._sample_weight(near_edge) < orbit_solver._sample_weight(center)
+
+
+def test_trim_endpoint_outliers_drops_obvious_tail_spike():
+    samples = [
+        orbit_solver._ProjectedPathSample(0, 0.0, 0.0, 0.10, 3),
+        orbit_solver._ProjectedPathSample(0, 1.0, 1.0, 0.12, 2),
+        orbit_solver._ProjectedPathSample(0, 2.0, 2.0, 0.11, 1),
+        orbit_solver._ProjectedPathSample(0, 3.0, 3.0, 0.13, 1),
+        orbit_solver._ProjectedPathSample(0, 4.0, 4.0, 0.14, 2),
+        orbit_solver._ProjectedPathSample(0, 5.0, 5.0, 0.95, 3),
+    ]
+
+    trimmed = orbit_solver._trim_endpoint_outliers(samples)
+
+    assert len(trimmed) == 5
+    assert [item.residual_km for item in trimmed] == [0.10, 0.12, 0.11, 0.13, 0.14]
+
+
+def test_trim_temporal_outliers_removes_scalar_spike_when_tracks_survive():
+    samples = [
+        orbit_solver._ProjectedPathSample(0, 0.0, 0.0, 0.10, 3),
+        orbit_solver._ProjectedPathSample(1, 1.0, 10.0, 0.10, 3),
+        orbit_solver._ProjectedPathSample(0, 2.0, 20.0, 0.10, 2),
+        orbit_solver._ProjectedPathSample(1, 3.0, 30.0, 0.10, 2),
+        orbit_solver._ProjectedPathSample(0, 4.0, 50.0, 0.10, 1),
+    ]
+
+    trimmed = orbit_solver._trim_temporal_outliers(
+        samples,
+        speed_kms=10.0,
+        intercepts=np.array([0.0, 0.0]),
+        time_center=0.0,
+    )
+
+    assert len(trimmed) == 4
+    assert [item.scalar_km for item in trimmed] == [0.0, 10.0, 20.0, 30.0]
 
 
 def test_event_detail_exposes_sampled_geometry_points_when_solved_path_exists(client, db_session):

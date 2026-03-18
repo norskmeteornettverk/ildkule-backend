@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 from typing import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from .config import get_settings
@@ -33,3 +33,9 @@ def get_session() -> Generator:
     with session_scope() as session:
         yield session
 
+
+def check_database_connection() -> None:
+    """Fail fast when the configured database cannot be reached."""
+
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))

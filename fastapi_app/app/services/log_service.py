@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 from ..config import get_settings
 from ..models import Cam, LogStation, ObservationCamData, Station
 from ..utils.serialization import serialize_observation
+from ..utils.sql_ordering import desc_nulls_last
 
 settings = get_settings()
 
@@ -55,8 +56,8 @@ class LogService:
                 .where(ObservationCamData.summary_latitude.isnot(None))
                 .where(ObservationCamData.summary_longitude.isnot(None))
                 .order_by(
-                    ObservationCamData.event_start_utc.desc().nullslast(),
-                    ObservationCamData.created.desc().nullslast(),
+                    *desc_nulls_last(ObservationCamData.event_start_utc),
+                    *desc_nulls_last(ObservationCamData.created),
                     ObservationCamData.id.desc(),
                 )
                 .limit(1)
@@ -70,8 +71,8 @@ class LogService:
                     )
                     .where(ObservationCamData.cam_id == cam.id)
                     .order_by(
-                        ObservationCamData.event_start_utc.desc().nullslast(),
-                        ObservationCamData.created.desc().nullslast(),
+                        *desc_nulls_last(ObservationCamData.event_start_utc),
+                        *desc_nulls_last(ObservationCamData.created),
                         ObservationCamData.id.desc(),
                     )
                     .limit(1)

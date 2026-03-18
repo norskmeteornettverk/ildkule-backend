@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Iterable, Optional, Sequence
 
@@ -35,17 +35,34 @@ _MAX_ORBIT_SPEED_KMS = 100.0
 _MAX_OBSERVED_MEAN_ANOMALY_DELTA_DEG = 15.0
 _MAX_OBSERVED_MEDIAN_RESIDUAL_KM = 0.3
 _MAX_OBSERVED_MAX_RESIDUAL_KM = 0.8
-_MAX_STABLE_Q_DELTA_AU = 0.01
-_MAX_STABLE_ECCENTRICITY_DELTA = 0.12
-_MAX_STABLE_INCLINATION_DELTA_DEG = 3.0
-_MAX_STABLE_NODE_DELTA_DEG = 2.0
-_MAX_STABLE_ARGUMENT_DELTA_DEG = 4.0
+_MAX_STABLE_Q_DELTA_AU = 0.12
+_MAX_STABLE_ECCENTRICITY_DELTA = 0.6
+_MAX_STABLE_INCLINATION_DELTA_DEG = 20.0
+_MAX_STABLE_NODE_DELTA_DEG = 30.0
+_MAX_STABLE_ARGUMENT_DELTA_DEG = 30.0
+_LATE_SERIES_START = 0.7
+_VERY_LATE_SERIES_START = 0.85
+_LATE_SPEED_DROP_RATIO = 0.78
+_MAX_REASONABLE_DECELERATION_KMS2 = 2.5
+_MIN_REASONABLE_DECELERATION_KMS2 = -20.0
+_TIMING_TRACK_SOFT_OFFSET_SECONDS = 0.12
+_TIMING_TRACK_HARD_OFFSET_SECONDS = 0.25
+_TIMING_SPREAD_SOFT_SECONDS = 0.22
+_TIMING_SPREAD_HARD_SECONDS = 0.45
+_TIMING_SPREAD_RELAXED_SECONDS = 1.2
+_STRONG_OBSERVED_TRACKS = 3
+_STRONG_OBSERVED_FIT_POINTS = 8
+_RELAXED_OBSERVED_FIT_POINTS = 20
+_AUTO_PATH_POLICY = "auto"
+_RUNTIME_PATH_POLICY = _AUTO_PATH_POLICY
 
 
 @dataclass(frozen=True)
 class _TrackPoint:
     timestamp: float
     los_ecef: np.ndarray
+    edge_distance: int
+    uses_ams: bool
 
 
 @dataclass(frozen=True)
@@ -55,17 +72,77 @@ class _ObservationTrack:
 
 
 @dataclass(frozen=True)
+class _ProjectedPathSample:
+    track_index: int
+    timestamp: float
+    scalar_km: float
+    residual_km: float
+    edge_distance: int
+    series_fraction: float = 0.0
+    local_speed_kms: Optional[float] = None
+    track_reference_speed_kms: Optional[float] = None
+    uses_ams: bool = False
+    is_marginal: bool = False
+
+
+@dataclass(frozen=True)
 class _PathFitDiagnostics:
     track_count: int
     fit_point_count: int
     median_residual_km: float
     max_residual_km: float
+    policy_name: str = "unknown"
+    timing_spread_seconds: float = 0.0
+    late_point_fraction: float = 0.0
 
 
 @dataclass(frozen=True)
 class _ObservationOrbitCandidate:
     payload: dict
     diagnostics: Optional[_PathFitDiagnostics]
+
+
+def _allowed_fit_thresholds(diagnostics: Optional[_PathFitDiagnostics]) -> tuple[float, float]:
+    if diagnostics is None:
+        return (_MAX_OBSERVED_MEDIAN_RESIDUAL_KM, _MAX_OBSERVED_MAX_RESIDUAL_KM)
+    if (
+        diagnostics.track_count >= _STRONG_OBSERVED_TRACKS
+        and diagnostics.fit_point_count >= _STRONG_OBSERVED_FIT_POINTS
+        and diagnostics.timing_spread_seconds <= _TIMING_SPREAD_SOFT_SECONDS
+        and diagnostics.late_point_fraction <= 0.65
+    ):
+        return (0.55, 1.5)
+    if (
+        diagnostics.fit_point_count >= _RELAXED_OBSERVED_FIT_POINTS
+        and diagnostics.timing_spread_seconds <= _TIMING_SPREAD_RELAXED_SECONDS
+    ):
+        return (0.5, 1.1)
+    return (_MAX_OBSERVED_MEDIAN_RESIDUAL_KM, _MAX_OBSERVED_MAX_RESIDUAL_KM)
+
+
+def _allowed_geometry_deltas(diagnostics: Optional[_PathFitDiagnostics]) -> tuple[float, float, float, float, float]:
+    if diagnostics is None:
+        return (
+            _MAX_STABLE_Q_DELTA_AU,
+            _MAX_STABLE_ECCENTRICITY_DELTA,
+            _MAX_STABLE_INCLINATION_DELTA_DEG,
+            _MAX_STABLE_NODE_DELTA_DEG,
+            _MAX_STABLE_ARGUMENT_DELTA_DEG,
+        )
+    if (
+        diagnostics.track_count >= _STRONG_OBSERVED_TRACKS
+        and diagnostics.fit_point_count >= _STRONG_OBSERVED_FIT_POINTS
+        and diagnostics.timing_spread_seconds <= _TIMING_SPREAD_SOFT_SECONDS
+        and diagnostics.late_point_fraction <= 0.6
+    ):
+        return (0.5, 1.05, 70.0, 150.0, 150.0)
+    return (
+        0.35,
+        0.95,
+        45.0,
+        120.0,
+        120.0,
+    )
 
 
 def _utc_datetime(value: datetime | float) -> datetime:
@@ -149,22 +226,23 @@ def _is_reasonable_observed_payload(
         return False
     if diagnostics.track_count < _MIN_TRACKS or diagnostics.fit_point_count < _MIN_FIT_POINTS:
         return False
-    if diagnostics.median_residual_km > _MAX_OBSERVED_MEDIAN_RESIDUAL_KM:
+    allowed_median_residual_km, allowed_max_residual_km = _allowed_fit_thresholds(diagnostics)
+    if diagnostics.median_residual_km > allowed_median_residual_km:
         return False
-    if diagnostics.max_residual_km > _MAX_OBSERVED_MAX_RESIDUAL_KM:
+    if diagnostics.max_residual_km > allowed_max_residual_km:
         return False
-
     if any(fallback.get(key) is None for key in ("perihelion_distance_au", "eccentricity", "inclination_deg", "ascending_node_deg", "argument_of_perihelion_deg")):
         return True
-    if abs(float(observed["perihelion_distance_au"]) - float(fallback["perihelion_distance_au"])) > 0.05:
+    max_q_delta_au, max_e_delta, max_i_delta_deg, max_node_delta_deg, max_argp_delta_deg = _allowed_geometry_deltas(diagnostics)
+    if abs(float(observed["perihelion_distance_au"]) - float(fallback["perihelion_distance_au"])) > max_q_delta_au:
         return False
-    if abs(float(observed["eccentricity"]) - float(fallback["eccentricity"])) > 0.35:
+    if abs(float(observed["eccentricity"]) - float(fallback["eccentricity"])) > max_e_delta:
         return False
-    if abs(float(observed["inclination_deg"]) - float(fallback["inclination_deg"])) > 15.0:
+    if abs(float(observed["inclination_deg"]) - float(fallback["inclination_deg"])) > max_i_delta_deg:
         return False
-    if _wrapped_angle_delta(float(observed["ascending_node_deg"]), float(fallback["ascending_node_deg"])) > 15.0:
+    if _wrapped_angle_delta(float(observed["ascending_node_deg"]), float(fallback["ascending_node_deg"])) > max_node_delta_deg:
         return False
-    if _wrapped_angle_delta(float(observed["argument_of_perihelion_deg"]), float(fallback["argument_of_perihelion_deg"])) > 20.0:
+    if _wrapped_angle_delta(float(observed["argument_of_perihelion_deg"]), float(fallback["argument_of_perihelion_deg"])) > max_argp_delta_deg:
         return False
     if (
         observed.get("mean_anomaly_deg") is not None
@@ -185,9 +263,10 @@ def _can_stabilize_mean_anomaly(
         return False
     if diagnostics.track_count < _MIN_TRACKS or diagnostics.fit_point_count < _MIN_FIT_POINTS:
         return False
-    if diagnostics.median_residual_km > _MAX_OBSERVED_MEDIAN_RESIDUAL_KM:
+    allowed_median_residual_km, allowed_max_residual_km = _allowed_fit_thresholds(diagnostics)
+    if diagnostics.median_residual_km > allowed_median_residual_km:
         return False
-    if diagnostics.max_residual_km > _MAX_OBSERVED_MAX_RESIDUAL_KM:
+    if diagnostics.max_residual_km > allowed_max_residual_km:
         return False
     required_keys = (
         "perihelion_distance_au",
@@ -199,19 +278,20 @@ def _can_stabilize_mean_anomaly(
     )
     if any(observed.get(key) is None or fallback.get(key) is None for key in required_keys):
         return False
+    max_q_delta_au, max_e_delta, max_i_delta_deg, max_node_delta_deg, max_argp_delta_deg = _allowed_geometry_deltas(diagnostics)
     if (
         abs(float(observed["perihelion_distance_au"]) - float(fallback["perihelion_distance_au"]))
-        > _MAX_STABLE_Q_DELTA_AU
+        > max_q_delta_au
     ):
         return False
     if (
         abs(float(observed["eccentricity"]) - float(fallback["eccentricity"]))
-        > _MAX_STABLE_ECCENTRICITY_DELTA
+        > max_e_delta
     ):
         return False
     if (
         abs(float(observed["inclination_deg"]) - float(fallback["inclination_deg"]))
-        > _MAX_STABLE_INCLINATION_DELTA_DEG
+        > max_i_delta_deg
     ):
         return False
     if (
@@ -219,7 +299,7 @@ def _can_stabilize_mean_anomaly(
             float(observed["ascending_node_deg"]),
             float(fallback["ascending_node_deg"]),
         )
-        > _MAX_STABLE_NODE_DELTA_DEG
+        > max_node_delta_deg
     ):
         return False
     if (
@@ -227,7 +307,7 @@ def _can_stabilize_mean_anomaly(
             float(observed["argument_of_perihelion_deg"]),
             float(fallback["argument_of_perihelion_deg"]),
         )
-        > _MAX_STABLE_ARGUMENT_DELTA_DEG
+        > max_argp_delta_deg
     ):
         return False
     return (
@@ -250,6 +330,45 @@ def _stabilize_observed_payload(
     stabilized["mean_anomaly_deg"] = fallback["mean_anomaly_deg"]
     stabilized["epoch"] = fallback["epoch"]
     return stabilized
+
+
+def _runtime_payload_from_candidate(
+    candidate: Optional[_ObservationOrbitCandidate],
+    fallback_payload: dict,
+) -> dict:
+    if candidate is None:
+        return fallback_payload
+    observed_payload = _stabilize_observed_payload(
+        candidate.payload,
+        fallback_payload,
+        candidate.diagnostics,
+    )
+    if _is_reasonable_observed_payload(
+        observed_payload,
+        fallback_payload,
+        candidate.diagnostics,
+    ):
+        return observed_payload
+    return fallback_payload
+
+
+def _runtime_payload_from_candidates(
+    candidates: Sequence[_ObservationOrbitCandidate],
+    fallback_payload: dict,
+) -> dict:
+    for candidate in candidates:
+        observed_payload = _stabilize_observed_payload(
+            candidate.payload,
+            fallback_payload,
+            candidate.diagnostics,
+        )
+        if _is_reasonable_observed_payload(
+            observed_payload,
+            fallback_payload,
+            candidate.diagnostics,
+        ):
+            return observed_payload
+    return fallback_payload
 
 
 def _state_to_payload(position_km: np.ndarray, velocity_kms: np.ndarray, when: datetime) -> dict:
@@ -462,6 +581,10 @@ def _point_direction(point: ObservationTrailPoint) -> Optional[tuple[float, floa
     return None
 
 
+def _point_uses_ams(point: ObservationTrailPoint) -> bool:
+    return point.ams_coord_long is not None and point.ams_coord_lat is not None
+
+
 def _los_ecef_from_horizontal(latitude_deg: float, longitude_deg: float, azimuth_deg: float, altitude_deg: float) -> Optional[np.ndarray]:
     latitude_rad = math.radians(latitude_deg)
     longitude_rad = math.radians(longitude_deg)
@@ -500,13 +623,14 @@ def _build_track(record: ObservationCamData) -> Optional[_ObservationTrack]:
         [component.to_value(u.km) for component in location.to_geocentric()],
         dtype=float,
     )
-    points = []
+    raw_points: list[tuple[float, np.ndarray, bool]] = []
     for point in sorted(record.trail_points, key=lambda item: (item.event_timestamp or float("inf"), item.frame_index)):
         if point.event_timestamp is None:
             continue
         direction = _point_direction(point)
         if direction is None:
             continue
+        uses_ams = _point_uses_ams(point)
         los_ecef = _los_ecef_from_horizontal(
             float(record.summary_latitude),
             float(record.summary_longitude),
@@ -515,9 +639,19 @@ def _build_track(record: ObservationCamData) -> Optional[_ObservationTrack]:
         )
         if los_ecef is None:
             continue
-        points.append(_TrackPoint(timestamp=float(point.event_timestamp), los_ecef=los_ecef))
-    if len(points) < 2:
+        raw_points.append((float(point.event_timestamp), los_ecef, uses_ams))
+    if len(raw_points) < 2:
         return None
+    point_count = len(raw_points)
+    points = [
+        _TrackPoint(
+            timestamp=timestamp,
+            los_ecef=los_ecef,
+            edge_distance=min(index, point_count - index - 1),
+            uses_ams=uses_ams,
+        )
+        for index, (timestamp, los_ecef, uses_ams) in enumerate(raw_points)
+    ]
     return _ObservationTrack(site_ecef=site_ecef, points=points)
 
 
@@ -609,7 +743,163 @@ def _project_path_scalar(
     return scalar, residual_km
 
 
-def _fit_path_state(
+def _sample_line_scalar_and_residual(
+    line_anchor: np.ndarray,
+    line_direction: np.ndarray,
+    track: _ObservationTrack,
+    point: _TrackPoint,
+) -> Optional[tuple[float, float]]:
+    delta = line_anchor - track.site_ecef
+    dot_du = _dot(line_direction, point.los_ecef)
+    denominator = 1.0 - (dot_du * dot_du)
+    if abs(denominator) < 1e-9:
+        return None
+    scalar = ((dot_du * _dot(point.los_ecef, delta)) - _dot(line_direction, delta)) / denominator
+    ray_distance = (_dot(point.los_ecef, delta) - (dot_du * _dot(line_direction, delta))) / denominator
+    if ray_distance < 0:
+        return None
+    line_point = line_anchor + (line_direction * scalar)
+    ray_point = track.site_ecef + (point.los_ecef * ray_distance)
+    return scalar, _vector_length(line_point - ray_point)
+
+
+def _trim_endpoint_outliers(samples: Sequence[_ProjectedPathSample]) -> list[_ProjectedPathSample]:
+    trimmed = list(samples)
+    while len(trimmed) > (_MIN_FIT_POINTS + 1):
+        changed = False
+        if (
+            len(trimmed) >= 3
+            and trimmed[0].residual_km > max(0.55, trimmed[1].residual_km * 2.2)
+        ):
+            trimmed = trimmed[1:]
+            changed = True
+        if (
+            len(trimmed) >= 3
+            and trimmed[-1].residual_km > max(0.32, trimmed[-2].residual_km * 1.5)
+        ):
+            trimmed = trimmed[:-1]
+            changed = True
+        if not changed:
+            break
+    return trimmed
+
+
+def _estimate_local_speed_kms(
+    previous_sample: Optional[_ProjectedPathSample],
+    current_sample: _ProjectedPathSample,
+    next_sample: Optional[_ProjectedPathSample],
+) -> Optional[float]:
+    candidates: list[float] = []
+    for neighbour in (previous_sample, next_sample):
+        if neighbour is None:
+            continue
+        delta_time = abs(current_sample.timestamp - neighbour.timestamp)
+        if delta_time <= 1e-6:
+            continue
+        candidates.append(abs(current_sample.scalar_km - neighbour.scalar_km) / delta_time)
+    if not candidates:
+        return None
+    return float(np.median(np.asarray(candidates, dtype=float)))
+
+
+def _track_reference_speed_kms(samples: Sequence[_ProjectedPathSample]) -> Optional[float]:
+    early_samples = [
+        sample.local_speed_kms
+        for sample in samples
+        if sample.local_speed_kms is not None and sample.series_fraction <= 0.4
+    ]
+    if not early_samples:
+        early_samples = [sample.local_speed_kms for sample in samples if sample.local_speed_kms is not None]
+    if not early_samples:
+        return None
+    return float(np.median(np.asarray(early_samples, dtype=float)))
+
+
+def _enrich_track_samples(track_samples: Sequence[_ProjectedPathSample]) -> list[_ProjectedPathSample]:
+    if not track_samples:
+        return []
+    enriched: list[_ProjectedPathSample] = []
+    last_index = len(track_samples) - 1
+    for index, sample in enumerate(track_samples):
+        previous_sample = track_samples[index - 1] if index > 0 else None
+        next_sample = track_samples[index + 1] if index < last_index else None
+        series_fraction = 0.0 if last_index <= 0 else index / last_index
+        enriched.append(
+            _ProjectedPathSample(
+                track_index=sample.track_index,
+                timestamp=sample.timestamp,
+                scalar_km=sample.scalar_km,
+                residual_km=sample.residual_km,
+                edge_distance=sample.edge_distance,
+                series_fraction=series_fraction,
+                local_speed_kms=_estimate_local_speed_kms(previous_sample, sample, next_sample),
+                track_reference_speed_kms=None,
+                uses_ams=sample.uses_ams,
+                is_marginal=sample.is_marginal,
+            )
+        )
+    reference_speed_kms = _track_reference_speed_kms(enriched)
+    return [
+        _ProjectedPathSample(
+            track_index=sample.track_index,
+            timestamp=sample.timestamp,
+            scalar_km=sample.scalar_km,
+            residual_km=sample.residual_km,
+            edge_distance=sample.edge_distance,
+            series_fraction=sample.series_fraction,
+            local_speed_kms=sample.local_speed_kms,
+            track_reference_speed_kms=reference_speed_kms,
+            uses_ams=sample.uses_ams,
+            is_marginal=sample.is_marginal,
+        )
+        for sample in enriched
+    ]
+
+
+def _collect_projected_path_samples(
+    path_start: np.ndarray,
+    path_direction: np.ndarray,
+    path_length_km: float,
+    tracks: Sequence[_ObservationTrack],
+) -> list[_ProjectedPathSample]:
+    per_track: list[list[_ProjectedPathSample]] = []
+    for track_index, track in enumerate(tracks):
+        track_samples: list[_ProjectedPathSample] = []
+        for point in track.points:
+            projection = _project_path_scalar(path_start, path_direction, track, point)
+            if projection is None:
+                continue
+            scalar_km, residual_km = projection
+            is_marginal = False
+            if residual_km > 12.0:
+                continue
+            if scalar_km < (-0.3 * path_length_km) or scalar_km > (1.35 * path_length_km):
+                continue
+            if residual_km > 8.0 or scalar_km < (-0.15 * path_length_km) or scalar_km > (1.2 * path_length_km):
+                is_marginal = True
+            track_samples.append(
+                _ProjectedPathSample(
+                    track_index=track_index,
+                    timestamp=point.timestamp,
+                    scalar_km=scalar_km,
+                    residual_km=residual_km,
+                    edge_distance=point.edge_distance,
+                    series_fraction=0.0,
+                    local_speed_kms=None,
+                    track_reference_speed_kms=None,
+                    uses_ams=point.uses_ams,
+                    is_marginal=is_marginal,
+                )
+            )
+        per_track.append(_enrich_track_samples(_trim_endpoint_outliers(track_samples)))
+    return [
+        sample
+        for track_samples in per_track
+        for sample in track_samples
+    ]
+
+
+def _fit_path_state_policy_a_baseline(
     event: Event,
     tracks: Sequence[_ObservationTrack],
 ) -> Optional[tuple[np.ndarray, np.ndarray, datetime, _PathFitDiagnostics]]:
@@ -623,46 +913,282 @@ def _fit_path_state(
     if path_direction is None or path_length_km == 0:
         return None
 
-    samples: list[tuple[float, float, float]] = []
-    contributing_tracks: set[int] = set()
-    for track_index, track in enumerate(tracks):
-        for point in track.points:
-            projection = _project_path_scalar(path_start, path_direction, track, point)
-            if projection is None:
-                continue
-            scalar_km, residual_km = projection
-            if residual_km > 8.0:
-                continue
-            if scalar_km < (-0.15 * path_length_km) or scalar_km > (1.2 * path_length_km):
-                continue
-            samples.append((point.timestamp, scalar_km, residual_km))
-            contributing_tracks.add(track_index)
+    samples = _collect_projected_path_samples(
+        path_start,
+        path_direction,
+        path_length_km,
+        tracks,
+    )
+    contributing_tracks = {sample.track_index for sample in samples}
     if len(samples) < _MIN_FIT_POINTS or len(contributing_tracks) < _MIN_TRACKS:
+        return None
+
+    solved_model = _solve_linear_path_model(samples, len(tracks), "policy_a")
+    if solved_model is None:
+        return None
+    track_weight_scales = _estimate_track_weight_scales(samples, solved_model)
+    if track_weight_scales:
+        solved_model = _solve_linear_path_model(
+            samples,
+            len(tracks),
+            "policy_a",
+            track_weight_scales=track_weight_scales,
+        )
+        if solved_model is None:
+            return None
+    refined_samples = _trim_temporal_outliers(samples, solved_model)
+    if refined_samples != list(samples):
+        track_weight_scales = _estimate_track_weight_scales(refined_samples, solved_model)
+        solved_model = _solve_linear_path_model(
+            refined_samples,
+            len(tracks),
+            "policy_a",
+            track_weight_scales=track_weight_scales or None,
+        )
+        if solved_model is None:
+            return None
+        samples = refined_samples
+        contributing_tracks = {sample.track_index for sample in samples}
+
+    start_timestamps = _start_timestamps_for_model(solved_model, samples)
+    if not start_timestamps:
+        return None
+    start_timestamp = min(start_timestamps)
+    if not math.isfinite(start_timestamp):
+        return None
+    start_speed_kms = solved_model.speed_kms
+    if start_speed_kms < _MIN_ORBIT_SPEED_KMS or start_speed_kms > _MAX_ORBIT_SPEED_KMS:
+        return None
+    late_point_fraction = (
+        sum(1 for sample in samples if sample.series_fraction >= _LATE_SERIES_START) / len(samples)
+        if samples
+        else 0.0
+    )
+    diagnostics = _PathFitDiagnostics(
+        track_count=len(contributing_tracks),
+        fit_point_count=len(samples),
+        median_residual_km=float(np.median([sample.residual_km for sample in samples])),
+        max_residual_km=float(np.max([sample.residual_km for sample in samples])),
+        policy_name="policy_a",
+        timing_spread_seconds=solved_model.timing_spread_seconds,
+        late_point_fraction=late_point_fraction,
+    )
+    return path_start, path_direction * start_speed_kms, _utc_datetime(start_timestamp), diagnostics
+
+
+def _sample_weight(sample: _ProjectedPathSample) -> float:
+    residual_weight = 1.0 / max(sample.residual_km, 0.15)
+    if sample.is_marginal:
+        residual_weight *= 0.18
+    if sample.edge_distance <= 0:
+        residual_weight *= 0.35
+    elif sample.edge_distance == 1:
+        residual_weight *= 0.7
+    return residual_weight
+
+
+@dataclass(frozen=True)
+class _PathModelSolution:
+    policy_name: str
+    speed_kms: float
+    intercepts: np.ndarray
+    time_center: float
+    scalar_residual_median_km: float
+    scalar_residual_max_km: float
+    acceleration_kms2: float = 0.0
+    timing_spread_seconds: float = math.inf
+
+
+def _sample_weight_for_policy(
+    sample: _ProjectedPathSample,
+    policy_name: str,
+    track_weight_scale: float = 1.0,
+) -> float:
+    weight = _sample_weight(sample)
+    if sample.uses_ams:
+        weight *= 1.08
+    if policy_name in {"policy_b", "policy_c"}:
+        if sample.series_fraction >= _VERY_LATE_SERIES_START:
+            weight *= 0.12
+        elif sample.series_fraction >= _LATE_SERIES_START:
+            weight *= 0.32
+        if (
+            sample.local_speed_kms is not None
+            and sample.track_reference_speed_kms is not None
+            and sample.track_reference_speed_kms > 0
+            and sample.series_fraction >= _LATE_SERIES_START
+            and sample.local_speed_kms < (sample.track_reference_speed_kms * _LATE_SPEED_DROP_RATIO)
+        ):
+            weight *= 0.22
+    return weight * track_weight_scale
+
+
+def _should_trim_late_sample(sample: _ProjectedPathSample, policy_name: str) -> bool:
+    if policy_name not in {"policy_b", "policy_c"}:
+        return False
+    if sample.series_fraction < _LATE_SERIES_START:
+        return False
+    if sample.local_speed_kms is None or sample.track_reference_speed_kms is None:
+        return False
+    return (
+        (
+            sample.local_speed_kms < (sample.track_reference_speed_kms * _LATE_SPEED_DROP_RATIO)
+            and sample.residual_km > 0.25
+        )
+        or (
+            sample.series_fraction >= _VERY_LATE_SERIES_START
+            and sample.local_speed_kms < (sample.track_reference_speed_kms * 0.88)
+            and sample.residual_km > 0.18
+        )
+    )
+
+
+def _filter_samples_for_policy(
+    samples: Sequence[_ProjectedPathSample],
+    policy_name: str,
+) -> list[_ProjectedPathSample]:
+    filtered = [sample for sample in samples if not _should_trim_late_sample(sample, policy_name)]
+    surviving_tracks = {sample.track_index for sample in filtered}
+    if len(filtered) < _MIN_FIT_POINTS or len(surviving_tracks) < _MIN_TRACKS:
+        return list(samples)
+    return filtered
+
+
+def _predicted_scalar(sample: _ProjectedPathSample, solved_model: _PathModelSolution) -> float:
+    sample_dt = sample.timestamp - solved_model.time_center
+    return (
+        (solved_model.speed_kms * sample_dt)
+        + (0.5 * solved_model.acceleration_kms2 * sample_dt * sample_dt)
+        + float(solved_model.intercepts[sample.track_index])
+    )
+
+
+def _track_start_timestamps_for_model(
+    solved_model: _PathModelSolution,
+    samples: Sequence[_ProjectedPathSample],
+) -> dict[int, float]:
+    per_track_min_dt: dict[int, float] = {}
+    for sample in samples:
+        sample_dt = sample.timestamp - solved_model.time_center
+        current = per_track_min_dt.get(sample.track_index)
+        if current is None or sample_dt < current:
+            per_track_min_dt[sample.track_index] = sample_dt
+
+    start_timestamps: dict[int, float] = {}
+    for track_index, intercept in enumerate(solved_model.intercepts):
+        if not math.isfinite(intercept):
+            continue
+        if abs(solved_model.acceleration_kms2) < 1e-9:
+            start_timestamps[track_index] = solved_model.time_center - (intercept / solved_model.speed_kms)
+            continue
+
+        a = 0.5 * solved_model.acceleration_kms2
+        b = solved_model.speed_kms
+        c = float(intercept)
+        discriminant = (b * b) - (4.0 * a * c)
+        if discriminant < 0:
+            continue
+        root_term = math.sqrt(discriminant)
+        candidate_offsets = [(-b - root_term) / (2.0 * a), (-b + root_term) / (2.0 * a)]
+        min_dt = per_track_min_dt.get(track_index, 0.0)
+        chosen_offset = min(
+            candidate_offsets,
+            key=lambda offset: (
+                0 if offset <= min_dt else 1,
+                abs(offset - min_dt),
+            ),
+        )
+        start_timestamps[track_index] = solved_model.time_center + chosen_offset
+    return start_timestamps
+
+
+def _timing_spread_seconds(
+    solved_model: _PathModelSolution,
+    samples: Sequence[_ProjectedPathSample],
+) -> float:
+    start_timestamps = list(_track_start_timestamps_for_model(solved_model, samples).values())
+    if len(start_timestamps) < 2:
+        return 0.0
+    return float(max(start_timestamps) - min(start_timestamps))
+
+
+def _estimate_track_weight_scales(
+    samples: Sequence[_ProjectedPathSample],
+    solved_model: _PathModelSolution,
+) -> dict[int, float]:
+    start_timestamp_map = _track_start_timestamps_for_model(solved_model, samples)
+    if len(start_timestamp_map) < _MIN_TRACKS:
+        return {}
+
+    median_start_timestamp = float(np.median(np.asarray(list(start_timestamp_map.values()), dtype=float)))
+    scalar_residuals = [
+        abs(sample.scalar_km - _predicted_scalar(sample, solved_model))
+        for sample in samples
+    ]
+    global_scalar_median = float(np.median(np.asarray(scalar_residuals, dtype=float))) if scalar_residuals else 0.0
+    per_track_scalar_residuals: dict[int, list[float]] = {}
+    per_track_late_fraction: dict[int, list[float]] = {}
+    for sample in samples:
+        per_track_scalar_residuals.setdefault(sample.track_index, []).append(
+            abs(sample.scalar_km - _predicted_scalar(sample, solved_model))
+        )
+        per_track_late_fraction.setdefault(sample.track_index, []).append(sample.series_fraction)
+
+    track_weight_scales: dict[int, float] = {}
+    for track_index, start_timestamp in start_timestamp_map.items():
+        start_offset = abs(start_timestamp - median_start_timestamp)
+        scale = 1.0
+        if start_offset > _TIMING_TRACK_SOFT_OFFSET_SECONDS:
+            scale *= 0.72
+        if start_offset > _TIMING_TRACK_HARD_OFFSET_SECONDS:
+            scale *= 0.42
+
+        track_scalar_median = float(
+            np.median(np.asarray(per_track_scalar_residuals.get(track_index, [0.0]), dtype=float))
+        )
+        if track_scalar_median > max(0.35, global_scalar_median * 1.3):
+            scale *= 0.65
+
+        track_series = per_track_late_fraction.get(track_index, [])
+        if track_series:
+            median_series_fraction = float(np.median(np.asarray(track_series, dtype=float)))
+            if median_series_fraction >= _LATE_SERIES_START:
+                scale *= 0.78
+            if median_series_fraction >= _VERY_LATE_SERIES_START:
+                scale *= 0.6
+
+        if scale < 0.98:
+            track_weight_scales[track_index] = scale
+    return track_weight_scales
+
+
+def _solve_linear_path_model(
+    samples: Sequence[_ProjectedPathSample],
+    track_count: int,
+    policy_name: str,
+    track_weight_scales: Optional[dict[int, float]] = None,
+) -> Optional[_PathModelSolution]:
+    if len(samples) < _MIN_FIT_POINTS:
         return None
 
     design_rows = []
     target_scalars = []
     weights = []
     timestamps = []
-    for track_index, track in enumerate(tracks):
-        for point in track.points:
-            projection = _project_path_scalar(path_start, path_direction, track, point)
-            if projection is None:
-                continue
-            scalar_km, residual_km = projection
-            if residual_km > 8.0:
-                continue
-            if scalar_km < (-0.15 * path_length_km) or scalar_km > (1.2 * path_length_km):
-                continue
-            row = [0.0]
-            for intercept_index in range(len(tracks)):
-                row.append(1.0 if intercept_index == track_index else 0.0)
-            design_rows.append(row)
-            target_scalars.append(scalar_km)
-            weights.append(1.0 / max(residual_km, 0.25))
-            timestamps.append(float(point.timestamp))
-    if len(target_scalars) < _MIN_FIT_POINTS:
-        return None
+    for sample in samples:
+        row = [0.0]
+        for intercept_index in range(track_count):
+            row.append(1.0 if intercept_index == sample.track_index else 0.0)
+        design_rows.append(row)
+        target_scalars.append(sample.scalar_km)
+        weights.append(
+            _sample_weight_for_policy(
+                sample,
+                policy_name,
+                float((track_weight_scales or {}).get(sample.track_index, 1.0)),
+            )
+        )
+        timestamps.append(sample.timestamp)
 
     design = np.asarray(design_rows, dtype=float)
     targets = np.asarray(target_scalars, dtype=float)
@@ -676,34 +1202,313 @@ def _fit_path_state(
     weighted_targets = targets * weight_vector
     solution, _, _, _ = np.linalg.lstsq(weighted_design, weighted_targets, rcond=None)
     speed_kms = float(solution[0])
+    intercepts = np.asarray(solution[1:], dtype=float)
     if speed_kms < 0:
-        path_direction = -path_direction
-        targets = -targets
-        solution, _, _, _ = np.linalg.lstsq(weighted_design, targets * weight_vector, rcond=None)
-        speed_kms = float(solution[0])
+        speed_kms = -speed_kms
+        intercepts = -intercepts
     if speed_kms < _MIN_ORBIT_SPEED_KMS or speed_kms > _MAX_ORBIT_SPEED_KMS:
         return None
-    intercepts = np.asarray(solution[1:], dtype=float)
-    start_timestamps = [
-        time_center - (intercept / speed_kms)
-        for intercept in intercepts
-        if math.isfinite(intercept)
+    scalar_residuals = []
+    for sample in samples:
+        predicted_scalar = (speed_kms * (sample.timestamp - time_center)) + float(intercepts[sample.track_index])
+        scalar_residuals.append(abs(sample.scalar_km - predicted_scalar))
+    return _PathModelSolution(
+        policy_name=policy_name,
+        speed_kms=speed_kms,
+        intercepts=intercepts,
+        time_center=time_center,
+        scalar_residual_median_km=float(np.median(scalar_residuals)),
+        scalar_residual_max_km=float(np.max(scalar_residuals)),
+        timing_spread_seconds=_timing_spread_seconds(
+            _PathModelSolution(
+                policy_name=policy_name,
+                speed_kms=speed_kms,
+                intercepts=intercepts,
+                time_center=time_center,
+                scalar_residual_median_km=float(np.median(scalar_residuals)),
+                scalar_residual_max_km=float(np.max(scalar_residuals)),
+            ),
+            samples,
+        ),
+    )
+
+
+def _solve_quadratic_path_model(
+    samples: Sequence[_ProjectedPathSample],
+    track_count: int,
+    track_weight_scales: Optional[dict[int, float]] = None,
+) -> Optional[_PathModelSolution]:
+    if len(samples) < (_MIN_FIT_POINTS + 2):
+        return None
+
+    design_rows = []
+    target_scalars = []
+    weights = []
+    timestamps = []
+    for sample in samples:
+        row = [0.0, 0.0]
+        for intercept_index in range(track_count):
+            row.append(1.0 if intercept_index == sample.track_index else 0.0)
+        design_rows.append(row)
+        target_scalars.append(sample.scalar_km)
+        weights.append(
+            _sample_weight_for_policy(
+                sample,
+                "policy_c",
+                float((track_weight_scales or {}).get(sample.track_index, 1.0)),
+            )
+        )
+        timestamps.append(sample.timestamp)
+
+    design = np.asarray(design_rows, dtype=float)
+    targets = np.asarray(target_scalars, dtype=float)
+    weight_vector = np.asarray(weights, dtype=float)
+    weight_sum = float(weight_vector.sum())
+    if weight_sum == 0:
+        return None
+    time_center = float(np.sum(weight_vector * np.asarray(timestamps, dtype=float)) / weight_sum)
+    dt = np.asarray(timestamps, dtype=float) - time_center
+    design[:, 0] = dt
+    design[:, 1] = 0.5 * dt * dt
+    weighted_design = design * weight_vector[:, None]
+    weighted_targets = targets * weight_vector
+    solution, _, _, _ = np.linalg.lstsq(weighted_design, weighted_targets, rcond=None)
+    speed_kms = float(solution[0])
+    acceleration_kms2 = float(solution[1])
+    intercepts = np.asarray(solution[2:], dtype=float)
+    if speed_kms < _MIN_ORBIT_SPEED_KMS or speed_kms > _MAX_ORBIT_SPEED_KMS:
+        return None
+    if acceleration_kms2 < _MIN_REASONABLE_DECELERATION_KMS2 or acceleration_kms2 > _MAX_REASONABLE_DECELERATION_KMS2:
+        return None
+    scalar_residuals = []
+    for sample in samples:
+        sample_dt = sample.timestamp - time_center
+        predicted_scalar = (
+            (speed_kms * sample_dt)
+            + (0.5 * acceleration_kms2 * sample_dt * sample_dt)
+            + float(intercepts[sample.track_index])
+        )
+        scalar_residuals.append(abs(sample.scalar_km - predicted_scalar))
+    return _PathModelSolution(
+        policy_name="policy_c",
+        speed_kms=speed_kms,
+        intercepts=intercepts,
+        time_center=time_center,
+        scalar_residual_median_km=float(np.median(scalar_residuals)),
+        scalar_residual_max_km=float(np.max(scalar_residuals)),
+        acceleration_kms2=acceleration_kms2,
+        timing_spread_seconds=_timing_spread_seconds(
+            _PathModelSolution(
+                policy_name="policy_c",
+                speed_kms=speed_kms,
+                intercepts=intercepts,
+                time_center=time_center,
+                scalar_residual_median_km=float(np.median(scalar_residuals)),
+                scalar_residual_max_km=float(np.max(scalar_residuals)),
+                acceleration_kms2=acceleration_kms2,
+            ),
+            samples,
+        ),
+    )
+
+
+def _trim_temporal_outliers(
+    samples: Sequence[_ProjectedPathSample],
+    solved_model: Optional[_PathModelSolution] = None,
+    *,
+    speed_kms: Optional[float] = None,
+    intercepts: Optional[np.ndarray] = None,
+    time_center: Optional[float] = None,
+    acceleration_kms2: float = 0.0,
+) -> list[_ProjectedPathSample]:
+    if solved_model is None:
+        if speed_kms is None or intercepts is None or time_center is None:
+            raise TypeError("Either solved_model or speed/intercepts/time_center must be provided")
+        solved_model = _PathModelSolution(
+            policy_name="compat",
+            speed_kms=float(speed_kms),
+            intercepts=np.asarray(intercepts, dtype=float),
+            time_center=float(time_center),
+            scalar_residual_median_km=0.0,
+            scalar_residual_max_km=0.0,
+            acceleration_kms2=float(acceleration_kms2),
+        )
+    scalar_residuals = []
+    for sample in samples:
+        predicted_scalar = _predicted_scalar(sample, solved_model)
+        scalar_residuals.append(abs(sample.scalar_km - predicted_scalar))
+    if not scalar_residuals:
+        return list(samples)
+
+    median_scalar_residual = float(np.median(scalar_residuals))
+    robust_scale = max(0.35, median_scalar_residual * 1.4826)
+    allowed_scalar_residual = max(0.9, robust_scale * 3.0)
+    trimmed = [
+        sample
+        for sample, scalar_residual in zip(samples, scalar_residuals)
+        if scalar_residual <= allowed_scalar_residual
     ]
+    surviving_tracks = {sample.track_index for sample in trimmed}
+    if len(trimmed) < _MIN_FIT_POINTS or len(surviving_tracks) < _MIN_TRACKS:
+        return list(samples)
+    return trimmed
+
+
+def _start_timestamps_for_model(
+    solved_model: _PathModelSolution,
+    samples: Sequence[_ProjectedPathSample],
+) -> list[float]:
+    return list(_track_start_timestamps_for_model(solved_model, samples).values())
+
+
+def _select_best_path_model(
+    samples: Sequence[_ProjectedPathSample],
+    track_count: int,
+    preferred_policy_name: Optional[str] = _RUNTIME_PATH_POLICY,
+) -> Optional[tuple[_PathModelSolution, list[_ProjectedPathSample]]]:
+    candidates: list[tuple[_PathModelSolution, list[_ProjectedPathSample]]] = []
+    for policy_name in ("policy_a", "policy_b"):
+        filtered_samples = _filter_samples_for_policy(samples, policy_name)
+        solved_model = _solve_linear_path_model(filtered_samples, track_count, policy_name)
+        if solved_model is None:
+            continue
+        track_weight_scales = _estimate_track_weight_scales(filtered_samples, solved_model)
+        if track_weight_scales:
+            solved_model = _solve_linear_path_model(
+                filtered_samples,
+                track_count,
+                policy_name,
+                track_weight_scales=track_weight_scales,
+            )
+            if solved_model is None:
+                continue
+        refined_samples = _trim_temporal_outliers(filtered_samples, solved_model)
+        if refined_samples != list(filtered_samples):
+            track_weight_scales = _estimate_track_weight_scales(refined_samples, solved_model)
+            solved_model = _solve_linear_path_model(
+                refined_samples,
+                track_count,
+                policy_name,
+                track_weight_scales=track_weight_scales or None,
+            )
+            if solved_model is None:
+                continue
+        candidates.append((solved_model, list(refined_samples)))
+
+    policy_c_samples = _filter_samples_for_policy(samples, "policy_c")
+    quadratic_model = _solve_quadratic_path_model(policy_c_samples, track_count)
+    if quadratic_model is not None:
+        track_weight_scales = _estimate_track_weight_scales(policy_c_samples, quadratic_model)
+        if track_weight_scales:
+            quadratic_model = _solve_quadratic_path_model(
+                policy_c_samples,
+                track_count,
+                track_weight_scales=track_weight_scales,
+            )
+        if quadratic_model is not None:
+            refined_samples = _trim_temporal_outliers(policy_c_samples, quadratic_model)
+            if refined_samples != list(policy_c_samples):
+                track_weight_scales = _estimate_track_weight_scales(refined_samples, quadratic_model)
+                quadratic_model = _solve_quadratic_path_model(
+                    refined_samples,
+                    track_count,
+                    track_weight_scales=track_weight_scales or None,
+                )
+            if quadratic_model is not None:
+                candidates.append((quadratic_model, list(refined_samples)))
+
+    if not candidates:
+        return None
+
+    def candidate_key(item: tuple[_PathModelSolution, list[_ProjectedPathSample]]) -> tuple[float, float, float, int]:
+        solved_model, candidate_samples = item
+        late_sample_count = sum(1 for sample in candidate_samples if sample.series_fraction >= _LATE_SERIES_START)
+        timing_penalty = max(0.0, solved_model.timing_spread_seconds - _TIMING_TRACK_SOFT_OFFSET_SECONDS)
+        acceleration_penalty = 0.0
+        if solved_model.policy_name == "policy_c":
+            acceleration_penalty = max(0.0, solved_model.acceleration_kms2) * 0.45
+            acceleration_penalty += max(0.0, abs(solved_model.acceleration_kms2) - 0.75) * 0.08
+        return (
+            solved_model.scalar_residual_median_km + (solved_model.scalar_residual_max_km * 0.2),
+            timing_penalty,
+            acceleration_penalty,
+            late_sample_count,
+        )
+
+    candidates.sort(key=candidate_key)
+    if preferred_policy_name not in {None, _AUTO_PATH_POLICY}:
+        for solved_model, candidate_samples in candidates:
+            if solved_model.policy_name != preferred_policy_name:
+                continue
+            return solved_model, candidate_samples
+    return candidates[0]
+
+
+def _fit_path_state(
+    event: Event,
+    tracks: Sequence[_ObservationTrack],
+    preferred_policy_name: Optional[str] = _RUNTIME_PATH_POLICY,
+) -> Optional[tuple[np.ndarray, np.ndarray, datetime, _PathFitDiagnostics]]:
+    if preferred_policy_name == "policy_a":
+        return _fit_path_state_policy_a_baseline(event, tracks)
+    endpoints = _path_endpoints_ecef(event)
+    if endpoints is None:
+        return None
+    path_start, path_end = endpoints
+    path_vector = path_end - path_start
+    path_length_km = _vector_length(path_vector)
+    path_direction = _unit(path_vector)
+    if path_direction is None or path_length_km == 0:
+        return None
+
+    samples = _collect_projected_path_samples(
+        path_start,
+        path_direction,
+        path_length_km,
+        tracks,
+    )
+    contributing_tracks = {sample.track_index for sample in samples}
+    if len(samples) < _MIN_FIT_POINTS or len(contributing_tracks) < _MIN_TRACKS:
+        return None
+
+    selected = _select_best_path_model(samples, len(tracks), preferred_policy_name)
+    if selected is None:
+        return None
+    solved_model, samples = selected
+    contributing_tracks = {sample.track_index for sample in samples}
+
+    start_timestamps = _start_timestamps_for_model(solved_model, samples)
     if not start_timestamps:
         return None
     start_timestamp = min(start_timestamps)
     if not math.isfinite(start_timestamp):
         return None
+    start_speed_kms = solved_model.speed_kms + (
+        solved_model.acceleration_kms2 * (start_timestamp - solved_model.time_center)
+    )
+    if start_speed_kms < _MIN_ORBIT_SPEED_KMS or start_speed_kms > _MAX_ORBIT_SPEED_KMS:
+        return None
+    late_point_fraction = (
+        sum(1 for sample in samples if sample.series_fraction >= _LATE_SERIES_START) / len(samples)
+        if samples
+        else 0.0
+    )
     diagnostics = _PathFitDiagnostics(
         track_count=len(contributing_tracks),
-        fit_point_count=len(target_scalars),
-        median_residual_km=float(np.median([item[2] for item in samples])),
-        max_residual_km=float(np.max([item[2] for item in samples])),
+        fit_point_count=len(samples),
+        median_residual_km=float(np.median([sample.residual_km for sample in samples])),
+        max_residual_km=float(np.max([sample.residual_km for sample in samples])),
+        policy_name=solved_model.policy_name,
+        timing_spread_seconds=solved_model.timing_spread_seconds,
+        late_point_fraction=late_point_fraction,
     )
-    return path_start, path_direction * speed_kms, _utc_datetime(start_timestamp), diagnostics
+    return path_start, path_direction * start_speed_kms, _utc_datetime(start_timestamp), diagnostics
 
 
-def _fit_observed_state(event: Event, tracks: Sequence[_ObservationTrack]) -> Optional[tuple[np.ndarray, np.ndarray, datetime]]:
+def _fit_observed_state(
+    event: Event,
+    tracks: Sequence[_ObservationTrack],
+) -> Optional[tuple[np.ndarray, np.ndarray, datetime, _PathFitDiagnostics]]:
     direction = _fit_trajectory_direction(tracks)
     if direction is None:
         return None
@@ -745,36 +1550,64 @@ def _fit_observed_state(event: Event, tracks: Sequence[_ObservationTrack]) -> Op
     if anchor is None:
         return None
 
-    design_rows = []
-    observed_scalars = []
-    timestamps = []
+    per_track_samples: list[list[_ProjectedPathSample]] = []
     for track_index, track in enumerate(tracks):
+        track_samples: list[_ProjectedPathSample] = []
         for point in track.points:
-            scalar = _trajectory_scalar(anchor, direction, track, point)
-            if scalar is None:
+            sample_geometry = _sample_line_scalar_and_residual(anchor, direction, track, point)
+            if sample_geometry is None:
                 continue
-            timestamps.append(float(point.timestamp))
-            row = [0.0]
-            for intercept_index in range(len(tracks)):
-                row.append(1.0 if intercept_index == track_index else 0.0)
-            design_rows.append(row)
-            observed_scalars.append(scalar)
-    if len(observed_scalars) < _MIN_FIT_POINTS:
+            scalar_km, residual_km = sample_geometry
+            if residual_km > 18.0:
+                continue
+            track_samples.append(
+                _ProjectedPathSample(
+                    track_index=track_index,
+                    timestamp=point.timestamp,
+                    scalar_km=scalar_km,
+                    residual_km=residual_km,
+                    edge_distance=point.edge_distance,
+                    uses_ams=point.uses_ams,
+                    is_marginal=residual_km > 8.0,
+                )
+            )
+        per_track_samples.append(_enrich_track_samples(_trim_endpoint_outliers(track_samples)))
+
+    samples = [
+        sample
+        for track_samples in per_track_samples
+        for sample in track_samples
+    ]
+    contributing_tracks = {sample.track_index for sample in samples}
+    if len(samples) < _MIN_FIT_POINTS or len(contributing_tracks) < _MIN_TRACKS:
         return None
 
-    design = np.asarray(design_rows, dtype=float)
-    targets = np.asarray(observed_scalars, dtype=float)
-    time_center = min(timestamps)
-    design[:, 0] = np.asarray(timestamps, dtype=float) - time_center
-    solution, _, _, _ = np.linalg.lstsq(design, targets, rcond=None)
-    speed_kms = float(solution[0])
-    if speed_kms < 0:
-        direction = -direction
-        targets = -targets
-        solution, _, _, _ = np.linalg.lstsq(design, targets, rcond=None)
-        speed_kms = float(solution[0])
-    if speed_kms < _MIN_ORBIT_SPEED_KMS or speed_kms > _MAX_ORBIT_SPEED_KMS:
+    solved_model = _solve_linear_path_model(samples, len(tracks), "reserve")
+    if solved_model is None:
         return None
+    track_weight_scales = _estimate_track_weight_scales(samples, solved_model)
+    if track_weight_scales:
+        solved_model = _solve_linear_path_model(
+            samples,
+            len(tracks),
+            "reserve",
+            track_weight_scales=track_weight_scales,
+        )
+        if solved_model is None:
+            return None
+    refined_samples = _trim_temporal_outliers(samples, solved_model)
+    if refined_samples != list(samples):
+        track_weight_scales = _estimate_track_weight_scales(refined_samples, solved_model)
+        solved_model = _solve_linear_path_model(
+            refined_samples,
+            len(tracks),
+            "reserve",
+            track_weight_scales=track_weight_scales or None,
+        )
+        if solved_model is None:
+            return None
+        samples = refined_samples
+        contributing_tracks = {sample.track_index for sample in samples}
 
     if event.track_startlat is not None and event.track_startlong is not None and event.track_startheight is not None:
         start_point = np.array(
@@ -789,11 +1622,33 @@ def _fit_observed_state(event: Event, tracks: Sequence[_ObservationTrack]) -> Op
             dtype=float,
         )
     else:
-        intercepts = solution[1:]
-        start_point = anchor + (direction * float(np.min(intercepts)))
+        start_timestamps = _start_timestamps_for_model(solved_model, samples)
+        if not start_timestamps:
+            return None
+        start_point = anchor + (direction * float(np.min(solved_model.intercepts)))
 
-    when = _utc_datetime(event.date) if event.date is not None else _utc_datetime(0.0)
-    return (start_point, direction * speed_kms, when)
+    start_timestamps = _start_timestamps_for_model(solved_model, samples)
+    if not start_timestamps:
+        return None
+    start_timestamp = min(start_timestamps)
+    start_speed_kms = solved_model.speed_kms
+    if start_speed_kms < _MIN_ORBIT_SPEED_KMS or start_speed_kms > _MAX_ORBIT_SPEED_KMS:
+        return None
+    late_point_fraction = (
+        sum(1 for sample in samples if sample.series_fraction >= _LATE_SERIES_START) / len(samples)
+        if samples
+        else 0.0
+    )
+    diagnostics = _PathFitDiagnostics(
+        track_count=len(contributing_tracks),
+        fit_point_count=len(samples),
+        median_residual_km=float(np.median([sample.residual_km for sample in samples])),
+        max_residual_km=float(np.max([sample.residual_km for sample in samples])),
+        policy_name="reserve",
+        timing_spread_seconds=solved_model.timing_spread_seconds,
+        late_point_fraction=late_point_fraction,
+    )
+    return (start_point, direction * start_speed_kms, _utc_datetime(start_timestamp), diagnostics)
 
 
 def _earth_heliocentric_state(when: datetime) -> tuple[np.ndarray, np.ndarray]:
@@ -845,22 +1700,10 @@ def _incoming_hyperbolic_excess(position_km: np.ndarray, velocity_kms: np.ndarra
     return max(candidates, key=lambda candidate: _dot(candidate, velocity_kms))
 
 
-def _solve_observation_candidate(
-    event: Event,
-    observations: Iterable[ObservationCamData],
+def _candidate_from_state(
+    observed_state: tuple,
 ) -> Optional[_ObservationOrbitCandidate]:
-    if not event.camera_confirmed or event.date is None:
-        return None
-    tracks = [track for track in (_build_track(record) for record in observations) if track is not None]
-    if len(tracks) < _MIN_TRACKS:
-        return None
-
     diagnostics = None
-    observed_state = _fit_path_state(event, tracks)
-    if observed_state is None:
-        observed_state = _fit_observed_state(event, tracks)
-    if observed_state is None:
-        return None
     if len(observed_state) == 4:
         position_ecef_km, observed_velocity_kms, when, diagnostics = observed_state
     else:
@@ -904,6 +1747,60 @@ def _solve_observation_candidate(
     )
 
 
+def _iter_observation_candidates(
+    event: Event,
+    observations: Iterable[ObservationCamData],
+    path_policy: Optional[str] = _RUNTIME_PATH_POLICY,
+) -> list[_ObservationOrbitCandidate]:
+    if not event.camera_confirmed or event.date is None:
+        return []
+    tracks = [track for track in (_build_track(record) for record in observations) if track is not None]
+    if len(tracks) < _MIN_TRACKS:
+        return []
+
+    if path_policy not in {None, _AUTO_PATH_POLICY}:
+        policy_order = [path_policy]
+    else:
+        policy_order = ["policy_a", "policy_b", "policy_c", "reserve"]
+
+    candidates: list[_ObservationOrbitCandidate] = []
+    seen_payloads: set[tuple[Optional[float], Optional[float], Optional[float], Optional[float], Optional[float], Optional[float], Optional[str]]] = set()
+    for policy_name in policy_order:
+        observed_state = (
+            _fit_observed_state(event, tracks)
+            if policy_name == "reserve"
+            else _fit_path_state(event, tracks, preferred_policy_name=policy_name)
+        )
+        if observed_state is None:
+            continue
+        candidate = _candidate_from_state(observed_state)
+        if candidate is None:
+            continue
+        payload_signature = (
+            candidate.payload.get("perihelion_distance_au"),
+            candidate.payload.get("eccentricity"),
+            candidate.payload.get("inclination_deg"),
+            candidate.payload.get("ascending_node_deg"),
+            candidate.payload.get("argument_of_perihelion_deg"),
+            candidate.payload.get("mean_anomaly_deg"),
+            candidate.payload.get("epoch"),
+        )
+        if payload_signature in seen_payloads:
+            continue
+        seen_payloads.add(payload_signature)
+        candidates.append(candidate)
+    return candidates
+
+
+def _solve_observation_candidate(
+    event: Event,
+    observations: Iterable[ObservationCamData],
+    path_policy: Optional[str] = _RUNTIME_PATH_POLICY,
+) -> Optional[_ObservationOrbitCandidate]:
+    candidates = _iter_observation_candidates(event, observations, path_policy=path_policy)
+    return candidates[0] if candidates else None
+
+
 def solve_observation_orbit(event: Event, observations: Iterable[ObservationCamData]) -> Optional[dict]:
     candidate = _solve_observation_candidate(event, observations)
     return candidate.payload if candidate is not None else None
@@ -921,18 +1818,20 @@ def build_orbit_payload(
     event: Event,
     observations: Iterable[ObservationCamData],
     fallback_factory: Optional[Callable[[Event], dict]] = None,
+    *,
+    path_policy: Optional[str] = _RUNTIME_PATH_POLICY,
 ) -> dict:
+    observation_records = tuple(observations)
     fallback_payload = fallback_factory(event) if fallback_factory is not None else _legacy_stat_orbit(event)
-    candidate = _solve_observation_candidate(event, observations)
-    observed_payload = (
-        _stabilize_observed_payload(candidate.payload, fallback_payload, candidate.diagnostics)
-        if candidate is not None
-        else None
-    )
-    if observed_payload is not None and _is_reasonable_observed_payload(
-        observed_payload,
-        fallback_payload,
-        candidate.diagnostics if candidate is not None else None,
-    ):
-        return observed_payload
-    return fallback_payload
+    if path_policy in {None, _AUTO_PATH_POLICY}:
+        candidates = [
+            candidate
+            for candidate in (
+                _solve_observation_candidate(event, observation_records, path_policy=policy_name)
+                for policy_name in ("policy_a", "policy_b", "policy_c", "reserve")
+            )
+            if candidate is not None
+        ]
+        return _runtime_payload_from_candidates(candidates, fallback_payload)
+    candidate = _solve_observation_candidate(event, observation_records, path_policy=path_policy)
+    return _runtime_payload_from_candidate(candidate, fallback_payload)

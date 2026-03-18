@@ -97,7 +97,7 @@ DROP TABLE IF EXISTS event ;
 
 CREATE TABLE IF NOT EXISTS event (
   id INT(9) UNSIGNED NOT NULL AUTO_INCREMENT,
-  datetimetag CHAR(14) NOT NULL,
+  datetimetag VARCHAR(32) NOT NULL,
   location VARCHAR(100) NULL DEFAULT NULL,
   create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
   track_startheight FLOAT NULL DEFAULT NULL,
@@ -162,6 +162,8 @@ CREATE TABLE IF NOT EXISTS observation_cam_data (
   trail_timestamps TEXT NULL DEFAULT NULL,
   trail_coordinates TEXT NULL DEFAULT NULL,
   trail_ams_coords TEXT NULL DEFAULT NULL,
+  trail_centroid TEXT NULL DEFAULT NULL,
+  trail_centroid2 TEXT NULL DEFAULT NULL,
   trail_gnomonic TEXT NULL DEFAULT NULL,
   trail_midpoint VARCHAR(1000) NULL DEFAULT NULL,
   trail_arc FLOAT NULL DEFAULT NULL,
@@ -286,6 +288,10 @@ CREATE TABLE IF NOT EXISTS observation_trail_point (
   coord_lat FLOAT NULL DEFAULT NULL,
   ams_coord_long FLOAT NULL DEFAULT NULL,
   ams_coord_lat FLOAT NULL DEFAULT NULL,
+  centroid_coord_long FLOAT NULL DEFAULT NULL,
+  centroid_coord_lat FLOAT NULL DEFAULT NULL,
+  centroid2_coord_long FLOAT NULL DEFAULT NULL,
+  centroid2_coord_lat FLOAT NULL DEFAULT NULL,
   gnomonic_x FLOAT NULL DEFAULT NULL,
   gnomonic_y FLOAT NULL DEFAULT NULL,
   brightness FLOAT NULL DEFAULT NULL,

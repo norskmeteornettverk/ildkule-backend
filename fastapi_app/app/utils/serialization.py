@@ -47,7 +47,7 @@ def _frontend_event_url(datetimetag: str) -> Optional[str]:
 
 
 def _event_report_prefix(datetimetag: str) -> str:
-    timestamp = datetime.strptime(datetimetag, "%Y%m%d%H%M%S")
+    timestamp = datetime.strptime(datetimetag[:14], "%Y%m%d%H%M%S")
     return f"obs_{timestamp.strftime('%Y-%m-%d_%H_%M_%S')}"
 
 
@@ -836,6 +836,8 @@ def _prune_observation_public_payload(payload: dict) -> dict:
         "source_hash",
         "cam_id",
         "event_id",
+        "trail_centroid",
+        "trail_centroid2",
     ):
         payload.pop(key, None)
     return payload
