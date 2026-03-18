@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr, Field, root_validator
@@ -52,6 +53,23 @@ class UserSummary(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class UserLookupResponse(BaseModel):
+    id: int
+    identifier: EmailStr = Field(
+        ...,
+        description="Public account identifier for the user.",
+    )
+    role: str
+    user_role: str
+    roles: List[str]
+    user_level: Optional[str] = None
+    tutorial_completed: bool
+    account_confirmed: bool
+    create_time: datetime
+    update_time: Optional[datetime] = None
+    password_reset_request_time: Optional[datetime] = None
 
 
 class UserListResponse(BaseModel):

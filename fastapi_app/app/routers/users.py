@@ -7,6 +7,7 @@ from ..schemas.user import (
     PasswordChangeRequest,
     TutorialMetadataResponse,
     TutorialUpdate,
+    UserLookupResponse,
     UserCreate,
     UserListResponse,
     UserPatch,
@@ -42,6 +43,7 @@ def create_user(payload: UserCreate, session: Session = Depends(get_session)):
 
 @router.get(
     "/users/{user_id}",
+    response_model=UserLookupResponse,
     summary="Get user",
     description="Returns account fields for one authenticated user. This is not a public profile endpoint.",
 )

@@ -21,6 +21,8 @@ class TrailPointRecord:
     event_timestamp: Optional[float] = None
     coord_long: Optional[float] = None
     coord_lat: Optional[float] = None
+    ams_coord_long: Optional[float] = None
+    ams_coord_lat: Optional[float] = None
     gnomonic_x: Optional[float] = None
     gnomonic_y: Optional[float] = None
     brightness: Optional[float] = None
@@ -99,6 +101,9 @@ class FileToObjectMapper:
         "trail:positions": "trail_positions",
         "trail:timestamps": "trail_timestamps",
         "trail:coordinates": "trail_coordinates",
+        "trail:ams_coords": "trail_ams_coords",
+        "trail:ams coords": "trail_ams_coords",
+        "ams_coords": "trail_ams_coords",
         "trail:gnomonic": "trail_gnomonic",
         "trail:midpoint": "trail_midpoint",
         "trail:arc": "trail_arc",
@@ -486,6 +491,7 @@ class FileToObjectMapper:
                 str(values.get("video_start", "")),
                 str(values.get("trail_timestamps", "")),
                 str(values.get("trail_positions", "")),
+                str(values.get("trail_ams_coords", "")),
             ]
         )
         return hashlib.sha256(signature.encode("utf-8")).hexdigest()
@@ -496,6 +502,7 @@ class FileToObjectMapper:
         positions = self._parse_pair_series(values.get("trail_positions"))
         timestamps = self._parse_scalar_series(values.get("trail_timestamps"))
         coordinates = self._parse_pair_series(values.get("trail_coordinates"))
+        ams_coordinates = self._parse_pair_series(values.get("trail_ams_coords"))
         gnomonic = self._parse_pair_series(values.get("trail_gnomonic"))
         brightness = self._parse_scalar_series(values.get("trail_brightness"))
         dct_values = self._parse_scalar_series(values.get("trail_dct"))
@@ -524,6 +531,9 @@ class FileToObjectMapper:
         for frame_index in range(common_length):
             pixel = positions[frame_index] if frame_index < len(positions) else None
             coord = coordinates[frame_index] if frame_index < len(coordinates) else None
+            ams_coord = (
+                ams_coordinates[frame_index] if frame_index < len(ams_coordinates) else None
+            )
             gnomonic_pair = gnomonic[frame_index] if frame_index < len(gnomonic) else None
             points.append(
                 TrailPointRecord(
@@ -535,6 +545,8 @@ class FileToObjectMapper:
                     else None,
                     coord_long=coord[0] if coord else None,
                     coord_lat=coord[1] if coord else None,
+                    ams_coord_long=ams_coord[0] if ams_coord else None,
+                    ams_coord_lat=ams_coord[1] if ams_coord else None,
                     gnomonic_x=gnomonic_pair[0] if gnomonic_pair else None,
                     gnomonic_y=gnomonic_pair[1] if gnomonic_pair else None,
                     brightness=brightness[frame_index]

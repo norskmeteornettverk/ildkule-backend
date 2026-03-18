@@ -48,9 +48,25 @@ class StationNetworkCamera(BaseModel):
 
 class StationNetworkStation(BaseModel):
     station_name: str = Field(..., description="Station name.")
+    latitude: float | None = Field(
+        default=None,
+        description="Best known station latitude from the freshest observation summary with coordinates.",
+    )
+    longitude: float | None = Field(
+        default=None,
+        description="Best known station longitude from the freshest observation summary with coordinates.",
+    )
     last_seen: datetime | None = Field(
         default=None,
         description="Best current last-seen timestamp for the station.",
+    )
+    latitude: float | None = Field(
+        default=None,
+        description="Station latitude derived from the latest observation summary data when available.",
+    )
+    longitude: float | None = Field(
+        default=None,
+        description="Station longitude derived from the latest observation summary data when available.",
     )
     connected: bool = Field(
         ...,

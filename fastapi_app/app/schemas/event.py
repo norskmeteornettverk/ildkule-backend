@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -66,6 +69,45 @@ class InsightReportName(str, Enum):
     coordinates = "coordinates"
 
 
+class ArtifactRole(str, Enum):
+    preview_thumbnail = "preview_thumbnail"
+    event_preview = "event_preview"
+    trajectory_map = "trajectory_map"
+    height_profile = "height_profile"
+    speed_acceleration = "speed_acceleration"
+    position_vs_time = "position_vs_time"
+    heliocentric_orbit = "heliocentric_orbit"
+    kml = "kml"
+    dynamic_analysis_report = "dynamic_analysis_report"
+    station_analysis = "station_analysis"
+    analysis_tables = "analysis_tables"
+    observation_preview = "observation_preview"
+    raw_image = "raw_image"
+    raw_video = "raw_video"
+    processed_image = "processed_image"
+    processed_video = "processed_video"
+    brightness_graph = "brightness_graph"
+    frame_brightness_graph = "frame_brightness_graph"
+    size_graph = "size_graph"
+    observation_text = "observation_text"
+
+
+class ArtifactType(str, Enum):
+    image = "image"
+    video = "video"
+    text = "text"
+    interactive = "interactive"
+
+
+class ArtifactVisibility(str, Enum):
+    public = "public"
+
+
+class ArtifactPrimaryAction(str, Enum):
+    open = "open"
+    download = "download"
+
+
 class EventTimes(MeteorSchema):
     utc: Optional[str] = Field(
         default=None,
@@ -109,8 +151,14 @@ class CandidateSettings(MeteorSchema):
 
 class ArtifactManifestItem(MeteorSchema):
     id: str = Field(..., description="Stable artifact identifier within the response.")
-    role: str = Field(..., description="Presentation role, for example preview, map, kml, or raw_video.")
-    type: str = Field(..., description="Artifact type, for example image, video, text, or interactive.")
+    role: "ArtifactRole" = Field(
+        ...,
+        description="Presentation role for the artifact.",
+    )
+    type: "ArtifactType" = Field(
+        ...,
+        description="Artifact type.",
+    )
     level: str = Field(..., description="Artifact scope. Current values are event or observation.")
     language: Optional[str] = Field(
         default=None,
@@ -118,9 +166,15 @@ class ArtifactManifestItem(MeteorSchema):
     )
     url: str = Field(..., description="Resolved public URL for opening or downloading the artifact.")
     interactive: bool = Field(..., description="True when the artifact should be treated as interactive content.")
-    primary_action: str = Field(..., description="Primary UI action, for example open or download.")
+    primary_action: "ArtifactPrimaryAction" = Field(
+        ...,
+        description="Primary UI action.",
+    )
     downloadable: bool = Field(..., description="Whether the artifact is intended to be downloadable.")
-    visibility: str = Field(..., description="Visibility hint for the frontend.")
+    visibility: "ArtifactVisibility" = Field(
+        ...,
+        description="Visibility hint for the frontend.",
+    )
     observation_ref: Optional[str] = Field(
         default=None,
         description="Observation key when the artifact belongs to a specific observation. Null means the artifact belongs to the event level rather than one observation package.",
@@ -206,6 +260,10 @@ class MeteorObservation(MeteorSchema):
         description="Observation-level artifact manifest.",
     )
     preview: ObservationPreview
+    has_ams_coords: bool = Field(
+        False,
+        description="True when this observation includes AMS trail coordinates in addition to the standard trail coordinate series.",
+    )
 
 
 class MeteorEventHeader(MeteorSchema):
@@ -291,6 +349,29 @@ class AtmosphericStationPoint(MeteorSchema):
     )
 
 
+class AtmosphericGeometryPoint(MeteorSchema):
+    step_index: int = Field(
+        ...,
+        description="Zero-based sample index along the atmospheric path.",
+    )
+    fraction: float = Field(
+        ...,
+        description="Relative path position from 0 at the solved start point to 1 at the solved end point.",
+    )
+    lat: float = Field(
+        ...,
+        description="Sampled atmospheric latitude.",
+    )
+    lng: float = Field(
+        ...,
+        description="Sampled atmospheric longitude.",
+    )
+    height_km: float = Field(
+        ...,
+        description="Sampled atmospheric height in km.",
+    )
+
+
 class MeteorEventClassification(MeteorSchema):
     final_classification: str = Field(
         ...,
@@ -340,9 +421,13 @@ class AtmosphericPath(MeteorSchema):
         default=None,
         description="Solved speed in km/s. Null means the source file did not provide a value.",
     )
-    geometry_points: Optional[List[Dict[str, Any]]] = Field(
+    speed_source: Optional[str] = Field(
         default=None,
-        description="Reserved for explicit sampled path geometry for dynamic 3D or map rendering. Null means this backend does not yet expose sampled path points.",
+        description="Raw source label for the solved speed, for example `average` when the stat file does not claim an entry-speed solution.",
+    )
+    geometry_points: Optional[List[AtmosphericGeometryPoint]] = Field(
+        default=None,
+        description="Sampled atmospheric path geometry for dynamic rendering. Null means the backend could not derive a solved start or end line to sample from current event data.",
     )
     station_points: List[AtmosphericStationPoint] = Field(
         ...,
@@ -363,36 +448,40 @@ class RadiantPayload(MeteorSchema):
         default=None,
         description="Meteor shower assignment. Null means no shower is assigned.",
     )
+    zenith_attractor: Optional[str] = Field(
+        default=None,
+        description="Raw radiant correction state from the stat file, for example `uncorrected` when the solved radiant still needs zenith-attraction handling.",
+    )
 
 
 class OrbitPayload(MeteorSchema):
     perihelion_distance_au: Optional[float] = Field(
         default=None,
-        description="Null means the backend does not yet ingest or expose this orbital element.",
+        description="Calculated perihelion distance in AU. Cross-station events first try an observation-driven solve from trail timestamps and coordinates, including AMS coordinates when present. Runtime keeps that solve only when the trail fit stays stable and close to the stat-based fallback; otherwise it falls back to the older stat solve. Null means the backend could not derive an orbit from current event data.",
     )
     eccentricity: Optional[float] = Field(
         default=None,
-        description="Null means the backend does not yet ingest or expose this orbital element.",
+        description="Calculated eccentricity from the same orbit solve path as `perihelion_distance_au`. Null means the backend could not derive an orbit from current event data.",
     )
     inclination_deg: Optional[float] = Field(
         default=None,
-        description="Null means the backend does not yet ingest or expose this orbital element.",
+        description="Calculated inclination in degrees from the same orbit solve path as `perihelion_distance_au`. Null means the backend could not derive an orbit from current event data.",
     )
     ascending_node_deg: Optional[float] = Field(
         default=None,
-        description="Null means the backend does not yet ingest or expose this orbital element.",
+        description="Calculated ascending node in degrees from the same orbit solve path as `perihelion_distance_au`. Null means the backend could not derive an orbit from current event data.",
     )
     argument_of_perihelion_deg: Optional[float] = Field(
         default=None,
-        description="Null means the backend does not yet ingest or expose this orbital element.",
+        description="Calculated argument of perihelion in degrees from the same orbit solve path as `perihelion_distance_au`. Null means the backend could not derive an orbit from current event data.",
     )
     mean_anomaly_deg: Optional[float] = Field(
         default=None,
-        description="Null means the backend does not yet ingest or expose this orbital element.",
+        description="Calculated mean anomaly in degrees from the same orbit solve path as `perihelion_distance_au`. Elliptic solutions are reported in the standard `0..360` range; hyperbolic solutions keep the direct solved value. Observation-driven solves are kept only when the fitted trail geometry and anomaly stay close to the fallback solve. Null means the backend could not derive an orbit from current event data.",
     )
     epoch: Optional[str] = Field(
         default=None,
-        description="Null means the backend does not yet ingest or expose a machine-readable orbital epoch.",
+        description="ISO-8601 timestamp used as orbital epoch when the backend derived orbit values. Observation-driven solves use the earliest fitted trail timestamp; stat-based fallback uses the stored event timestamp. Null means the backend could not derive an orbit from current event data.",
     )
 
 
@@ -465,6 +554,22 @@ class MeteorEventListResponse(MeteorSchema):
 
 
 class AdminMeteorEvent(MeteorEvent):
+    datetimetag: str = Field(
+        ...,
+        description="Event date and time tag in `YYYYMMDDHHMMSS` form.",
+    )
+    date: Optional[str] = Field(
+        default=None,
+        description="Event timestamp in ISO form when available.",
+    )
+    camera_confirmed: int = Field(
+        ...,
+        description="Top-level admin compatibility value for cross-station status. Current runtime uses 1 for yes and 0 for no.",
+    )
+    user_confirmed: int = Field(
+        ...,
+        description="Top-level admin compatibility value for moderation status. Current runtime uses 1 for meteor, 0 for not meteor, and -1 for unclear.",
+    )
     ratings: int = Field(
         ...,
         description="Total number of stored user reviews for this event.",
@@ -540,6 +645,14 @@ class MeteorTrailPoint(MeteorSchema):
     event_timestamp: Optional[float] = Field(default=None, description="Event timestamp when available.")
     coord_long: Optional[float] = Field(default=None, description="Solved longitude when available.")
     coord_lat: Optional[float] = Field(default=None, description="Solved latitude when available.")
+    ams_coord_long: Optional[float] = Field(
+        default=None,
+        description="AMS trail longitude when that alternative coordinate series exists for this frame.",
+    )
+    ams_coord_lat: Optional[float] = Field(
+        default=None,
+        description="AMS trail latitude when that alternative coordinate series exists for this frame.",
+    )
     gnomonic_x: Optional[float] = Field(
         default=None,
         description="Frame-aligned gnomonic x value when available from the raw trail series.",
@@ -570,6 +683,10 @@ class MeteorObservationTrailResponse(MeteorSchema):
     totalItems: int
     limit: int
     offset: int
+    has_ams_coords: bool = Field(
+        False,
+        description="True when the stored observation contains AMS trail coordinates for at least one frame.",
+    )
     trailPoints: List[MeteorTrailPoint] = Field(
         ...,
         description="Frame-aligned trail points normalised from the raw trail series in one observation event.txt file.",
@@ -681,6 +798,87 @@ class ExploreResponse(MeteorSchema):
         ...,
         description="Filtered Utforsk event cards.",
     )
+
+
+class InsightFilterRequest(MeteorSchema):
+    from_date: Optional[str] = Field(
+        default=None,
+        description="Inclusive start date in `YYYY-MM-DD` form.",
+    )
+    to_date: Optional[str] = Field(
+        default=None,
+        description="Inclusive end date in `YYYY-MM-DD` form.",
+    )
+    stations: List[str] = Field(
+        default_factory=list,
+        description="Selected station names for the report filter.",
+    )
+    cross_station_confirmed: Optional[bool] = Field(
+        default=None,
+        description="Optional cross-station filter. Null means no explicit filter was applied.",
+    )
+    candidate: bool = Field(
+        default=False,
+        description="Set true to keep only candidate events in the report.",
+    )
+    includeDeleted: bool = Field(
+        default=False,
+        description="Set true to include rows backed by deleted events.",
+    )
+
+
+class InsightReportRowBase(BaseModel):
+    ForsteObservasjonsTidspunkt: Optional[datetime] = Field(
+        default=None,
+        description="First observation timestamp in the report.",
+    )
+    SisteObervasjonsTidspunkt: Optional[datetime] = Field(
+        default=None,
+        description="Last observation timestamp in the report.",
+    )
+    DagerMedObservasjoner: int = Field(
+        ...,
+        description="Number of calendar days with observations in the report.",
+    )
+    DagerSidenSisteObservasjon: Optional[int] = Field(
+        default=None,
+        description="Days since the latest observation in the report.",
+    )
+    Kameraopptak: int = Field(
+        ...,
+        description="Number of camera recordings in the report.",
+    )
+    Hendelser: int = Field(..., description="Number of events in the report.")
+    Krysspeilede: int = Field(
+        ...,
+        description="Number of cross-station confirmed events in the report.",
+    )
+    Meteorittkandidater: int = Field(
+        ...,
+        description="Number of meteorite candidates in the report.",
+    )
+
+
+class InsightCamRow(InsightReportRowBase):
+    Stasjonsnavn: Optional[str] = Field(
+        default=None,
+        description="Station name for the grouped camera row.",
+    )
+    Kameranavn: Optional[str] = Field(
+        default=None,
+        description="Camera name for the grouped camera row.",
+    )
+
+
+class InsightStationRow(InsightReportRowBase):
+    Stasjonsnavn: Optional[str] = Field(
+        default=None,
+        description="Station name for the grouped station row.",
+    )
+
+
+class InsightTotalRow(InsightReportRowBase):
+    pass
 
 
 class InsightCoordinateRow(MeteorSchema):

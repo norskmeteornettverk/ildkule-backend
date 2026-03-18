@@ -3,6 +3,8 @@ from datetime import datetime
 from fastapi_app.app.models import Cam, Event, ObservationCamData, Station, User
 from fastapi_app.app.security import create_access_token
 from fastapi_app.app.services import user_service
+from fastapi_app.app.utils import orbit_solver
+from fastapi_app.app.utils.serialization import _orbit_payload
 
 
 def _observation_kwargs(key: str) -> dict:
@@ -52,7 +54,16 @@ def test_login_and_user_reads(client, db_session, monkeypatch):
 
     get_user = client.get(f"/api/users/{user.id}", headers=headers)
     assert get_user.status_code == 200
-    assert get_user.json()["id"] == user.id
+    user_payload = get_user.json()
+    assert user_payload["id"] == user.id
+    assert user_payload["identifier"] == "test@example.com"
+    assert user_payload["user_role"] == "ROLE_USER"
+    assert user_payload["roles"] == ["ROLE_USER"]
+    assert user_payload["user_level"] == "1"
+    assert user_payload["tutorial_completed"] is False
+    assert user_payload["account_confirmed"] is True
+    assert "username" not in user_payload
+    assert "confirmed" not in user_payload
 
     get_users = client.get("/api/users", headers=headers)
     assert get_users.status_code == 200
@@ -157,6 +168,8 @@ def test_event_list_search_filter_and_get(client, db_session):
     assert "candidate" in first_event
     assert "final_classification" in first_event
     assert "station_summary" in first_event
+    assert "camera_confirmed" not in first_event
+    assert "user_confirmed" not in first_event
 
     page2 = client.get("/api/events?page=2&limit=1")
     assert page2.status_code == 200
@@ -188,6 +201,16 @@ def test_event_list_search_filter_and_get(client, db_session):
     assert isinstance(get_one.json()["event_artifacts"], list)
     assert isinstance(get_one.json()["observations"], list)
     assert get_one.json()["observations"][0]["observation_ref"]["station_name"] == "larvik"
+    assert get_one.json()["analysis"]["atmospheric_path"]["geometry_points"] is None
+    assert get_one.json()["analysis"]["orbit"] == {
+        "perihelion_distance_au": None,
+        "eccentricity": None,
+        "inclination_deg": None,
+        "ascending_node_deg": None,
+        "argument_of_perihelion_deg": None,
+        "mean_anomaly_deg": None,
+        "epoch": None,
+    }
     assert "camera_confirmed" not in get_one.json()
     assert "user_confirmed" not in get_one.json()
     assert "media" not in get_one.json()
@@ -209,6 +232,7 @@ def test_event_filter_options_and_coordinate_report(client, db_session):
         track_startheight=70.0,
         track_endheight=55.0,
         track_speed=18.5,
+        track_speed_source="average",
         track_startlat=61.2,
         track_startlong=11.3,
         track_endlat=59.1,
@@ -218,6 +242,7 @@ def test_event_filter_options_and_coordinate_report(client, db_session):
         radiant_ecl_lat=4.1,
         radiant_ecl_long=200.2,
         radiant_shower="Perseids",
+        radiant_zenith_attractor="uncorrected",
     )
     db_session.add_all([station, cam, event])
     db_session.commit()
@@ -241,14 +266,232 @@ def test_event_filter_options_and_coordinate_report(client, db_session):
 
     coordinates = client.get("/api/insights/coordinates")
     assert coordinates.status_code == 200
-    assert coordinates.json()[0]["lat"] == 59.1
-    assert coordinates.json()[0]["lng"] == 10.2
-    assert coordinates.json()[0]["slat"] == 61.2
-    assert coordinates.json()[0]["slng"] == 11.3
-    assert coordinates.json()[0]["track_speed"] == 18.5
-    assert coordinates.json()[0]["radiant_shower"] == "Perseids"
-    assert coordinates.json()[0]["proper_triangulation"] is True
-    assert coordinates.json()[0]["ai_score"] == 87.5
+    coordinate_row = coordinates.json()[0]
+    assert coordinate_row["lat"] == 59.1
+    assert coordinate_row["lng"] == 10.2
+    assert coordinate_row["slat"] == 61.2
+    assert coordinate_row["slng"] == 11.3
+    assert coordinate_row["track_speed"] == 18.5
+    assert coordinate_row["radiant_shower"] == "Perseids"
+    assert coordinate_row["proper_triangulation"] is True
+    assert coordinate_row["ai_score"] == 87.5
+    assert "StationCam" not in coordinate_row
+    assert "NumberOfStations" not in coordinate_row
+
+    detail = client.get(f"/api/events/{event.id}")
+    assert detail.status_code == 200
+    analysis = detail.json()["analysis"]
+    assert analysis["atmospheric_path"]["speed_source"] == "average"
+    assert analysis["radiant"]["zenith_attractor"] == "uncorrected"
+    orbit = analysis["orbit"]
+    assert set(orbit) == {
+        "perihelion_distance_au",
+        "eccentricity",
+        "inclination_deg",
+        "ascending_node_deg",
+        "argument_of_perihelion_deg",
+        "mean_anomaly_deg",
+        "epoch",
+    }
+    assert orbit["epoch"] == "2024-01-02T03:04:05+00:00"
+    assert orbit["perihelion_distance_au"] is not None
+    assert orbit["eccentricity"] is not None
+    assert orbit["inclination_deg"] is not None
+    assert orbit["ascending_node_deg"] is not None
+    assert orbit["argument_of_perihelion_deg"] is not None
+    assert orbit["mean_anomaly_deg"] is not None
+    assert 0 <= orbit["mean_anomaly_deg"] < 360
+
+
+def test_orbit_payload_wraps_elliptic_mean_anomaly_to_0_360():
+    orbit = _orbit_payload(
+        Event(
+            track_speed=29.6,
+            track_speed_source="average",
+            radiant_ra=120.86,
+            radiant_dec=26.66,
+            radiant_ecl_long=117.45,
+            radiant_ecl_lat=6.12,
+            radiant_zenith_attractor="uncorrected",
+            date=datetime(2022, 1, 5, 23, 42, 19),
+        )
+    )
+
+    assert orbit["eccentricity"] < 1
+    assert 0 <= orbit["mean_anomaly_deg"] < 360
+
+
+def test_build_orbit_payload_falls_back_when_observation_solve_is_far_off(monkeypatch):
+    event = Event(
+        track_speed=41.3,
+        radiant_ra=230.92,
+        radiant_dec=50.30,
+        radiant_ecl_long=200.28,
+        radiant_ecl_lat=64.57,
+        date=datetime(2022, 1, 3, 18, 18, 52),
+    )
+
+    monkeypatch.setattr(
+        orbit_solver,
+        "_solve_observation_candidate",
+        lambda *_args, **_kwargs: orbit_solver._ObservationOrbitCandidate(
+            payload={
+                "perihelion_distance_au": 0.982316,
+                "eccentricity": 3.024395,
+                "inclination_deg": 37.435,
+                "ascending_node_deg": 70.872,
+                "argument_of_perihelion_deg": 42.642,
+                "mean_anomaly_deg": -393.115,
+                "epoch": "2022-01-03T18:18:52+00:00",
+            },
+            diagnostics=orbit_solver._PathFitDiagnostics(
+                track_count=2,
+                fit_point_count=8,
+                median_residual_km=0.12,
+                max_residual_km=0.31,
+            ),
+        ),
+    )
+
+    orbit = orbit_solver.build_orbit_payload(
+        event,
+        [ObservationCamData(**_observation_kwargs("guard:far"))],
+        fallback_factory=orbit_solver._legacy_stat_orbit,
+    )
+
+    assert orbit == orbit_solver._legacy_stat_orbit(event)
+
+
+def test_build_orbit_payload_keeps_observation_solve_when_it_is_close(monkeypatch):
+    event = Event(
+        track_speed=41.3,
+        radiant_ra=230.92,
+        radiant_dec=50.30,
+        radiant_ecl_long=200.28,
+        radiant_ecl_lat=64.57,
+        date=datetime(2022, 1, 3, 18, 18, 52),
+    )
+    fallback = orbit_solver._legacy_stat_orbit(event)
+    observed = {
+        **fallback,
+        "perihelion_distance_au": round(fallback["perihelion_distance_au"] + 0.001, 6),
+        "eccentricity": round(fallback["eccentricity"] + 0.02, 6),
+        "inclination_deg": round(fallback["inclination_deg"] + 0.4, 3),
+        "ascending_node_deg": round(fallback["ascending_node_deg"] + 0.5, 3),
+        "argument_of_perihelion_deg": round(fallback["argument_of_perihelion_deg"] + 0.6, 3),
+        "mean_anomaly_deg": round(fallback["mean_anomaly_deg"] + 6.0, 3),
+    }
+    monkeypatch.setattr(
+        orbit_solver,
+        "_solve_observation_candidate",
+        lambda *_args, **_kwargs: orbit_solver._ObservationOrbitCandidate(
+            payload=observed,
+            diagnostics=orbit_solver._PathFitDiagnostics(
+                track_count=2,
+                fit_point_count=12,
+                median_residual_km=0.22,
+                max_residual_km=0.55,
+            ),
+        ),
+    )
+
+    orbit = orbit_solver.build_orbit_payload(
+        event,
+        [ObservationCamData(**_observation_kwargs("guard:close"))],
+        fallback_factory=orbit_solver._legacy_stat_orbit,
+    )
+
+    assert orbit == observed
+
+
+def test_build_orbit_payload_falls_back_when_validation_metrics_are_weak(monkeypatch):
+    event = Event(
+        track_speed=41.3,
+        radiant_ra=230.92,
+        radiant_dec=50.30,
+        radiant_ecl_long=200.28,
+        radiant_ecl_lat=64.57,
+        date=datetime(2022, 1, 3, 18, 18, 52),
+    )
+    fallback = orbit_solver._legacy_stat_orbit(event)
+    observed = {
+        **fallback,
+        "perihelion_distance_au": round(fallback["perihelion_distance_au"] + 0.002, 6),
+        "eccentricity": round(fallback["eccentricity"] + 0.04, 6),
+        "inclination_deg": round(fallback["inclination_deg"] + 0.8, 3),
+        "ascending_node_deg": round(fallback["ascending_node_deg"] + 0.4, 3),
+        "argument_of_perihelion_deg": round(fallback["argument_of_perihelion_deg"] + 1.0, 3),
+        "mean_anomaly_deg": round(fallback["mean_anomaly_deg"] + 8.0, 3),
+    }
+    monkeypatch.setattr(
+        orbit_solver,
+        "_solve_observation_candidate",
+        lambda *_args, **_kwargs: orbit_solver._ObservationOrbitCandidate(
+            payload=observed,
+            diagnostics=orbit_solver._PathFitDiagnostics(
+                track_count=2,
+                fit_point_count=10,
+                median_residual_km=0.41,
+                max_residual_km=0.92,
+            ),
+        ),
+    )
+
+    orbit = orbit_solver.build_orbit_payload(
+        event,
+        [ObservationCamData(**_observation_kwargs("guard:diagnostics"))],
+        fallback_factory=orbit_solver._legacy_stat_orbit,
+    )
+
+    assert orbit == fallback
+
+
+def test_event_detail_exposes_sampled_geometry_points_when_solved_path_exists(client, db_session):
+    station = Station(station_name="alta")
+    cam = Cam(station=station, cam_name="cam7")
+    event = Event(
+        datetimetag="20240203040506",
+        location="Finnmark",
+        date=datetime(2024, 2, 3, 4, 5, 6),
+        user_confirmed=1,
+        camera_confirmed=1,
+        track_startheight=86.0,
+        track_endheight=24.0,
+        track_startlat=70.1,
+        track_startlong=24.9,
+        track_endlat=69.2,
+        track_endlong=23.4,
+    )
+    db_session.add_all([station, cam, event])
+    db_session.commit()
+    db_session.add(
+        ObservationCamData(
+            event_id=event.id,
+            cam_id=cam.id,
+            **_observation_kwargs("alta:cam7:2024-02-03T04:05:06.000"),
+        )
+    )
+    db_session.commit()
+
+    response = client.get(f"/api/events/{event.id}")
+
+    assert response.status_code == 200
+    geometry_points = response.json()["analysis"]["atmospheric_path"]["geometry_points"]
+    assert len(geometry_points) == 17
+    assert geometry_points[0] == {
+        "step_index": 0,
+        "fraction": 0.0,
+        "lat": 70.1,
+        "lng": 24.9,
+        "height_km": 86.0,
+    }
+    assert geometry_points[-1] == {
+        "step_index": 16,
+        "fraction": 1.0,
+        "lat": 69.2,
+        "lng": 23.4,
+        "height_km": 24.0,
+    }
 
 
 def test_insight_cam_and_station(client, db_session):
@@ -275,13 +518,51 @@ def test_insight_cam_and_station(client, db_session):
 
     cam_report = client.get("/api/insights/cam")
     assert cam_report.status_code == 200
-    assert isinstance(cam_report.json(), list)
-    assert "Kameranavn" in cam_report.json()[0]
+    cam_row = cam_report.json()[0]
+    assert set(cam_row) == {
+        "Stasjonsnavn",
+        "Kameranavn",
+        "ForsteObservasjonsTidspunkt",
+        "SisteObervasjonsTidspunkt",
+        "DagerMedObservasjoner",
+        "DagerSidenSisteObservasjon",
+        "Kameraopptak",
+        "Hendelser",
+        "Krysspeilede",
+        "Meteorittkandidater",
+    }
+    assert cam_row["Stasjonsnavn"] == "Sorreisa"
+    assert cam_row["Kameranavn"] == "cam2"
 
     station_report = client.get("/api/insights/station")
     assert station_report.status_code == 200
-    assert isinstance(station_report.json(), list)
-    assert "Stasjonsnavn" in station_report.json()[0]
+    station_row = station_report.json()[0]
+    assert set(station_row) == {
+        "Stasjonsnavn",
+        "ForsteObservasjonsTidspunkt",
+        "SisteObervasjonsTidspunkt",
+        "DagerMedObservasjoner",
+        "DagerSidenSisteObservasjon",
+        "Kameraopptak",
+        "Hendelser",
+        "Krysspeilede",
+        "Meteorittkandidater",
+    }
+    assert station_row["Stasjonsnavn"] == "Sorreisa"
+
+    total_report = client.get("/api/insights/total")
+    assert total_report.status_code == 200
+    total_row = total_report.json()[0]
+    assert set(total_row) == {
+        "ForsteObservasjonsTidspunkt",
+        "SisteObervasjonsTidspunkt",
+        "DagerMedObservasjoner",
+        "DagerSidenSisteObservasjon",
+        "Kameraopptak",
+        "Hendelser",
+        "Krysspeilede",
+        "Meteorittkandidater",
+    }
 
 
 def test_explore_and_csv_export(client, db_session):

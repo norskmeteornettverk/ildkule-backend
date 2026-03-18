@@ -299,6 +299,48 @@ def test_event_review_messages_and_alias_routes(client, db_session, monkeypatch)
         lambda session, report_name: (
             [
                 {
+                    "Stasjonsnavn": "Ski",
+                    "Kameranavn": "cam1",
+                    "ForsteObservasjonsTidspunkt": "2024-01-01T01:02:03",
+                    "SisteObervasjonsTidspunkt": "2024-01-01T01:02:03",
+                    "DagerMedObservasjoner": 1,
+                    "DagerSidenSisteObservasjon": 1,
+                    "Kameraopptak": 1,
+                    "Hendelser": 1,
+                    "Krysspeilede": 1,
+                    "Meteorittkandidater": 1,
+                }
+            ]
+            if report_name == "cam"
+            else [
+                {
+                    "Stasjonsnavn": "Ski",
+                    "ForsteObservasjonsTidspunkt": "2024-01-01T01:02:03",
+                    "SisteObervasjonsTidspunkt": "2024-01-01T01:02:03",
+                    "DagerMedObservasjoner": 1,
+                    "DagerSidenSisteObservasjon": 1,
+                    "Kameraopptak": 1,
+                    "Hendelser": 1,
+                    "Krysspeilede": 1,
+                    "Meteorittkandidater": 1,
+                }
+            ]
+            if report_name == "station"
+            else [
+                {
+                    "ForsteObservasjonsTidspunkt": "2024-01-01T01:02:03",
+                    "SisteObervasjonsTidspunkt": "2024-01-01T01:02:03",
+                    "DagerMedObservasjoner": 1,
+                    "DagerSidenSisteObservasjon": 1,
+                    "Kameraopptak": 1,
+                    "Hendelser": 1,
+                    "Krysspeilede": 1,
+                    "Meteorittkandidater": 1,
+                }
+            ]
+            if report_name == "total"
+            else [
+                {
                     "id": 10,
                     "datetimetag": "20240101010203",
                     "station_cam": "cam1@ski",
@@ -323,6 +365,33 @@ def test_event_review_messages_and_alias_routes(client, db_session, monkeypatch)
             if report_name == "coordinates"
             else [{"report": report_name}]
         ),
+    )
+    monkeypatch.setattr(
+        events_router.event_service,
+        "get_coordinate_insight",
+        lambda session, **kwargs: [
+            {
+                "id": 10,
+                "datetimetag": "20240101010203",
+                "station_cam": "cam1@ski",
+                "number_of_stations": 1,
+                "lat": 59.9,
+                "lng": 10.7,
+                "slat": 60.1,
+                "slng": 10.8,
+                "radiant_ra": None,
+                "radiant_dec": None,
+                "radiant_ecl_lat": None,
+                "radiant_ecl_long": None,
+                "track_speed": None,
+                "track_endheight": None,
+                "radiant_shower": None,
+                "date": None,
+                "triangulation": False,
+                "proper_triangulation": None,
+                "ai_score": None,
+            }
+        ],
     )
     monkeypatch.setattr(
         events_router.event_service,
@@ -364,7 +433,15 @@ def test_event_review_messages_and_alias_routes(client, db_session, monkeypatch)
 
     insight = client.get("/api/insights/cam")
     assert insight.status_code == 200
-    assert insight.json()[0]["report"] == "cam"
+    assert insight.json()[0]["Kameranavn"] == "cam1"
+
+    station_insight = client.get("/api/insights/station")
+    assert station_insight.status_code == 200
+    assert station_insight.json()[0]["Stasjonsnavn"] == "Ski"
+
+    total_insight = client.get("/api/insights/total")
+    assert total_insight.status_code == 200
+    assert total_insight.json()[0]["Hendelser"] == 1
 
     coordinates = client.get("/api/insights/coordinates")
     assert coordinates.status_code == 200
@@ -384,6 +461,10 @@ def test_admin_eventboard_uses_admin_response_shape(client, db_session, monkeypa
             "events": [
                 {
                     **_minimal_event(9, "admin"),
+                    "datetimetag": "20240203040506",
+                    "date": "2024-02-03T04:05:06",
+                    "camera_confirmed": 1,
+                    "user_confirmed": 1,
                     "ratings": 5,
                     "positive_ratings": 3,
                     "negative_ratings": 2,
@@ -406,6 +487,10 @@ def test_admin_eventboard_uses_admin_response_shape(client, db_session, monkeypa
     response = client.get("/api/admin/events", headers=_auth_header(admin))
     assert response.status_code == 200
     payload = response.json()
+    assert payload["events"][0]["datetimetag"] == "20240203040506"
+    assert payload["events"][0]["date"] == "2024-02-03T04:05:06"
+    assert payload["events"][0]["camera_confirmed"] == 1
+    assert payload["events"][0]["user_confirmed"] == 1
     assert payload["events"][0]["ratings"] == 5
     assert payload["events"][0]["positive_ratings"] == 3
     assert payload["events"][0]["negative_ratings"] == 2

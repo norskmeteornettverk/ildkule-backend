@@ -30,6 +30,8 @@ class ObservationTrailPoint(Base):
     event_timestamp = Column(Float, nullable=True)
     coord_long = Column(Float, nullable=True)
     coord_lat = Column(Float, nullable=True)
+    ams_coord_long = Column(Float, nullable=True)
+    ams_coord_lat = Column(Float, nullable=True)
     gnomonic_x = Column(Float, nullable=True)
     gnomonic_y = Column(Float, nullable=True)
     brightness = Column(Float, nullable=True)

@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
@@ -8,11 +8,15 @@ from ..db import get_session
 from ..models import User
 from ..schemas.event import (
     AdminMeteorEventListResponse,
+    InsightCamRow,
     EventClassificationUpdate,
     EventFilterOptionsResponse,
     ExploreResponse,
+    InsightFilterRequest,
     InsightCoordinateRow,
     InsightReportName,
+    InsightStationRow,
+    InsightTotalRow,
     EventReviewRequest,
     MeteorEvent,
     MeteorEventListResponse,
@@ -41,6 +45,30 @@ def _parse_optional_bool(value: Optional[str]) -> Optional[bool]:
     if lowered in {"0", "false", "no"}:
         return False
     raise HTTPException(status_code=400, detail=f"Invalid boolean value: {value}")
+
+
+def _legacy_probability(score: Optional[float]) -> Optional[float]:
+    if score is None:
+        return None
+    return score / 100 if score > 1 else score
+
+
+def _legacy_coordinate_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    legacy_rows: List[Dict[str, Any]] = []
+    for row in rows:
+        legacy_rows.append(
+            {
+                **row,
+                "StationCam": row.get("station_cam"),
+                "NumberOfStations": row.get("number_of_stations"),
+                "ProperTriangulation": (
+                    "1" if row.get("proper_triangulation") else "0"
+                ),
+                "SourceBadDetection": "0",
+                "MeteorScoreHighest": _legacy_probability(row.get("ai_score")),
+            }
+        )
+    return legacy_rows
 
 
 @router.get(
@@ -232,10 +260,80 @@ def admin_event_classification(
     "/insights/coordinates",
     response_model=List[InsightCoordinateRow],
     summary="Get coordinate report",
-    description="Convenience route for the solved-event coordinate report. The current runtime returns end coordinates, start coordinates, radiant values, speed, end height, triangulation flags, station count, and the highest available observation-side probability when the source data has it.",
+    description="Convenience route for the solved-event coordinate report. The current runtime returns end coordinates, start coordinates, radiant values, speed, end height, triangulation flags, station count, and the highest available observation-side probability when the source data has it. The same date, station, candidate, and cross-station filters used by Utforsk can also be applied here.",
 )
-def report_coordinates(session: Session = Depends(get_session)):
-    return event_service.get_insight(session, "coordinates")
+def report_coordinates(
+    from_date: Optional[str] = Query(
+        None,
+        description="Inclusive start date in `YYYY-MM-DD` form.",
+    ),
+    to_date: Optional[str] = Query(
+        None,
+        description="Inclusive end date in `YYYY-MM-DD` form.",
+    ),
+    stations: Optional[str] = Query(
+        None,
+        description="Comma-separated station names, for example `alta,ski`.",
+    ),
+    cross_station_confirmed: Optional[str] = Query(
+        None,
+        description="Optional boolean filter accepted as `true`, `false`, `1`, `0`, `yes`, or `no`.",
+    ),
+    candidate: bool = Query(
+        False,
+        description="Set true to keep only candidate events.",
+    ),
+    includeDeleted: bool = Query(False),
+    session: Session = Depends(get_session),
+):
+    return event_service.get_coordinate_insight(
+        session,
+        from_date=from_date,
+        to_date=to_date,
+        stations=_parse_csv(stations),
+        cross_station_confirmed=_parse_optional_bool(cross_station_confirmed),
+        candidate_only=candidate,
+        include_deleted=includeDeleted,
+    )
+
+
+@router.get(
+    "/insights/cam",
+    response_model=List[InsightCamRow],
+    summary="Get camera insight report",
+    description="Returns the camera-level observation summary with the current backend field names preserved as-is.",
+    response_description="Camera-level insight rows.",
+)
+def report_insight_cam(
+    session: Session = Depends(get_session),
+):
+    return event_service.get_insight(session, "cam")
+
+
+@router.get(
+    "/insights/station",
+    response_model=List[InsightStationRow],
+    summary="Get station insight report",
+    description="Returns the station-level observation summary with the current backend field names preserved as-is.",
+    response_description="Station-level insight rows.",
+)
+def report_insight_station(
+    session: Session = Depends(get_session),
+):
+    return event_service.get_insight(session, "station")
+
+
+@router.get(
+    "/insights/total",
+    response_model=List[InsightTotalRow],
+    summary="Get total insight report",
+    description="Returns the total observation summary as the current single-row report.",
+    response_description="Total insight row.",
+)
+def report_insight_total(
+    session: Session = Depends(get_session),
+):
+    return event_service.get_insight(session, "total")
 
 
 @router.get(
@@ -243,6 +341,7 @@ def report_coordinates(session: Session = Depends(get_session)):
     response_model=List[Dict[str, Any]],
     summary="Get aggregate report",
     description="Returns one named aggregate report. Current supported values are `cam`, `station`, `total`, and `coordinates`. The `coordinates` variant is a solved-event coordinate report with start and end geometry, radiant values, and basic quality flags rather than a generic free-form map feed.",
+    include_in_schema=False,
 )
 def insight(
     report_name: InsightReportName = Path(
@@ -252,6 +351,39 @@ def insight(
     session: Session = Depends(get_session),
 ):
     return event_service.get_insight(session, report_name.value)
+
+
+@router.get("/insight/{report_name}", include_in_schema=False)
+def legacy_insight(
+    report_name: InsightReportName,
+    session: Session = Depends(get_session),
+):
+    if report_name == InsightReportName.coordinates:
+        return _legacy_coordinate_rows(event_service.get_coordinate_insight(session))
+    return event_service.get_insight(session, report_name.value)
+
+
+@router.get("/report/coordinates", include_in_schema=False)
+def legacy_report_coordinates_get(session: Session = Depends(get_session)):
+    return _legacy_coordinate_rows(event_service.get_coordinate_insight(session))
+
+
+@router.post("/insight/coordinates", include_in_schema=False)
+def legacy_report_coordinates_post(
+    payload: Optional[InsightFilterRequest] = Body(default=None),
+    session: Session = Depends(get_session),
+):
+    filters = payload or InsightFilterRequest()
+    rows = event_service.get_coordinate_insight(
+        session,
+        from_date=filters.from_date,
+        to_date=filters.to_date,
+        stations=filters.stations or None,
+        cross_station_confirmed=filters.cross_station_confirmed,
+        candidate_only=filters.candidate,
+        include_deleted=filters.includeDeleted,
+    )
+    return _legacy_coordinate_rows(rows)
 
 
 @router.get(
@@ -352,7 +484,7 @@ def explore_export_csv(
     "/admin/events",
     response_model=AdminMeteorEventListResponse,
     summary="List events for admin board",
-    description="Admin-authenticated event-board list. This route currently reuses the same event list payload as `/api/events`, but it belongs to the protected moderation or admin board. Admin-specific counters and queue fields are not yet split into a separate response shape, so clients should treat this as the current runtime contract rather than a fully locked admin-only payload.",
+    description="Admin-authenticated event-board list for moderation and queue work. The response keeps the same rich event basis as `/api/events`, but also exposes top-level admin helper fields `datetimetag`, `date`, `camera_confirmed`, `user_confirmed`, `ratings`, `positive_ratings`, and `negative_ratings`. These helper fields belong only to `/api/admin/events`, while `classification` remains the canonical moderation object.",
     response_description="Paginated event-board list.",
 )
 def event_board(

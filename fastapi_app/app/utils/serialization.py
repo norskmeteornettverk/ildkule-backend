@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, List, Optional
@@ -19,9 +20,14 @@ from ..models import (
     User,
     UserReview,
 )
+from .orbit_solver import build_orbit_payload, solve_event_orbit
 
 
 settings = get_settings()
+_ASTRONOMICAL_UNIT_KM = 149597870.7
+_SOLAR_MU_KM_S2 = 1.32712440018e11
+_EARTH_ORBIT_SAMPLE_SECONDS = 3600
+_EARTH_OBLIQUITY_DEG = 23.439291
 
 
 def _event_path(datetimetag: str) -> str:
@@ -72,6 +78,294 @@ def _data_file_path(path: str) -> Optional[Path]:
     if not settings.data_directory:
         return None
     return Path(settings.data_directory) / path
+
+
+def _dot(left: tuple[float, float, float], right: tuple[float, float, float]) -> float:
+    return sum(a * b for a, b in zip(left, right))
+
+
+def _cross(left: tuple[float, float, float], right: tuple[float, float, float]) -> tuple[float, float, float]:
+    return (
+        (left[1] * right[2]) - (left[2] * right[1]),
+        (left[2] * right[0]) - (left[0] * right[2]),
+        (left[0] * right[1]) - (left[1] * right[0]),
+    )
+
+
+def _vector_length(vector: tuple[float, float, float]) -> float:
+    return math.sqrt(_dot(vector, vector))
+
+
+def _scale(vector: tuple[float, float, float], factor: float) -> tuple[float, float, float]:
+    return tuple(component * factor for component in vector)
+
+
+def _add(left: tuple[float, float, float], right: tuple[float, float, float]) -> tuple[float, float, float]:
+    return tuple(a + b for a, b in zip(left, right))
+
+
+def _subtract(left: tuple[float, float, float], right: tuple[float, float, float]) -> tuple[float, float, float]:
+    return tuple(a - b for a, b in zip(left, right))
+
+
+def _normalize_angle_deg(angle_deg: float) -> float:
+    normalized = angle_deg % 360.0
+    if normalized < 0:
+        normalized += 360.0
+    return normalized
+
+
+def _normalize_signed_angle_deg(angle_deg: float) -> float:
+    normalized = _normalize_angle_deg(angle_deg)
+    if normalized > 180.0:
+        normalized -= 360.0
+    return normalized
+
+
+def _julian_day(value: datetime) -> float:
+    utc_value = value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    year = utc_value.year
+    month = utc_value.month
+    day_fraction = (
+        utc_value.day
+        + (utc_value.hour / 24.0)
+        + (utc_value.minute / 1440.0)
+        + (utc_value.second / 86400.0)
+        + (utc_value.microsecond / 86400000000.0)
+    )
+
+    if month <= 2:
+        year -= 1
+        month += 12
+
+    century = year // 100
+    correction = 2 - century + (century // 4)
+
+    return (
+        math.floor(365.25 * (year + 4716))
+        + math.floor(30.6001 * (month + 1))
+        + day_fraction
+        + correction
+        - 1524.5
+    )
+
+
+def _earth_heliocentric_position_au(value: datetime) -> tuple[float, float, float]:
+    days_since_j2000 = _julian_day(value) - 2451545.0
+    mean_anomaly_deg = _normalize_angle_deg(357.52910 + (0.98560028 * days_since_j2000))
+    mean_longitude_deg = _normalize_angle_deg(280.46645 + (0.98564736 * days_since_j2000))
+    mean_anomaly = math.radians(mean_anomaly_deg)
+
+    ecliptic_longitude_deg = _normalize_angle_deg(
+        mean_longitude_deg
+        + (1.9148 * math.sin(mean_anomaly))
+        + (0.0200 * math.sin(2 * mean_anomaly))
+        + (0.0003 * math.sin(3 * mean_anomaly))
+    )
+    radius_au = (
+        1.00014
+        - (0.01671 * math.cos(mean_anomaly))
+        - (0.00014 * math.cos(2 * mean_anomaly))
+    )
+    ecliptic_longitude = math.radians(ecliptic_longitude_deg)
+
+    return (
+        -radius_au * math.cos(ecliptic_longitude),
+        -radius_au * math.sin(ecliptic_longitude),
+        0.0,
+    )
+
+
+def _earth_heliocentric_velocity_kms(value: datetime) -> tuple[float, float, float]:
+    delta = timedelta(seconds=_EARTH_ORBIT_SAMPLE_SECONDS)
+    before = _earth_heliocentric_position_au(value - delta)
+    after = _earth_heliocentric_position_au(value + delta)
+    derivative_au_per_second = _scale(
+        _subtract(after, before),
+        1.0 / (2.0 * _EARTH_ORBIT_SAMPLE_SECONDS),
+    )
+    return _scale(derivative_au_per_second, _ASTRONOMICAL_UNIT_KM)
+
+
+def _ecliptic_radiant(event: Event) -> Optional[tuple[float, float]]:
+    if event.radiant_ecl_long is not None and event.radiant_ecl_lat is not None:
+        return (event.radiant_ecl_long, event.radiant_ecl_lat)
+    if event.radiant_ra is None or event.radiant_dec is None:
+        return None
+
+    obliquity = math.radians(_EARTH_OBLIQUITY_DEG)
+    right_ascension = math.radians(event.radiant_ra)
+    declination = math.radians(event.radiant_dec)
+
+    ecliptic_longitude = math.atan2(
+        (math.sin(right_ascension) * math.cos(obliquity))
+        + (math.tan(declination) * math.sin(obliquity)),
+        math.cos(right_ascension),
+    )
+    ecliptic_latitude = math.asin(
+        (math.sin(declination) * math.cos(obliquity))
+        - (math.cos(declination) * math.sin(obliquity) * math.sin(right_ascension))
+    )
+    return (
+        _normalize_angle_deg(math.degrees(ecliptic_longitude)),
+        math.degrees(ecliptic_latitude),
+    )
+
+
+def _fallback_orbit_payload(event: Event) -> dict:
+    if event.track_speed is None or event.date is None:
+        return {
+            "perihelion_distance_au": None,
+            "eccentricity": None,
+            "inclination_deg": None,
+            "ascending_node_deg": None,
+            "argument_of_perihelion_deg": None,
+            "mean_anomaly_deg": None,
+            "epoch": None,
+        }
+
+    radiant = _ecliptic_radiant(event)
+    if radiant is None:
+        return {
+            "perihelion_distance_au": None,
+            "eccentricity": None,
+            "inclination_deg": None,
+            "ascending_node_deg": None,
+            "argument_of_perihelion_deg": None,
+            "mean_anomaly_deg": None,
+            "epoch": None,
+        }
+
+    radiant_longitude = math.radians(radiant[0])
+    radiant_latitude = math.radians(radiant[1])
+    radiant_unit = (
+        math.cos(radiant_latitude) * math.cos(radiant_longitude),
+        math.cos(radiant_latitude) * math.sin(radiant_longitude),
+        math.sin(radiant_latitude),
+    )
+
+    geocentric_velocity = _scale(radiant_unit, -float(event.track_speed))
+    heliocentric_velocity = _add(
+        _earth_heliocentric_velocity_kms(event.date),
+        geocentric_velocity,
+    )
+    position_au = _earth_heliocentric_position_au(event.date)
+    position_km = _scale(position_au, _ASTRONOMICAL_UNIT_KM)
+
+    radius_km = _vector_length(position_km)
+    speed_kms = _vector_length(heliocentric_velocity)
+    if radius_km == 0 or speed_kms == 0:
+        return {
+            "perihelion_distance_au": None,
+            "eccentricity": None,
+            "inclination_deg": None,
+            "ascending_node_deg": None,
+            "argument_of_perihelion_deg": None,
+            "mean_anomaly_deg": None,
+            "epoch": None,
+        }
+
+    angular_momentum = _cross(position_km, heliocentric_velocity)
+    angular_momentum_norm = _vector_length(angular_momentum)
+    if angular_momentum_norm == 0:
+        return {
+            "perihelion_distance_au": None,
+            "eccentricity": None,
+            "inclination_deg": None,
+            "ascending_node_deg": None,
+            "argument_of_perihelion_deg": None,
+            "mean_anomaly_deg": None,
+            "epoch": None,
+        }
+
+    eccentricity_vector = _subtract(
+        _scale(_cross(heliocentric_velocity, angular_momentum), 1.0 / _SOLAR_MU_KM_S2),
+        _scale(position_km, 1.0 / radius_km),
+    )
+    eccentricity = _vector_length(eccentricity_vector)
+    node_vector = _cross((0.0, 0.0, 1.0), angular_momentum)
+    node_norm = _vector_length(node_vector)
+
+    inclination_deg = math.degrees(
+        math.acos(max(-1.0, min(1.0, angular_momentum[2] / angular_momentum_norm)))
+    )
+    ascending_node_deg = (
+        _normalize_angle_deg(math.degrees(math.atan2(node_vector[1], node_vector[0])))
+        if node_norm > 0
+        else 0.0
+    )
+
+    if node_norm > 0 and eccentricity > 1e-9:
+        argument_of_perihelion_deg = _normalize_angle_deg(
+            math.degrees(
+                math.atan2(
+                    _dot(_cross(node_vector, eccentricity_vector), angular_momentum)
+                    / (node_norm * angular_momentum_norm),
+                    _dot(node_vector, eccentricity_vector) / node_norm,
+                )
+            )
+        )
+    else:
+        argument_of_perihelion_deg = 0.0
+
+    specific_energy = (speed_kms * speed_kms / 2.0) - (_SOLAR_MU_KM_S2 / radius_km)
+    if abs(1.0 - eccentricity) < 1e-6 or specific_energy == 0:
+        return {
+            "perihelion_distance_au": round((angular_momentum_norm**2 / _SOLAR_MU_KM_S2) / (1.0 + eccentricity) / _ASTRONOMICAL_UNIT_KM, 6),
+            "eccentricity": round(eccentricity, 6),
+            "inclination_deg": round(inclination_deg, 3),
+            "ascending_node_deg": round(ascending_node_deg, 3),
+            "argument_of_perihelion_deg": round(argument_of_perihelion_deg, 3),
+            "mean_anomaly_deg": None,
+            "epoch": event.date.replace(tzinfo=timezone.utc).isoformat() if event.date.tzinfo is None else event.date.astimezone(timezone.utc).isoformat(),
+        }
+
+    perihelion_distance_au = (
+        (angular_momentum_norm * angular_momentum_norm) / _SOLAR_MU_KM_S2 / (1.0 + eccentricity)
+    ) / _ASTRONOMICAL_UNIT_KM
+
+    true_anomaly = math.atan2(
+        _dot(_cross(eccentricity_vector, position_km), angular_momentum)
+        / (angular_momentum_norm * max(eccentricity, 1e-9)),
+        _dot(eccentricity_vector, position_km) / (max(eccentricity, 1e-9) * radius_km),
+    )
+
+    mean_anomaly_deg = None
+    if eccentricity < 1.0:
+        eccentric_anomaly = 2.0 * math.atan2(
+            math.sqrt(1.0 - eccentricity) * math.sin(true_anomaly / 2.0),
+            math.sqrt(1.0 + eccentricity) * math.cos(true_anomaly / 2.0),
+        )
+        mean_anomaly_deg = _normalize_angle_deg(
+            math.degrees(eccentric_anomaly - (eccentricity * math.sin(eccentric_anomaly)))
+        )
+    elif eccentricity > 1.0:
+        hyperbolic_factor = math.sqrt((eccentricity - 1.0) / (eccentricity + 1.0))
+        hyperbolic_argument = hyperbolic_factor * math.tan(true_anomaly / 2.0)
+        hyperbolic_argument = max(-0.999999, min(0.999999, hyperbolic_argument))
+        hyperbolic_anomaly = 2.0 * math.atanh(hyperbolic_argument)
+        mean_anomaly_deg = math.degrees(
+            (eccentricity * math.sinh(hyperbolic_anomaly)) - hyperbolic_anomaly
+        )
+
+    epoch_value = event.date.astimezone(timezone.utc) if event.date.tzinfo else event.date.replace(tzinfo=timezone.utc)
+
+    return {
+        "perihelion_distance_au": round(perihelion_distance_au, 6),
+        "eccentricity": round(eccentricity, 6),
+        "inclination_deg": round(inclination_deg, 3),
+        "ascending_node_deg": round(ascending_node_deg, 3),
+        "argument_of_perihelion_deg": round(argument_of_perihelion_deg, 3),
+        "mean_anomaly_deg": round(mean_anomaly_deg, 3) if mean_anomaly_deg is not None else None,
+        "epoch": epoch_value.isoformat(),
+    }
+
+
+def _orbit_payload(
+    event: Event,
+    observations: Optional[Iterable[ObservationCamData]] = None,
+) -> dict:
+    return build_orbit_payload(event, observations or [], fallback_factory=solve_event_orbit)
 
 
 def _artifact(
@@ -470,6 +764,32 @@ def _analysis_payload(event: Event, observations: List[ObservationCamData], even
             }
         )
 
+    geometry_points = None
+    if (
+        event.track_startlat is not None
+        and event.track_startlong is not None
+        and event.track_startheight is not None
+        and event.track_endlat is not None
+        and event.track_endlong is not None
+        and event.track_endheight is not None
+    ):
+        sample_steps = 16
+        geometry_points = []
+        for step_index in range(sample_steps + 1):
+            fraction = step_index / sample_steps
+            geometry_points.append(
+                {
+                    "step_index": step_index,
+                    "fraction": fraction,
+                    "lat": event.track_startlat
+                    + ((event.track_endlat - event.track_startlat) * fraction),
+                    "lng": event.track_startlong
+                    + ((event.track_endlong - event.track_startlong) * fraction),
+                    "height_km": event.track_startheight
+                    + ((event.track_endheight - event.track_startheight) * fraction),
+                }
+            )
+
     return {
         "atmospheric_path": {
             "start_height_km": event.track_startheight,
@@ -481,23 +801,17 @@ def _analysis_payload(event: Event, observations: List[ObservationCamData], even
             "course_deg": event.track_course,
             "incidence_deg": event.track_incidence,
             "speed_kms": event.track_speed,
-            "geometry_points": None,
+            "speed_source": event.track_speed_source,
+            "geometry_points": geometry_points,
             "station_points": station_points,
         },
         "radiant": {
             "ra": event.radiant_ra,
             "dec": event.radiant_dec,
             "shower": event.radiant_shower,
+            "zenith_attractor": event.radiant_zenith_attractor,
         },
-        "orbit": {
-            "perihelion_distance_au": None,
-            "eccentricity": None,
-            "inclination_deg": None,
-            "ascending_node_deg": None,
-            "argument_of_perihelion_deg": None,
-            "mean_anomaly_deg": None,
-            "epoch": None,
-        },
+        "orbit": _orbit_payload(event, observations),
         "artifacts": event_artifacts,
     }
 
@@ -589,6 +903,7 @@ def serialize_observation(record: ObservationCamData) -> dict:
     trail_points_state = inspect(record).attrs.trail_points.loaded_value
     if trail_points_state is not NO_VALUE:
         payload["trail_point_count"] = len(trail_points_state or [])
+    payload["has_ams_coords"] = bool(getattr(record, "trail_ams_coords", None))
     if record.cam:
         payload["cam"] = serialize_cam(record.cam)
     media = _observation_media(record)

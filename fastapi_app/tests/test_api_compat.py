@@ -56,6 +56,107 @@ def test_event_review_accepts_legacy_and_modern_payload(client, db_session):
     assert mismatch.status_code == 400
 
 
+def test_insight_reports_use_current_norwegian_wire_keys(client, db_session):
+    station = Station(station_name="sorreisa")
+    cam = Cam(station=station, cam_name="cam2")
+    event = Event(
+        datetimetag="20211102010101",
+        date=datetime(2021, 11, 2, 1, 1, 1),
+        user_confirmed=1,
+        camera_confirmed=1,
+        track_startheight=60.0,
+        track_endheight=20.0,
+        track_speed=22.0,
+        track_endlat=61.1,
+        track_endlong=10.2,
+        track_startlat=62.2,
+        track_startlong=11.3,
+        radiant_ra=13.5,
+        radiant_dec=-1.2,
+        radiant_ecl_lat=4.5,
+        radiant_ecl_long=44.4,
+    )
+    db_session.add_all([station, cam, event])
+    db_session.commit()
+    db_session.add(
+        ObservationCamData(
+            event_id=event.id,
+            cam_id=cam.id,
+            trail_frames=10,
+            summary_meteor_probability=87.5,
+            **_observation_kwargs("sorreisa:cam2:2021-11-02T01:01:01.000"),
+        )
+    )
+    db_session.commit()
+
+    cam_report = client.get("/api/insights/cam")
+    assert cam_report.status_code == 200
+    cam_row = cam_report.json()[0]
+    assert set(cam_row) == {
+        "Stasjonsnavn",
+        "Kameranavn",
+        "ForsteObservasjonsTidspunkt",
+        "SisteObervasjonsTidspunkt",
+        "DagerMedObservasjoner",
+        "DagerSidenSisteObservasjon",
+        "Kameraopptak",
+        "Hendelser",
+        "Krysspeilede",
+        "Meteorittkandidater",
+    }
+    assert cam_row["Stasjonsnavn"] == "Sorreisa"
+    assert cam_row["Kameranavn"] == "cam2"
+    assert cam_row["Hendelser"] == 1
+    assert cam_row["Krysspeilede"] == 1
+    assert cam_row["Meteorittkandidater"] == 1
+
+    station_report = client.get("/api/insights/station")
+    assert station_report.status_code == 200
+    station_row = station_report.json()[0]
+    assert set(station_row) == {
+        "Stasjonsnavn",
+        "ForsteObservasjonsTidspunkt",
+        "SisteObervasjonsTidspunkt",
+        "DagerMedObservasjoner",
+        "DagerSidenSisteObservasjon",
+        "Kameraopptak",
+        "Hendelser",
+        "Krysspeilede",
+        "Meteorittkandidater",
+    }
+    assert station_row["Stasjonsnavn"] == "Sorreisa"
+    assert station_row["Hendelser"] == 1
+
+    total_report = client.get("/api/insights/total")
+    assert total_report.status_code == 200
+    total_rows = total_report.json()
+    assert len(total_rows) == 1
+    total_row = total_rows[0]
+    assert set(total_row) == {
+        "ForsteObservasjonsTidspunkt",
+        "SisteObervasjonsTidspunkt",
+        "DagerMedObservasjoner",
+        "DagerSidenSisteObservasjon",
+        "Kameraopptak",
+        "Hendelser",
+        "Krysspeilede",
+        "Meteorittkandidater",
+    }
+    assert total_row["Hendelser"] == 1
+    assert total_row["Krysspeilede"] == 1
+
+    coordinates = client.get("/api/insights/coordinates")
+    assert coordinates.status_code == 200
+    coordinate_row = coordinates.json()[0]
+    assert "station_cam" in coordinate_row
+    assert "number_of_stations" in coordinate_row
+    assert "StationCam" not in coordinate_row
+    assert "NumberOfStations" not in coordinate_row
+    assert coordinate_row["station_cam"] == "cam2@sorreisa"
+    assert coordinate_row["number_of_stations"] == 1
+    assert coordinate_row["ai_score"] == 87.5
+
+
 def test_eventboard_accepts_pagination_params(client, db_session):
     admin = User(
         username="admin@example.com",
@@ -132,6 +233,10 @@ def test_eventboard_returns_admin_fields_and_public_card_fields(client, db_sessi
 
     assert response.status_code == 200
     item = response.json()["events"][0]
+    assert item["datetimetag"] == "20240203040506"
+    assert item["date"] == "2024-02-03T04:05:06"
+    assert item["camera_confirmed"] == 1
+    assert item["user_confirmed"] == 1
     assert "preview" in item
     assert "times" in item
     assert "cross_station_confirmed" in item
@@ -141,6 +246,102 @@ def test_eventboard_returns_admin_fields_and_public_card_fields(client, db_sessi
     assert item["negative_ratings"] == 1
     assert item["classification"]["final_classification"] == "Meteor"
     assert item["classification"]["user_confirmed"] == 1
+
+
+def test_coordinates_report_supports_filters_and_legacy_aliases(client, db_session):
+    station_a = Station(station_name="alta")
+    station_b = Station(station_name="larvik")
+    cam_a = Cam(station=station_a, cam_name="cam9")
+    cam_b = Cam(station=station_b, cam_name="cam2")
+    matching = Event(
+        datetimetag="20240102030405",
+        location="Finnmark",
+        date=datetime(2024, 1, 2, 3, 4, 5),
+        camera_confirmed=1,
+        track_startlat=70.4,
+        track_startlong=24.2,
+        track_startheight=90.0,
+        track_endlat=69.9,
+        track_endlong=23.3,
+        track_endheight=22.0,
+        track_speed=20.0,
+        radiant_ra=12.3,
+        radiant_dec=-1.2,
+        radiant_ecl_lat=4.5,
+        radiant_ecl_long=44.4,
+    )
+    non_matching = Event(
+        datetimetag="20240302030405",
+        location="Vestfold",
+        date=datetime(2024, 3, 2, 3, 4, 5),
+        camera_confirmed=0,
+        track_startlat=60.4,
+        track_startlong=10.2,
+        track_startheight=80.0,
+        track_endlat=59.9,
+        track_endlong=10.3,
+        track_endheight=55.0,
+        track_speed=28.0,
+        radiant_ra=10.0,
+        radiant_dec=-5.0,
+        radiant_ecl_lat=2.0,
+        radiant_ecl_long=20.0,
+    )
+    db_session.add_all([station_a, station_b, cam_a, cam_b, matching, non_matching])
+    db_session.commit()
+    db_session.add_all(
+        [
+            ObservationCamData(
+                event_id=matching.id,
+                cam_id=cam_a.id,
+                summary_meteor_probability=73.2,
+                **_observation_kwargs("alta:cam9:2024-01-02T03:04:05.000"),
+            ),
+            ObservationCamData(
+                event_id=non_matching.id,
+                cam_id=cam_b.id,
+                summary_meteor_probability=12.0,
+                **_observation_kwargs("larvik:cam2:2024-03-02T03:04:05.000"),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    filtered = client.get(
+        "/api/insights/coordinates",
+        params={
+            "from_date": "2024-01-01",
+            "to_date": "2024-01-31",
+            "stations": "alta",
+            "cross_station_confirmed": "true",
+            "candidate": "true",
+        },
+    )
+    assert filtered.status_code == 200
+    payload = filtered.json()
+    assert [row["id"] for row in payload] == [matching.id]
+
+    legacy = client.post(
+        "/api/insight/coordinates",
+        json={
+            "from_date": "2024-01-01",
+            "to_date": "2024-01-31",
+            "stations": ["alta"],
+            "cross_station_confirmed": True,
+            "candidate": True,
+        },
+    )
+    assert legacy.status_code == 200
+    legacy_row = legacy.json()[0]
+    assert legacy_row["StationCam"] == "cam9@alta"
+    assert legacy_row["NumberOfStations"] == 1
+    assert legacy_row["ProperTriangulation"] == "1"
+    assert legacy_row["SourceBadDetection"] == "0"
+    assert round(legacy_row["MeteorScoreHighest"], 3) == 0.732
+
+    report_alias = client.get("/api/report/coordinates")
+    assert report_alias.status_code == 200
+    assert "StationCam" in report_alias.json()[0]
 
 
 def test_forms_recaptcha_failure_has_legacy_message_shape(client, monkeypatch):

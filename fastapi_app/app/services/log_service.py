@@ -48,6 +48,19 @@ class LogService:
         for station in stations:
             camera_rows = []
             station_last_seen = latest_station_logs.get(station.station_name)
+            station_coordinate = session.scalars(
+                select(ObservationCamData)
+                .join(ObservationCamData.cam)
+                .where(Cam.station_id == station.id)
+                .where(ObservationCamData.summary_latitude.isnot(None))
+                .where(ObservationCamData.summary_longitude.isnot(None))
+                .order_by(
+                    ObservationCamData.event_start_utc.desc().nullslast(),
+                    ObservationCamData.created.desc().nullslast(),
+                    ObservationCamData.id.desc(),
+                )
+                .limit(1)
+            ).first()
             for cam in sorted(station.cams, key=lambda item: item.cam_name):
                 observation = session.scalars(
                     select(ObservationCamData)
@@ -97,6 +110,12 @@ class LogService:
                 {
                     "station_name": station.station_name,
                     "last_seen": station_last_seen,
+                    "latitude": (
+                        station_coordinate.summary_latitude if station_coordinate else None
+                    ),
+                    "longitude": (
+                        station_coordinate.summary_longitude if station_coordinate else None
+                    ),
                     "connected": station_connected,
                     "camera_count": len(camera_rows),
                     "cameras": camera_rows,

@@ -50,6 +50,7 @@ class ObservationCamData(Base):
     trail_positions = Column(Text)
     trail_timestamps = Column(Text)
     trail_coordinates = Column(Text)
+    trail_ams_coords = Column(Text)
     trail_gnomonic = Column(Text)
     trail_midpoint = Column(String(1000))
     trail_arc = Column(Float)

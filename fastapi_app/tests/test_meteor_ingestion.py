@@ -45,6 +45,7 @@ def sample_data_dir(tmp_path_factory):
                 "positions=10,20 11,21 12,22",
                 "timestamps=1715471644.000 1715471644.040 1715471644.080",
                 "coordinates=60.1,10.2 60.2,10.3 60.3,10.4",
+                "ams_coords=60.11,10.21 60.21,10.31 60.31,10.41",
                 "gnomonic=1.1,2.1 1.2,2.2 1.3,2.3",
                 "brightness=5 6 7",
                 "dct=8 9 10",
@@ -80,6 +81,9 @@ def test_file_mapper_reads_event(sample_data_dir):
     assert observation.values["trail_frames"] == "3"
     assert observation.observation_key == "stationalpha:cam01:2024-05-12T23:54:04.000"
     assert len(observation.trail_points) == 3
+    assert observation.values["trail_ams_coords"] == "60.11,10.21 60.21,10.31 60.31,10.41"
+    assert observation.trail_points[0].ams_coord_long == 60.11
+    assert observation.trail_points[0].ams_coord_lat == 10.21
 
     thumb = Path(sample_data_dir) / "20230101" / "010101" / "thumbnail.jpg"
     assert thumb.exists(), "Thumbnail should be generated for each event"
@@ -155,6 +159,64 @@ def test_file_mapper_reads_realistic_non_crossbearing_sample(tmp_path_factory):
     assert first.values["config_log_file"] == "/event/cam2/metdetect.log"
     assert first.values["config_brightness"] == "6"
     assert first.values["summary_duration"] == "1.97"
+
+
+def test_file_mapper_reads_mixed_ams_coordinates_without_breaking_non_ams_observations(tmp_path_factory):
+    base = tmp_path_factory.mktemp("event_data_mixed_ams")
+    event_dir = base / "20240512" / "235404"
+    ams_cam_dir = event_dir / "StationAlpha" / "Cam01"
+    plain_cam_dir = event_dir / "StationAlpha" / "Cam02"
+    ams_cam_dir.mkdir(parents=True, exist_ok=True)
+    plain_cam_dir.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (800, 600), "white").save(event_dir / "image.jpg")
+    ams_payload = "\n".join(
+        [
+            "[trail]",
+            "frames=3",
+            "positions=10,20 11,21 12,22",
+            "timestamps=1715558044.000 1715558044.040 1715558044.080",
+            "coordinates=60.1,10.2 60.2,10.3 60.3,10.4",
+            "ams_coords=60.11,10.21 60.21,10.31 60.31,10.41",
+            "[video]",
+            "start=2024-05-12 23:54:04.000 UTC",
+            "[summary]",
+            "latitude=60.1",
+            "longitude=10.2",
+        ]
+    )
+    plain_payload = "\n".join(
+        [
+            "[trail]",
+            "frames=3",
+            "positions=20,30 21,31 22,32",
+            "timestamps=1715558044.000 1715558044.040 1715558044.080",
+            "coordinates=61.1,11.2 61.2,11.3 61.3,11.4",
+            "[video]",
+            "start=2024-05-12 23:54:04.000 UTC",
+            "[summary]",
+            "latitude=61.1",
+            "longitude=11.2",
+        ]
+    )
+    (ams_cam_dir / "event.txt").write_text(ams_payload, encoding="utf-8")
+    (plain_cam_dir / "event.txt").write_text(plain_payload, encoding="utf-8")
+
+    mapper = FileToObjectMapper(base, "20240512", "20240513")
+    records = mapper.map()
+    assert len(records) == 1
+
+    observations = {observation.cam_name: observation for observation in records[0].observations}
+    assert set(observations) == {"Cam01", "Cam02"}
+
+    ams_observation = observations["Cam01"]
+    plain_observation = observations["Cam02"]
+    assert ams_observation.values["trail_ams_coords"] == "60.11,10.21 60.21,10.31 60.31,10.41"
+    assert plain_observation.values.get("trail_ams_coords") is None
+    assert ams_observation.trail_points[0].ams_coord_long == 60.11
+    assert ams_observation.trail_points[0].ams_coord_lat == 10.21
+    assert plain_observation.trail_points[0].ams_coord_long is None
+    assert plain_observation.trail_points[0].ams_coord_lat is None
 
 
 def test_file_mapper_reads_realistic_crossbearing_sample(tmp_path_factory):
@@ -368,6 +430,9 @@ def test_eventload_endpoint_ingests_data(client, db_session, sample_data_dir):
     assert res_entries[0].entry_type == "start"
     assert len(trail_points) == 3
     assert trail_points[0].pixel_x == 10.0
+    assert observation.trail_ams_coords == "60.11,10.21 60.21,10.31 60.31,10.41"
+    assert trail_points[0].ams_coord_long == 60.11
+    assert trail_points[0].ams_coord_lat == 10.21
 
     res_response = client.get(f"/api/events/{event.id}/res?limit=10&offset=0")
     assert res_response.status_code == 200
@@ -379,7 +444,10 @@ def test_eventload_endpoint_ingests_data(client, db_session, sample_data_dir):
     )
     assert trail_response.status_code == 200
     assert trail_response.json()["totalItems"] == 3
+    assert trail_response.json()["has_ams_coords"] is True
     assert trail_response.json()["trailPoints"][0]["frame_index"] == 0
+    assert trail_response.json()["trailPoints"][0]["ams_coord_long"] == 60.11
+    assert trail_response.json()["trailPoints"][0]["ams_coord_lat"] == 10.21
 
 
 def test_eventload_reloads_same_observation_without_duplicates(client, db_session, tmp_path_factory):

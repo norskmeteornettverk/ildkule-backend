@@ -1,8 +1,10 @@
+from datetime import datetime
+
 from PIL import Image
 from sqlalchemy import func, select
 
 from fastapi_app.app.config import get_settings
-from fastapi_app.app.models import Event, EventResEntry, ObservationCamData, ObservationTrailPoint
+from fastapi_app.app.models import Cam, Event, EventResEntry, ObservationCamData, ObservationTrailPoint, Station
 
 
 def _write_event_txt(path, *, include_trail: bool = True, include_summary: bool = True) -> None:
@@ -173,3 +175,79 @@ def test_reimport_clears_missing_observation_source_fields(client, db_session, t
     assert trail_response.status_code == 200
     assert trail_response.json()["totalItems"] == 0
     assert trail_response.json()["trailPoints"] == []
+
+
+def test_event_detail_and_trail_response_expose_ams_coordinates(client, db_session):
+    station = Station(station_name="sorreisa")
+    cam = Cam(station=station, cam_name="cam2")
+    event = Event(
+        datetimetag="20240512235404",
+        date=datetime(2024, 5, 12, 23, 54, 4),
+        user_confirmed=1,
+        camera_confirmed=1,
+        track_startheight=80.0,
+        track_endheight=45.0,
+        track_speed=21.5,
+        track_speed_source="average",
+        radiant_ra=13.5,
+        radiant_dec=-1.2,
+        radiant_ecl_lat=4.5,
+        radiant_ecl_long=44.4,
+        radiant_zenith_attractor="uncorrected",
+    )
+    db_session.add_all([station, cam, event])
+    db_session.commit()
+
+    observation = ObservationCamData(
+        event_id=event.id,
+        cam_id=cam.id,
+        trail_frames=2,
+        trail_ams_coords="60.11,10.21 60.21,10.31",
+        trail_positions="10,20 11,21",
+        trail_timestamps="1715558044.000 1715558044.040",
+        trail_coordinates="60.1,10.2 60.2,10.3",
+        observation_key="sorreisa:cam2:2024-05-12T23:54:04.000",
+        source_hash="hash-sorreisa:cam2:2024-05-12T23:54:04.000",
+    )
+    db_session.add(observation)
+    db_session.commit()
+    db_session.add_all(
+        [
+            ObservationTrailPoint(
+                observation_id=observation.id,
+                frame_index=0,
+                pixel_x=10.0,
+                pixel_y=20.0,
+                event_timestamp=1715558044.0,
+                coord_long=60.1,
+                coord_lat=10.2,
+                ams_coord_long=60.11,
+                ams_coord_lat=10.21,
+            ),
+            ObservationTrailPoint(
+                observation_id=observation.id,
+                frame_index=1,
+                pixel_x=11.0,
+                pixel_y=21.0,
+                event_timestamp=1715558044.04,
+                coord_long=60.2,
+                coord_lat=10.3,
+                ams_coord_long=60.21,
+                ams_coord_lat=10.31,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    event_response = client.get(f"/api/events/{event.id}")
+    assert event_response.status_code == 200
+    observation_payload = event_response.json()["observations"][0]
+    assert observation_payload["trail_point_count"] == 2
+
+    trail_response = client.get(f"/api/observations/{observation.id}/trail?limit=10&offset=0")
+    assert trail_response.status_code == 200
+    assert trail_response.json()["totalItems"] == 2
+    assert trail_response.json()["has_ams_coords"] is True
+    first_point = trail_response.json()["trailPoints"][0]
+    assert first_point["ams_coord_long"] == 60.11
+    assert first_point["ams_coord_lat"] == 10.21

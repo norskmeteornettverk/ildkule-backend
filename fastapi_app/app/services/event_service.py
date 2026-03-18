@@ -118,6 +118,54 @@ class EventService:
             ObservationCamData.cam
         ).selectinload(Cam.station)
 
+    def _filtered_events_stmt(
+        self,
+        include_deleted: bool = False,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        stations: Optional[List[str]] = None,
+        cross_station_confirmed: Optional[bool] = None,
+        candidate_only: bool = False,
+        require_coordinates: bool = False,
+    ):
+        stmt = (
+            select(Event)
+            .options(self._event_list_load_options())
+            .where(self._base_filter(include_deleted))
+        )
+        if require_coordinates:
+            stmt = stmt.where(
+                Event.track_endlat.isnot(None),
+                Event.track_endlong.isnot(None),
+            )
+        if from_date:
+            stmt = stmt.where(Event.date >= self._parse_iso_date(from_date))
+        if to_date:
+            stmt = stmt.where(
+                Event.date <= self._parse_iso_date(to_date, inclusive_end=True)
+            )
+        if stations:
+            stmt = (
+                stmt.join(ObservationCamData, Event.id == ObservationCamData.event_id)
+                .join(Cam, ObservationCamData.cam_id == Cam.id)
+                .join(Station, Cam.station_id == Station.id)
+                .where(Station.station_name.in_(stations))
+            )
+        if cross_station_confirmed is not None:
+            stmt = stmt.where(
+                Event.camera_confirmed == (1 if cross_station_confirmed else 0)
+            )
+        if candidate_only:
+            stmt = stmt.where(
+                Event.track_endheight.isnot(None),
+                Event.track_endheight <= settings.candidate_max_end_height_km,
+                or_(
+                    Event.track_speed.is_(None),
+                    Event.track_speed <= settings.candidate_max_speed_kms,
+                ),
+            )
+        return stmt
+
     def _proper_triangulation(self, event: Event) -> Optional[bool]:
         if (
             event.track_speed is None
@@ -133,6 +181,102 @@ class EventService:
             and event.track_startheight < 1000
             and event.track_startheight > event.track_endheight
         )
+
+    def get_coordinate_insight(
+        self,
+        session: Session,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        stations: Optional[List[str]] = None,
+        cross_station_confirmed: Optional[bool] = None,
+        candidate_only: bool = False,
+        include_deleted: bool = False,
+    ) -> list[dict]:
+        stmt = self._filtered_events_stmt(
+            include_deleted=include_deleted,
+            from_date=from_date,
+            to_date=to_date,
+            stations=stations,
+            cross_station_confirmed=cross_station_confirmed,
+            candidate_only=candidate_only,
+            require_coordinates=True,
+        ).order_by(Event.date.desc().nullslast(), Event.id.desc())
+        events = session.scalars(stmt).unique().all()
+        rows: list[dict] = []
+        for event in events:
+            observations = event.observation_data or []
+            station_names = sorted(
+                {
+                    record.cam.station.station_name
+                    for record in observations
+                    if record.cam and record.cam.station and record.cam.station.station_name
+                }
+            )
+            camera_labels = sorted(
+                {
+                    f"{record.cam.cam_name}@{record.cam.station.station_name}"
+                    for record in observations
+                    if record.cam
+                    and record.cam.cam_name
+                    and record.cam.station
+                    and record.cam.station.station_name
+                }
+            )
+            ai_scores = [
+                float(record.summary_meteor_probability)
+                for record in observations
+                if record.summary_meteor_probability is not None
+            ]
+            rows.append(
+                {
+                    "id": event.id,
+                    "datetimetag": event.datetimetag,
+                    "station_cam": ", ".join(camera_labels),
+                    "number_of_stations": len(station_names),
+                    "lat": event.track_endlat,
+                    "lng": event.track_endlong,
+                    "slat": event.track_startlat,
+                    "slng": event.track_startlong,
+                    "radiant_ra": event.radiant_ra,
+                    "radiant_dec": event.radiant_dec,
+                    "radiant_ecl_lat": event.radiant_ecl_lat,
+                    "radiant_ecl_long": event.radiant_ecl_long,
+                    "track_speed": event.track_speed,
+                    "track_endheight": event.track_endheight,
+                    "radiant_shower": event.radiant_shower,
+                    "date": event.date.isoformat() if event.date else None,
+                    "triangulation": bool(
+                        event.radiant_ra is not None
+                        and event.radiant_dec is not None
+                        and event.radiant_ecl_lat is not None
+                        and event.radiant_ecl_long is not None
+                        and event.track_speed is not None
+                        and event.track_endheight is not None
+                    ),
+                    "proper_triangulation": self._proper_triangulation(event),
+                    "ai_score": max(ai_scores) if ai_scores else None,
+                }
+            )
+        return rows
+
+    def _admin_event_payload(
+        self,
+        event: Event,
+        ratings: Optional[int],
+        positive_ratings: Optional[int],
+        negative_ratings: Optional[int],
+    ) -> dict:
+        payload = serialize_event(event, include_relationships=True)
+        payload["datetimetag"] = event.datetimetag
+        payload["date"] = event.date.isoformat() if event.date else None
+        payload["camera_confirmed"] = 1 if event.camera_confirmed == 1 else 0
+        payload["user_confirmed"] = (
+            event.user_confirmed if event.user_confirmed is not None else -1
+        )
+        payload["ratings"] = ratings or 0
+        payload["positive_ratings"] = positive_ratings or 0
+        payload["negative_ratings"] = negative_ratings or 0
+        return payload
 
     def list_events(
         self,
@@ -172,11 +316,15 @@ class EventService:
 
         events = []
         for event, ratings, positive_ratings, negative_ratings in results:
-            payload = serialize_event(event, include_relationships=True)
             if include_ratings:
-                payload["ratings"] = ratings or 0
-                payload["positive_ratings"] = positive_ratings or 0
-                payload["negative_ratings"] = negative_ratings or 0
+                payload = self._admin_event_payload(
+                    event,
+                    ratings,
+                    positive_ratings,
+                    negative_ratings,
+                )
+            else:
+                payload = serialize_event(event, include_relationships=True)
             events.append(payload)
 
         total_items = session.scalar(
@@ -377,6 +525,7 @@ class EventService:
             "totalItems": total_items,
             "limit": limit,
             "offset": offset,
+            "has_ams_coords": bool(getattr(observation, "trail_ams_coords", None)),
             "trailPoints": [serialize_trail_point(point) for point in points],
         }
 
@@ -470,70 +619,7 @@ class EventService:
             left outer join event as m on d.event_id = m.id
             """
         elif report_name == "coordinates":
-            stmt = (
-                select(Event)
-                .options(self._event_list_load_options())
-                .where(
-                    self._base_filter(False),
-                    Event.track_endlat.isnot(None),
-                    Event.track_endlong.isnot(None),
-                )
-                .order_by(Event.date.desc().nullslast(), Event.id.desc())
-            )
-            events = session.scalars(stmt).unique().all()
-            rows: list[dict] = []
-            for event in events:
-                observations = event.observation_data or []
-                station_names = sorted(
-                    {
-                        record.cam.station.station_name
-                        for record in observations
-                        if record.cam and record.cam.station and record.cam.station.station_name
-                    }
-                )
-                camera_labels = sorted(
-                    {
-                        f"{record.cam.cam_name}@{record.cam.station.station_name}"
-                        for record in observations
-                        if record.cam and record.cam.cam_name and record.cam.station and record.cam.station.station_name
-                    }
-                )
-                ai_scores = [
-                    float(record.summary_meteor_probability)
-                    for record in observations
-                    if record.summary_meteor_probability is not None
-                ]
-                rows.append(
-                    {
-                        "id": event.id,
-                        "datetimetag": event.datetimetag,
-                        "station_cam": ", ".join(camera_labels),
-                        "number_of_stations": len(station_names),
-                        "lat": event.track_endlat,
-                        "lng": event.track_endlong,
-                        "slat": event.track_startlat,
-                        "slng": event.track_startlong,
-                        "radiant_ra": event.radiant_ra,
-                        "radiant_dec": event.radiant_dec,
-                        "radiant_ecl_lat": event.radiant_ecl_lat,
-                        "radiant_ecl_long": event.radiant_ecl_long,
-                        "track_speed": event.track_speed,
-                        "track_endheight": event.track_endheight,
-                        "radiant_shower": event.radiant_shower,
-                        "date": event.date.isoformat() if event.date else None,
-                        "triangulation": bool(
-                            event.radiant_ra is not None
-                            and event.radiant_dec is not None
-                            and event.radiant_ecl_lat is not None
-                            and event.radiant_ecl_long is not None
-                            and event.track_speed is not None
-                            and event.track_endheight is not None
-                        ),
-                        "proper_triangulation": self._proper_triangulation(event),
-                        "ai_score": max(ai_scores) if ai_scores else None,
-                    }
-                )
-            return rows
+            return self.get_coordinate_insight(session)
         else:
             raise HTTPException(status_code=404, detail="Unknown insight report")
 
@@ -584,27 +670,13 @@ class EventService:
         candidate_only: bool = False,
         include_deleted: bool = False,
     ) -> dict:
-        stmt = (
-            select(Event)
-            .options(self._event_list_load_options())
-            .where(self._base_filter(include_deleted))
-            .order_by(Event.date.desc())
-        )
-
-        if from_date:
-            stmt = stmt.where(Event.date >= self._parse_iso_date(from_date))
-        if to_date:
-            stmt = stmt.where(Event.date <= self._parse_iso_date(to_date, inclusive_end=True))
-        if stations:
-            stmt = (
-                stmt.join(ObservationCamData, Event.id == ObservationCamData.event_id)
-                .join(Cam, ObservationCamData.cam_id == Cam.id)
-                .join(Station, Cam.station_id == Station.id)
-                .where(Station.station_name.in_(stations))
-            )
-        if cross_station_confirmed is not None:
-            stmt = stmt.where(Event.camera_confirmed == (1 if cross_station_confirmed else 0))
-
+        stmt = self._filtered_events_stmt(
+            include_deleted=include_deleted,
+            from_date=from_date,
+            to_date=to_date,
+            stations=stations,
+            cross_station_confirmed=cross_station_confirmed,
+        ).order_by(Event.date.desc())
         events = session.scalars(stmt).unique().all()
         serialised = [serialize_event(event, include_relationships=True) for event in events]
         if candidate_only:
@@ -1032,6 +1104,8 @@ class EventService:
                     event_timestamp=point.event_timestamp,
                     coord_long=point.coord_long,
                     coord_lat=point.coord_lat,
+                    ams_coord_long=point.ams_coord_long,
+                    ams_coord_lat=point.ams_coord_lat,
                     gnomonic_x=point.gnomonic_x,
                     gnomonic_y=point.gnomonic_y,
                     brightness=point.brightness,

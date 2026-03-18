@@ -489,6 +489,8 @@ def test_station_network_returns_aggregated_status(client, db_session, monkeypat
         observation_key="sorreisa:cam1:2024-01-02T03:04:05.000",
         source_hash="hash",
         event_start_utc=datetime.utcnow(),
+        summary_latitude=69.1234,
+        summary_longitude=18.9876,
     )
     db_session.add_all([station, cam, event, observation])
     db_session.add(
@@ -507,6 +509,8 @@ def test_station_network_returns_aggregated_status(client, db_session, monkeypat
     payload = response.json()
     assert payload["offline_after_minutes"] == 60
     assert payload["stations"][0]["station_name"] == "sorreisa"
+    assert payload["stations"][0]["latitude"] == pytest.approx(69.1234)
+    assert payload["stations"][0]["longitude"] == pytest.approx(18.9876)
     assert payload["stations"][0]["cameras"][0]["cam_name"] == "cam1"
     assert payload["stations"][0]["cameras"][0]["connected"] is True
     assert payload["stations"][0]["cameras"][0]["snapshot_url"].endswith("/sorreisa/cam1/snapshot.jpg")
