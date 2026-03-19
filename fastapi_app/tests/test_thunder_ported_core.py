@@ -648,6 +648,33 @@ def test_trim_temporal_outliers_removes_scalar_spike_when_tracks_survive():
     assert [item.scalar_km for item in trimmed] == [0.0, 10.0, 20.0, 30.0]
 
 
+def test_solve_linear_path_model_accepts_speed_just_under_150_kms():
+    samples = [
+        orbit_solver._ProjectedPathSample(0, 0.0, 0.0, 0.10, 3),
+        orbit_solver._ProjectedPathSample(1, 0.2, 29.8, 0.10, 3),
+        orbit_solver._ProjectedPathSample(0, 0.4, 59.6, 0.10, 2),
+        orbit_solver._ProjectedPathSample(1, 0.6, 89.4, 0.10, 2),
+    ]
+
+    solved = orbit_solver._solve_linear_path_model(samples, 2, "policy_a")
+
+    assert solved is not None
+    assert abs(solved.speed_kms - 149.0) < 1e-6
+
+
+def test_solve_linear_path_model_still_rejects_speed_over_150_kms():
+    samples = [
+        orbit_solver._ProjectedPathSample(0, 0.0, 0.0, 0.10, 3),
+        orbit_solver._ProjectedPathSample(1, 0.2, 30.2, 0.10, 3),
+        orbit_solver._ProjectedPathSample(0, 0.4, 60.4, 0.10, 2),
+        orbit_solver._ProjectedPathSample(1, 0.6, 90.6, 0.10, 2),
+    ]
+
+    solved = orbit_solver._solve_linear_path_model(samples, 2, "policy_a")
+
+    assert solved is None
+
+
 def test_event_detail_exposes_sampled_geometry_points_when_solved_path_exists(client, db_session):
     station = Station(station_name="alta")
     cam = Cam(station=station, cam_name="cam7")
