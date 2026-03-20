@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from math import isfinite
 import re
 from dataclasses import dataclass, field
@@ -18,7 +19,7 @@ class TrailPointRecord:
     frame_index: int
     pixel_x: Optional[float] = None
     pixel_y: Optional[float] = None
-    event_timestamp: Optional[float] = None
+    event_timestamp_us: Optional[int] = None
     coord_long: Optional[float] = None
     coord_lat: Optional[float] = None
     ams_coord_long: Optional[float] = None
@@ -34,6 +35,16 @@ class TrailPointRecord:
     size: Optional[float] = None
     frame_brightness: Optional[float] = None
 
+    @property
+    def event_timestamp(self) -> Optional[float]:
+        if self.event_timestamp_us is None:
+            return None
+        return self.event_timestamp_us / 1_000_000.0
+
+    @event_timestamp.setter
+    def event_timestamp(self, value: Optional[float]) -> None:
+        self.event_timestamp_us = FileToObjectMapper._parse_microsecond_timestamp_value(value)
+
 
 @dataclass
 class CentroidPointRecord:
@@ -45,7 +56,17 @@ class CentroidPointRecord:
     coord_lat: Optional[float] = None
     quality: Optional[float] = None
     station_code: Optional[str] = None
-    event_timestamp: Optional[float] = None
+    event_timestamp_us: Optional[int] = None
+
+    @property
+    def event_timestamp(self) -> Optional[float]:
+        if self.event_timestamp_us is None:
+            return None
+        return self.event_timestamp_us / 1_000_000.0
+
+    @event_timestamp.setter
+    def event_timestamp(self, value: Optional[float]) -> None:
+        self.event_timestamp_us = FileToObjectMapper._parse_microsecond_timestamp_value(value)
 
 
 @dataclass
@@ -87,6 +108,9 @@ class EventRecord:
 
 class FileToObjectMapper:
     """Read event folders from disk and map them into persistence-ready records."""
+
+    _microseconds_per_second = Decimal("1000000")
+    _utc_epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
     stat_file_map = {
         "startheight": "track_startheight",
@@ -485,9 +509,9 @@ class FileToObjectMapper:
             parsed = self._parse_event_datetime(video_start)
             if parsed:
                 return parsed
-        trail_timestamps = self._parse_scalar_series(values.get("trail_timestamps"))
+        trail_timestamps = self._parse_timestamp_series(values.get("trail_timestamps"))
         if trail_timestamps:
-            return datetime.utcfromtimestamp(trail_timestamps[0])
+            return self._microseconds_to_datetime(trail_timestamps[0])
         return None
 
     def _build_observation_key(
@@ -532,7 +556,7 @@ class FileToObjectMapper:
         """Normalise parallel [trail] arrays into frame-based rows."""
 
         positions = self._parse_pair_series(values.get("trail_positions"))
-        timestamps = self._parse_scalar_series(values.get("trail_timestamps"))
+        timestamps = self._parse_timestamp_series(values.get("trail_timestamps"))
         coordinates = self._parse_pair_series(values.get("trail_coordinates"))
         ams_coordinates = self._parse_pair_series(values.get("trail_ams_coords"))
         gnomonic = self._parse_pair_series(values.get("trail_gnomonic"))
@@ -572,7 +596,7 @@ class FileToObjectMapper:
                     frame_index=frame_index,
                     pixel_x=pixel[0] if pixel else None,
                     pixel_y=pixel[1] if pixel else None,
-                    event_timestamp=timestamps[frame_index]
+                    event_timestamp_us=timestamps[frame_index]
                     if frame_index < len(timestamps)
                     else None,
                     coord_long=coord[0] if coord else None,
@@ -647,7 +671,7 @@ class FileToObjectMapper:
                     coord_lat=coord_lat,
                     quality=quality,
                     station_code=station_code,
-                    event_timestamp=timestamp,
+                    event_timestamp_us=timestamp,
                 )
             )
         return points
@@ -675,14 +699,14 @@ class FileToObjectMapper:
     ) -> Dict[int, CentroidPointRecord]:
         centroid_by_timestamp: Dict[int, List[CentroidPointRecord]] = {}
         for point in centroid_points:
-            key = self._timestamp_match_key(point.event_timestamp)
+            key = self._timestamp_match_key(point.event_timestamp_us)
             if key is None:
                 continue
             centroid_by_timestamp.setdefault(key, []).append(point)
 
         matches: Dict[int, CentroidPointRecord] = {}
         for index, trail_point in enumerate(trail_points):
-            key = self._timestamp_match_key(trail_point.event_timestamp)
+            key = self._timestamp_match_key(trail_point.event_timestamp_us)
             if key is None:
                 continue
             candidates = centroid_by_timestamp.get(key)
@@ -696,24 +720,22 @@ class FileToObjectMapper:
         return {index: centroid_point for index, centroid_point in enumerate(centroid_points)}
 
     @staticmethod
-    def _timestamp_match_key(timestamp: Optional[float]) -> Optional[int]:
-        if timestamp is None:
+    def _timestamp_match_key(timestamp_us: Optional[int]) -> Optional[int]:
+        if timestamp_us is None:
             return None
-        return int(round(timestamp * 1_000_000))
+        return timestamp_us
 
     @staticmethod
     def _parse_centroid_timestamp(
         date_part: str, time_part: str, timezone_part: str
-    ) -> Optional[float]:
+    ) -> Optional[int]:
         if timezone_part.upper() != "UTC":
             return None
         candidate = f"{date_part} {time_part}"
         for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
             try:
-                return (
-                    datetime.strptime(candidate, fmt)
-                    .replace(tzinfo=timezone.utc)
-                    .timestamp()
+                return FileToObjectMapper._datetime_to_microseconds(
+                    datetime.strptime(candidate, fmt).replace(tzinfo=timezone.utc)
                 )
             except ValueError:
                 continue
@@ -758,6 +780,43 @@ class FileToObjectMapper:
             if parsed is not None:
                 values.append(parsed)
         return values
+
+    def _parse_timestamp_series(self, raw_value: object) -> List[int]:
+        if not isinstance(raw_value, str):
+            return []
+        values: List[int] = []
+        for token in raw_value.split():
+            parsed = self._parse_microsecond_timestamp(token)
+            if parsed is not None:
+                values.append(parsed)
+        return values
+
+    @classmethod
+    def _datetime_to_microseconds(cls, value: datetime) -> int:
+        utc_value = value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        delta = utc_value - cls._utc_epoch
+        return ((delta.days * 86400) + delta.seconds) * 1_000_000 + delta.microseconds
+
+    @classmethod
+    def _microseconds_to_datetime(cls, value: int) -> datetime:
+        return (cls._utc_epoch + timedelta(microseconds=value)).replace(tzinfo=None)
+
+    def _parse_microsecond_timestamp(self, raw_value: object) -> Optional[int]:
+        return self._parse_microsecond_timestamp_value(raw_value)
+
+    @classmethod
+    def _parse_microsecond_timestamp_value(cls, raw_value: object) -> Optional[int]:
+        try:
+            parsed = Decimal(str(raw_value).strip())
+        except (InvalidOperation, ValueError, TypeError):
+            return None
+        if not parsed.is_finite():
+            return None
+        return int(
+            (parsed * cls._microseconds_per_second).to_integral_value(
+                rounding=ROUND_HALF_UP
+            )
+        )
 
     @staticmethod
     def _safe_float(raw_value: object) -> float | None:

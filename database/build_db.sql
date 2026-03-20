@@ -283,7 +283,7 @@ CREATE TABLE IF NOT EXISTS observation_trail_point (
   frame_index INT(11) NOT NULL,
   pixel_x FLOAT NULL DEFAULT NULL,
   pixel_y FLOAT NULL DEFAULT NULL,
-  event_timestamp FLOAT NULL DEFAULT NULL,
+  event_timestamp_us BIGINT(20) NULL DEFAULT NULL,
   coord_long FLOAT NULL DEFAULT NULL,
   coord_lat FLOAT NULL DEFAULT NULL,
   ams_coord_long FLOAT NULL DEFAULT NULL,

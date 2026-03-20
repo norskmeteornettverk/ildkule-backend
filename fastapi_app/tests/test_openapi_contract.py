@@ -114,6 +114,10 @@ def test_openapi_exposes_identifier_account_and_explore_shapes(client):
     assert "has_centroid2" in trail_response
     trail_points = _resolve_schema(payload, trail_response["trailPoints"])
     trail_item = _resolve_schema(payload, trail_points["items"])
+    assert "event_timestamp_us" in trail_item["properties"]
+    assert trail_item["properties"]["event_timestamp_us"]["type"] == "integer"
+    assert "event_timestamp" in trail_item["properties"]
+    assert trail_item["properties"]["event_timestamp"]["type"] == "number"
     assert "ams_coord_long" in trail_item["properties"]
     assert "ams_coord_lat" in trail_item["properties"]
     assert "centroid_coord_long" in trail_item["properties"]

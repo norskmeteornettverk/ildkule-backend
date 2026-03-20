@@ -28,21 +28,25 @@ This backend:
 
 ## Run The FastAPI App
 
-1. Create a virtual environment
-2. Install packages
-3. Copy the example env file
-4. Start the server
+1. Use Python 3.10 for this repo. Python 3.14 breaks the current FastAPI/Pydantic stack.
+2. Create a virtual environment
+3. Install packages
+4. Copy the example env file
+5. Start the server
 
 Example:
 
 ```bash
-pip install -r fastapi_app/requirements.txt
-pip install -r fastapi_app/requirements-dev.txt
+py -3.10 -m pip install -r fastapi_app/requirements.txt
+py -3.10 -m pip install -r fastapi_app/requirements-dev.txt
 cp fastapi_app/.env.example fastapi_app/.env
-uvicorn fastapi_app.app.main:app --reload
+py -3.10 -m uvicorn fastapi_app.app.main:app --reload
 ```
 
 Open `http://127.0.0.1:8000/docs` to see the API docs.
+
+If `uvicorn` starts and then crashes with a Pydantic import error, check that
+you are really using Python 3.10 and not a newer global Python install.
 
 ## MySQL Setup
 

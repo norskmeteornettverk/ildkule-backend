@@ -9,6 +9,10 @@ thunder-tests/thunderEnvironment.json
 fastapi_app/tests/test.db
 .venv/
 .pytest_tmp/
+.pytest-tmp/
+.pytest-tmp2/
+.pytest-tmp3/
+.pytemp/
 .pytest_cache/
 fastapi_app/.env
 **/__pycache__/

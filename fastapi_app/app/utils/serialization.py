@@ -929,7 +929,9 @@ def serialize_res_entry(entry: EventResEntry) -> dict:
 
 
 def serialize_trail_point(point: ObservationTrailPoint) -> dict:
-    return model_to_dict(point)
+    payload = model_to_dict(point)
+    payload["event_timestamp"] = point.event_timestamp
+    return payload
 
 
 def serialize_event(

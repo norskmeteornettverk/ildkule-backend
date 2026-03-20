@@ -1104,7 +1104,7 @@ class EventService:
                     frame_index=point.frame_index,
                     pixel_x=point.pixel_x,
                     pixel_y=point.pixel_y,
-                    event_timestamp=point.event_timestamp,
+                    event_timestamp_us=point.event_timestamp_us,
                     coord_long=point.coord_long,
                     coord_lat=point.coord_lat,
                     ams_coord_long=point.ams_coord_long,

@@ -642,7 +642,14 @@ class MeteorTrailPoint(MeteorSchema):
     frame_index: int = Field(..., description="Frame index within the stored trail sequence.")
     pixel_x: Optional[float] = Field(default=None, description="Pixel x position when available.")
     pixel_y: Optional[float] = Field(default=None, description="Pixel y position when available.")
-    event_timestamp: Optional[float] = Field(default=None, description="Event timestamp when available.")
+    event_timestamp_us: Optional[int] = Field(
+        default=None,
+        description="Exact event timestamp in Unix microseconds stored in the database.",
+    )
+    event_timestamp: Optional[float] = Field(
+        default=None,
+        description="Convenience event timestamp in Unix seconds derived from event_timestamp_us.",
+    )
     coord_long: Optional[float] = Field(default=None, description="Solved longitude when available.")
     coord_lat: Optional[float] = Field(default=None, description="Solved latitude when available.")
     ams_coord_long: Optional[float] = Field(

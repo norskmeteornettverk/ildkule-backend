@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import pytest
 from PIL import Image
 from sqlalchemy import func, select
 
@@ -189,6 +190,7 @@ def test_event_detail_and_trail_response_expose_ams_coordinates(client, db_sessi
         track_endheight=45.0,
         track_speed=21.5,
         track_speed_source="average",
+        is_deleted=False,
         radiant_ra=13.5,
         radiant_dec=-1.2,
         radiant_ecl_lat=4.5,
@@ -218,7 +220,7 @@ def test_event_detail_and_trail_response_expose_ams_coordinates(client, db_sessi
                 frame_index=0,
                 pixel_x=10.0,
                 pixel_y=20.0,
-                event_timestamp=1715558044.0,
+                event_timestamp_us=1715558044000000,
                 coord_long=60.1,
                 coord_lat=10.2,
                 ams_coord_long=60.11,
@@ -229,7 +231,7 @@ def test_event_detail_and_trail_response_expose_ams_coordinates(client, db_sessi
                 frame_index=1,
                 pixel_x=11.0,
                 pixel_y=21.0,
-                event_timestamp=1715558044.04,
+                event_timestamp_us=1715558044040000,
                 coord_long=60.2,
                 coord_lat=10.3,
                 ams_coord_long=60.21,
@@ -249,5 +251,7 @@ def test_event_detail_and_trail_response_expose_ams_coordinates(client, db_sessi
     assert trail_response.json()["totalItems"] == 2
     assert trail_response.json()["has_ams_coords"] is True
     first_point = trail_response.json()["trailPoints"][0]
+    assert first_point["event_timestamp_us"] == 1715558044000000
+    assert first_point["event_timestamp"] == pytest.approx(1715558044.0)
     assert first_point["ams_coord_long"] == 60.11
     assert first_point["ams_coord_lat"] == 10.21

@@ -44,7 +44,7 @@ def sample_data_dir(tmp_path_factory):
                 "frames=3",
                 "duration=2.5",
                 "positions=10,20 11,21 12,22",
-                "timestamps=1715471644.000 1715471644.040 1715471644.080",
+                "timestamps=1715471644.000123 1715471644.040456 1715471644.080789",
                 "coordinates=60.1,10.2 60.2,10.3 60.3,10.4",
                 "ams_coords=60.11,10.21 60.21,10.31 60.31,10.41",
                 "gnomonic=1.1,2.1 1.2,2.2 1.3,2.3",
@@ -105,6 +105,8 @@ def test_file_mapper_reads_event(sample_data_dir):
     assert observation.values["trail_ams_coords"] == "60.11,10.21 60.21,10.31 60.31,10.41"
     assert observation.values["trail_centroid"].startswith("0 0.0 10.21 60.11 1.0 STA")
     assert observation.values["trail_centroid2"].startswith("0 0.0 10.22 60.12 1.0 STA")
+    assert observation.trail_points[0].event_timestamp_us == 1715471644000123
+    assert observation.trail_points[0].event_timestamp == pytest.approx(1715471644.000123)
     assert observation.trail_points[0].ams_coord_long == 60.11
     assert observation.trail_points[0].ams_coord_lat == 10.21
     assert observation.trail_points[0].centroid_coord_long == 60.11
@@ -240,6 +242,8 @@ def test_file_mapper_reads_mixed_ams_coordinates_without_breaking_non_ams_observ
     plain_observation = observations["Cam02"]
     assert ams_observation.values["trail_ams_coords"] == "60.11,10.21 60.21,10.31 60.31,10.41"
     assert plain_observation.values.get("trail_ams_coords") is None
+    assert ams_observation.trail_points[0].event_timestamp_us == 1715558044000000
+    assert ams_observation.trail_points[0].event_timestamp == pytest.approx(1715558044.0)
     assert ams_observation.trail_points[0].ams_coord_long == 60.11
     assert ams_observation.trail_points[0].ams_coord_lat == 10.21
     assert plain_observation.trail_points[0].ams_coord_long is None
@@ -301,6 +305,7 @@ def test_file_mapper_reads_realistic_crossbearing_sample(tmp_path_factory):
             "frames = 12",
             "duration = 0.74",
             "dct midpoint = 3",
+            "timestamps = 1641233933.415000 1641233933.455000 1641233933.495000 1641233933.535000 1641233933.575000 1641233933.615000 1641233933.655000 1641233933.695000 1641233933.735000 1641233933.775000 1641233933.815000 1641233933.855000",
             "[video]",
             "height = 1536",
             "[config]",
@@ -460,6 +465,8 @@ def test_eventload_endpoint_ingests_data(client, db_session, sample_data_dir):
     assert observation.trail_ams_coords == "60.11,10.21 60.21,10.31 60.31,10.41"
     assert observation.trail_centroid.startswith("0 0.0 10.21 60.11 1.0 STA")
     assert observation.trail_centroid2.startswith("0 0.0 10.22 60.12 1.0 STA")
+    assert trail_points[0].event_timestamp_us == 1715471644000123
+    assert trail_points[0].event_timestamp == pytest.approx(1715471644.000123)
     assert trail_points[0].ams_coord_long == 60.11
     assert trail_points[0].ams_coord_lat == 10.21
     assert trail_points[0].centroid_coord_long == 60.11
@@ -481,6 +488,8 @@ def test_eventload_endpoint_ingests_data(client, db_session, sample_data_dir):
     assert trail_response.json()["has_centroid"] is True
     assert trail_response.json()["has_centroid2"] is True
     assert trail_response.json()["trailPoints"][0]["frame_index"] == 0
+    assert trail_response.json()["trailPoints"][0]["event_timestamp_us"] == 1715471644000123
+    assert trail_response.json()["trailPoints"][0]["event_timestamp"] == pytest.approx(1715471644.000123)
     assert trail_response.json()["trailPoints"][0]["ams_coord_long"] == 60.11
     assert trail_response.json()["trailPoints"][0]["ams_coord_lat"] == 10.21
     assert trail_response.json()["trailPoints"][0]["centroid_coord_long"] == 60.11
