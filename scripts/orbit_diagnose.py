@@ -20,9 +20,12 @@ from fastapi_app.app.utils.orbit_solver import (
     _ObservationOrbitCandidate,
     _PathFitDiagnostics,
     _build_track,
+    _can_stabilize_mean_anomaly,
+    _is_reasonable_observed_payload,
     _legacy_stat_orbit,
     _runtime_payload_from_candidate,
     _solve_observation_candidate,
+    _stabilize_observed_payload,
     _wrapped_angle_delta,
     build_orbit_payload,
 )
@@ -126,8 +129,14 @@ def _stage_for_candidate(candidate: Optional[_ObservationOrbitCandidate], usable
             return "full ny bane bygget, men fysisk vill"
         return "heliosentrisk bane kunne ikke løses"
     uses_new_geometry = runtime_payload is not None and runtime_payload.get("perihelion_distance_au") != fallback_payload.get("perihelion_distance_au")
-    reuses_old_mean_epoch = uses_new_geometry and runtime_payload.get("mean_anomaly_deg") == fallback_payload.get("mean_anomaly_deg") and runtime_payload.get("epoch") == fallback_payload.get("epoch")
-    if uses_new_geometry and not reuses_old_mean_epoch:
+    reuses_old_mean_epoch = (
+        uses_new_geometry
+        and runtime_payload.get("mean_anomaly_deg") == fallback_payload.get("mean_anomaly_deg")
+        and runtime_payload.get("epoch") == fallback_payload.get("epoch")
+    )
+    if uses_new_geometry and reuses_old_mean_epoch:
+        return "full ny bane akseptert i API-et (M/epoch stabilisert)"
+    if uses_new_geometry:
         return "full ny bane akseptert i API-et"
     return "full ny bane bygget, men avvist før final API choice"
 
@@ -135,11 +144,26 @@ def _stage_for_candidate(candidate: Optional[_ObservationOrbitCandidate], usable
 def _serialize_candidate(name: str, candidate: Optional[_ObservationOrbitCandidate], fallback_payload: dict, truth: Optional[dict], usable_tracks: int, raw_points: int) -> dict:
     runtime_payload = _runtime_payload_from_candidate(candidate, fallback_payload)
     diagnostics: Optional[_PathFitDiagnostics] = candidate.diagnostics if candidate is not None else None
+    stabilized_payload = (
+        _stabilize_observed_payload(candidate.payload, fallback_payload, diagnostics)
+        if candidate is not None
+        else None
+    )
     return {
         "policy": name,
         "stage": _stage_for_candidate(candidate, usable_tracks, raw_points, runtime_payload, fallback_payload),
         "has_candidate": candidate is not None,
         "physical": _payload_is_physical(candidate.payload if candidate else None),
+        "passes_runtime_guard": (
+            _is_reasonable_observed_payload(stabilized_payload, fallback_payload, diagnostics)
+            if candidate is not None
+            else False
+        ),
+        "stabilizes_mean_anomaly": (
+            _can_stabilize_mean_anomaly(candidate.payload, fallback_payload, diagnostics)
+            if candidate is not None
+            else False
+        ),
         "diagnostics": {
             "track_count": diagnostics.track_count,
             "fit_point_count": diagnostics.fit_point_count,

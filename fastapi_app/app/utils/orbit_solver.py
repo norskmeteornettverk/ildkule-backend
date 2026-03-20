@@ -53,6 +53,12 @@ _TIMING_SPREAD_RELAXED_SECONDS = 1.2
 _STRONG_OBSERVED_TRACKS = 3
 _STRONG_OBSERVED_FIT_POINTS = 8
 _RELAXED_OBSERVED_FIT_POINTS = 20
+_RICH_OBSERVED_TRACKS = 3
+_RICH_OBSERVED_FIT_POINTS = 30
+_RICH_OBSERVED_TIMING_SPREAD_SECONDS = 2.0
+_VERY_RICH_OBSERVED_TRACKS = 4
+_VERY_RICH_OBSERVED_FIT_POINTS = 100
+_VERY_RICH_OBSERVED_TIMING_SPREAD_SECONDS = 1.0
 _AUTO_PATH_POLICY = "auto"
 _RUNTIME_PATH_POLICY = _AUTO_PATH_POLICY
 
@@ -106,12 +112,28 @@ def _allowed_fit_thresholds(diagnostics: Optional[_PathFitDiagnostics]) -> tuple
     if diagnostics is None:
         return (_MAX_OBSERVED_MEDIAN_RESIDUAL_KM, _MAX_OBSERVED_MAX_RESIDUAL_KM)
     if (
+        diagnostics.track_count >= _VERY_RICH_OBSERVED_TRACKS
+        and diagnostics.fit_point_count >= _VERY_RICH_OBSERVED_FIT_POINTS
+        and diagnostics.timing_spread_seconds <= _VERY_RICH_OBSERVED_TIMING_SPREAD_SECONDS
+        and diagnostics.late_point_fraction <= 0.35
+    ):
+        return (1.1, 2.4)
+    if (
         diagnostics.track_count >= _STRONG_OBSERVED_TRACKS
         and diagnostics.fit_point_count >= _STRONG_OBSERVED_FIT_POINTS
         and diagnostics.timing_spread_seconds <= _TIMING_SPREAD_SOFT_SECONDS
         and diagnostics.late_point_fraction <= 0.65
     ):
         return (0.55, 1.5)
+    # Rich multi-station events can still be stable even when the full visible path
+    # spans longer than the tighter timing windows used for short tracks.
+    if (
+        diagnostics.track_count >= _RICH_OBSERVED_TRACKS
+        and diagnostics.fit_point_count >= _RICH_OBSERVED_FIT_POINTS
+        and diagnostics.timing_spread_seconds <= _RICH_OBSERVED_TIMING_SPREAD_SECONDS
+        and diagnostics.late_point_fraction <= 0.35
+    ):
+        return (1.1, 1.5)
     if (
         diagnostics.fit_point_count >= _RELAXED_OBSERVED_FIT_POINTS
         and diagnostics.timing_spread_seconds <= _TIMING_SPREAD_RELAXED_SECONDS
@@ -574,8 +596,12 @@ def _legacy_stat_orbit(event: Event) -> dict:
 
 
 def _point_direction(point: ObservationTrailPoint) -> Optional[tuple[float, float]]:
+    if point.centroid2_coord_long is not None and point.centroid2_coord_lat is not None:
+        return (point.centroid2_coord_long, point.centroid2_coord_lat)
     if point.ams_coord_long is not None and point.ams_coord_lat is not None:
         return (point.ams_coord_long, point.ams_coord_lat)
+    if point.centroid_coord_long is not None and point.centroid_coord_lat is not None:
+        return (point.centroid_coord_long, point.centroid_coord_lat)
     if point.coord_long is not None and point.coord_lat is not None:
         return (point.coord_long, point.coord_lat)
     return None
@@ -695,31 +721,6 @@ def _trajectory_scalar(anchor: np.ndarray, direction: np.ndarray, track: _Observ
         return None
     return ((dot_du * _dot(point.los_ecef, delta)) - _dot(direction, delta)) / denominator
 
-
-def _path_endpoints_ecef(event: Event) -> Optional[tuple[np.ndarray, np.ndarray]]:
-    if (
-        event.track_startlat is None
-        or event.track_startlong is None
-        or event.track_startheight is None
-        or event.track_endlat is None
-        or event.track_endlong is None
-        or event.track_endheight is None
-    ):
-        return None
-    start = EarthLocation.from_geodetic(
-        lon=float(event.track_startlong) * u.deg,
-        lat=float(event.track_startlat) * u.deg,
-        height=float(event.track_startheight) * u.km,
-    )
-    end = EarthLocation.from_geodetic(
-        lon=float(event.track_endlong) * u.deg,
-        lat=float(event.track_endlat) * u.deg,
-        height=float(event.track_endheight) * u.km,
-    )
-    return (
-        np.array([component.to_value(u.km) for component in start.to_geocentric()], dtype=float),
-        np.array([component.to_value(u.km) for component in end.to_geocentric()], dtype=float),
-    )
 
 
 def _project_path_scalar(
@@ -899,63 +900,75 @@ def _collect_projected_path_samples(
     ]
 
 
-def _fit_path_state_policy_a_baseline(
+
+def _fit_track_geometry_state(
     event: Event,
     tracks: Sequence[_ObservationTrack],
+    preferred_policy_name: Optional[str] = _RUNTIME_PATH_POLICY,
 ) -> Optional[tuple[np.ndarray, np.ndarray, datetime, _PathFitDiagnostics]]:
-    endpoints = _path_endpoints_ecef(event)
-    if endpoints is None:
+    direction = _fit_trajectory_direction(tracks)
+    if direction is None:
         return None
-    path_start, path_end = endpoints
-    path_vector = path_end - path_start
-    path_length_km = _vector_length(path_vector)
-    path_direction = _unit(path_vector)
-    if path_direction is None or path_length_km == 0:
-        return None
-
-    samples = _collect_projected_path_samples(
-        path_start,
-        path_direction,
-        path_length_km,
-        tracks,
-    )
-    contributing_tracks = {sample.track_index for sample in samples}
-    if len(samples) < _MIN_FIT_POINTS or len(contributing_tracks) < _MIN_TRACKS:
-        return None
-
-    solved_model = _solve_linear_path_model(samples, len(tracks), "policy_a")
-    if solved_model is None:
-        return None
-    track_weight_scales = _estimate_track_weight_scales(samples, solved_model)
-    if track_weight_scales:
-        solved_model = _solve_linear_path_model(
-            samples,
-            len(tracks),
-            "policy_a",
-            track_weight_scales=track_weight_scales,
-        )
-        if solved_model is None:
+    def collect_samples(direction_vector: np.ndarray) -> Optional[tuple[np.ndarray, list[_ProjectedPathSample], set[int]]]:
+        anchor = _fit_line_anchor(direction_vector, tracks)
+        if anchor is None:
             return None
-    refined_samples = _trim_temporal_outliers(samples, solved_model)
-    if refined_samples != list(samples):
-        track_weight_scales = _estimate_track_weight_scales(refined_samples, solved_model)
-        solved_model = _solve_linear_path_model(
-            refined_samples,
-            len(tracks),
-            "policy_a",
-            track_weight_scales=track_weight_scales or None,
-        )
-        if solved_model is None:
-            return None
-        samples = refined_samples
+        per_track_samples: list[list[_ProjectedPathSample]] = []
+        for track_index, track in enumerate(tracks):
+            track_samples: list[_ProjectedPathSample] = []
+            for point in track.points:
+                sample_geometry = _sample_line_scalar_and_residual(anchor, direction_vector, track, point)
+                if sample_geometry is None:
+                    continue
+                scalar_km, residual_km = sample_geometry
+                if residual_km > 18.0:
+                    continue
+                track_samples.append(
+                    _ProjectedPathSample(
+                        track_index=track_index,
+                        timestamp=point.timestamp,
+                        scalar_km=scalar_km,
+                        residual_km=residual_km,
+                        edge_distance=point.edge_distance,
+                        uses_ams=point.uses_ams,
+                        is_marginal=residual_km > 8.0,
+                    )
+                )
+            per_track_samples.append(_enrich_track_samples(_trim_endpoint_outliers(track_samples)))
+        samples = [
+            sample
+            for track_samples in per_track_samples
+            for sample in track_samples
+        ]
         contributing_tracks = {sample.track_index for sample in samples}
+        if len(samples) < _MIN_FIT_POINTS or len(contributing_tracks) < _MIN_TRACKS:
+            return None
+        return anchor, samples, contributing_tracks
+
+    collected = collect_samples(direction)
+    if collected is None:
+        return None
+    anchor, samples, contributing_tracks = collected
+
+    scalar_series = np.asarray([sample.scalar_km for sample in samples], dtype=float)
+    time_series = np.asarray([sample.timestamp for sample in samples], dtype=float)
+    if scalar_series.size >= 2 and float(np.cov(time_series, scalar_series, bias=True)[0, 1]) < 0.0:
+        direction = -direction
+        collected = collect_samples(direction)
+        if collected is None:
+            return None
+        anchor, samples, contributing_tracks = collected
+
+    selected = _select_best_path_model(samples, len(tracks), preferred_policy_name)
+    if selected is None:
+        return None
+    solved_model, samples = selected
+    contributing_tracks = {sample.track_index for sample in samples}
 
     start_timestamps = _start_timestamps_for_model(solved_model, samples)
     if not start_timestamps:
         return None
     start_timestamp = min(start_timestamps)
-    if not math.isfinite(start_timestamp):
-        return None
     start_speed_kms = solved_model.speed_kms
     if start_speed_kms < _MIN_ORBIT_SPEED_KMS or start_speed_kms > _MAX_ORBIT_SPEED_KMS:
         return None
@@ -969,11 +982,13 @@ def _fit_path_state_policy_a_baseline(
         fit_point_count=len(samples),
         median_residual_km=float(np.median([sample.residual_km for sample in samples])),
         max_residual_km=float(np.max([sample.residual_km for sample in samples])),
-        policy_name="policy_a",
+        policy_name=solved_model.policy_name,
         timing_spread_seconds=solved_model.timing_spread_seconds,
         late_point_fraction=late_point_fraction,
     )
-    return path_start, path_direction * start_speed_kms, _utc_datetime(start_timestamp), diagnostics
+
+    start_point = anchor + (direction * float(np.min(solved_model.intercepts)))
+    return start_point, direction * start_speed_kms, _utc_datetime(start_timestamp), diagnostics
 
 
 def _sample_weight(sample: _ProjectedPathSample) -> float:
@@ -1449,206 +1464,14 @@ def _fit_path_state(
     tracks: Sequence[_ObservationTrack],
     preferred_policy_name: Optional[str] = _RUNTIME_PATH_POLICY,
 ) -> Optional[tuple[np.ndarray, np.ndarray, datetime, _PathFitDiagnostics]]:
-    if preferred_policy_name == "policy_a":
-        return _fit_path_state_policy_a_baseline(event, tracks)
-    endpoints = _path_endpoints_ecef(event)
-    if endpoints is None:
-        return None
-    path_start, path_end = endpoints
-    path_vector = path_end - path_start
-    path_length_km = _vector_length(path_vector)
-    path_direction = _unit(path_vector)
-    if path_direction is None or path_length_km == 0:
-        return None
-
-    samples = _collect_projected_path_samples(
-        path_start,
-        path_direction,
-        path_length_km,
-        tracks,
-    )
-    contributing_tracks = {sample.track_index for sample in samples}
-    if len(samples) < _MIN_FIT_POINTS or len(contributing_tracks) < _MIN_TRACKS:
-        return None
-
-    selected = _select_best_path_model(samples, len(tracks), preferred_policy_name)
-    if selected is None:
-        return None
-    solved_model, samples = selected
-    contributing_tracks = {sample.track_index for sample in samples}
-
-    start_timestamps = _start_timestamps_for_model(solved_model, samples)
-    if not start_timestamps:
-        return None
-    start_timestamp = min(start_timestamps)
-    if not math.isfinite(start_timestamp):
-        return None
-    start_speed_kms = solved_model.speed_kms + (
-        solved_model.acceleration_kms2 * (start_timestamp - solved_model.time_center)
-    )
-    if start_speed_kms < _MIN_ORBIT_SPEED_KMS or start_speed_kms > _MAX_ORBIT_SPEED_KMS:
-        return None
-    late_point_fraction = (
-        sum(1 for sample in samples if sample.series_fraction >= _LATE_SERIES_START) / len(samples)
-        if samples
-        else 0.0
-    )
-    diagnostics = _PathFitDiagnostics(
-        track_count=len(contributing_tracks),
-        fit_point_count=len(samples),
-        median_residual_km=float(np.median([sample.residual_km for sample in samples])),
-        max_residual_km=float(np.max([sample.residual_km for sample in samples])),
-        policy_name=solved_model.policy_name,
-        timing_spread_seconds=solved_model.timing_spread_seconds,
-        late_point_fraction=late_point_fraction,
-    )
-    return path_start, path_direction * start_speed_kms, _utc_datetime(start_timestamp), diagnostics
+    return _fit_track_geometry_state(event, tracks, preferred_policy_name)
 
 
 def _fit_observed_state(
     event: Event,
     tracks: Sequence[_ObservationTrack],
 ) -> Optional[tuple[np.ndarray, np.ndarray, datetime, _PathFitDiagnostics]]:
-    direction = _fit_trajectory_direction(tracks)
-    if direction is None:
-        return None
-
-    if (
-        event.track_startlat is not None
-        and event.track_startlong is not None
-        and event.track_startheight is not None
-        and event.track_endlat is not None
-        and event.track_endlong is not None
-        and event.track_endheight is not None
-    ):
-        start_ecef = np.array(
-            [
-                component.to_value(u.km)
-                for component in EarthLocation.from_geodetic(
-                    lon=float(event.track_startlong) * u.deg,
-                    lat=float(event.track_startlat) * u.deg,
-                    height=float(event.track_startheight) * u.km,
-                ).to_geocentric()
-            ],
-            dtype=float,
-        )
-        end_ecef = np.array(
-            [
-                component.to_value(u.km)
-                for component in EarthLocation.from_geodetic(
-                    lon=float(event.track_endlong) * u.deg,
-                    lat=float(event.track_endlat) * u.deg,
-                    height=float(event.track_endheight) * u.km,
-                ).to_geocentric()
-            ],
-            dtype=float,
-        )
-        if np.dot(direction, end_ecef - start_ecef) < 0:
-            direction = -direction
-
-    anchor = _fit_line_anchor(direction, tracks)
-    if anchor is None:
-        return None
-
-    per_track_samples: list[list[_ProjectedPathSample]] = []
-    for track_index, track in enumerate(tracks):
-        track_samples: list[_ProjectedPathSample] = []
-        for point in track.points:
-            sample_geometry = _sample_line_scalar_and_residual(anchor, direction, track, point)
-            if sample_geometry is None:
-                continue
-            scalar_km, residual_km = sample_geometry
-            if residual_km > 18.0:
-                continue
-            track_samples.append(
-                _ProjectedPathSample(
-                    track_index=track_index,
-                    timestamp=point.timestamp,
-                    scalar_km=scalar_km,
-                    residual_km=residual_km,
-                    edge_distance=point.edge_distance,
-                    uses_ams=point.uses_ams,
-                    is_marginal=residual_km > 8.0,
-                )
-            )
-        per_track_samples.append(_enrich_track_samples(_trim_endpoint_outliers(track_samples)))
-
-    samples = [
-        sample
-        for track_samples in per_track_samples
-        for sample in track_samples
-    ]
-    contributing_tracks = {sample.track_index for sample in samples}
-    if len(samples) < _MIN_FIT_POINTS or len(contributing_tracks) < _MIN_TRACKS:
-        return None
-
-    solved_model = _solve_linear_path_model(samples, len(tracks), "reserve")
-    if solved_model is None:
-        return None
-    track_weight_scales = _estimate_track_weight_scales(samples, solved_model)
-    if track_weight_scales:
-        solved_model = _solve_linear_path_model(
-            samples,
-            len(tracks),
-            "reserve",
-            track_weight_scales=track_weight_scales,
-        )
-        if solved_model is None:
-            return None
-    refined_samples = _trim_temporal_outliers(samples, solved_model)
-    if refined_samples != list(samples):
-        track_weight_scales = _estimate_track_weight_scales(refined_samples, solved_model)
-        solved_model = _solve_linear_path_model(
-            refined_samples,
-            len(tracks),
-            "reserve",
-            track_weight_scales=track_weight_scales or None,
-        )
-        if solved_model is None:
-            return None
-        samples = refined_samples
-        contributing_tracks = {sample.track_index for sample in samples}
-
-    if event.track_startlat is not None and event.track_startlong is not None and event.track_startheight is not None:
-        start_point = np.array(
-            [
-                component.to_value(u.km)
-                for component in EarthLocation.from_geodetic(
-                    lon=float(event.track_startlong) * u.deg,
-                    lat=float(event.track_startlat) * u.deg,
-                    height=float(event.track_startheight) * u.km,
-                ).to_geocentric()
-            ],
-            dtype=float,
-        )
-    else:
-        start_timestamps = _start_timestamps_for_model(solved_model, samples)
-        if not start_timestamps:
-            return None
-        start_point = anchor + (direction * float(np.min(solved_model.intercepts)))
-
-    start_timestamps = _start_timestamps_for_model(solved_model, samples)
-    if not start_timestamps:
-        return None
-    start_timestamp = min(start_timestamps)
-    start_speed_kms = solved_model.speed_kms
-    if start_speed_kms < _MIN_ORBIT_SPEED_KMS or start_speed_kms > _MAX_ORBIT_SPEED_KMS:
-        return None
-    late_point_fraction = (
-        sum(1 for sample in samples if sample.series_fraction >= _LATE_SERIES_START) / len(samples)
-        if samples
-        else 0.0
-    )
-    diagnostics = _PathFitDiagnostics(
-        track_count=len(contributing_tracks),
-        fit_point_count=len(samples),
-        median_residual_km=float(np.median([sample.residual_km for sample in samples])),
-        max_residual_km=float(np.max([sample.residual_km for sample in samples])),
-        policy_name="reserve",
-        timing_spread_seconds=solved_model.timing_spread_seconds,
-        late_point_fraction=late_point_fraction,
-    )
-    return (start_point, direction * start_speed_kms, _utc_datetime(start_timestamp), diagnostics)
+    return _fit_track_geometry_state(event, tracks, "reserve")
 
 
 def _earth_heliocentric_state(when: datetime) -> tuple[np.ndarray, np.ndarray]:
@@ -1662,30 +1485,37 @@ def _earth_heliocentric_state(when: datetime) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _incoming_hyperbolic_excess(position_km: np.ndarray, velocity_kms: np.ndarray) -> Optional[np.ndarray]:
+    candidates = _incoming_hyperbolic_excess_candidates(position_km, velocity_kms)
+    if not candidates:
+        return None
+    return max(candidates, key=lambda candidate: _dot(candidate, velocity_kms))
+
+
+def _incoming_hyperbolic_excess_candidates(position_km: np.ndarray, velocity_kms: np.ndarray) -> list[np.ndarray]:
     radius_km = _vector_length(position_km)
     speed_kms = _vector_length(velocity_kms)
     if radius_km == 0 or speed_kms == 0:
-        return None
+        return []
     specific_energy = (speed_kms * speed_kms / 2.0) - (_EARTH_MU_KM_S2 / radius_km)
     if specific_energy <= 0:
-        return None
+        return []
 
     h_vec = _cross(position_km, velocity_kms)
     h_norm = _vector_length(h_vec)
     if h_norm == 0:
-        return None
+        return []
     e_vec = ((_cross(velocity_kms, h_vec) / _EARTH_MU_KM_S2) - (position_km / radius_km))
     eccentricity = _vector_length(e_vec)
     if eccentricity <= 1.0:
-        return None
+        return []
 
     p_hat = _unit(e_vec)
     h_hat = _unit(h_vec)
     if p_hat is None or h_hat is None:
-        return None
+        return []
     q_hat = _unit(_cross(h_hat, p_hat))
     if q_hat is None:
-        return None
+        return []
 
     v_inf_mag = math.sqrt(2.0 * specific_energy)
     f_inf = math.acos(-1.0 / eccentricity)
@@ -1695,14 +1525,12 @@ def _incoming_hyperbolic_excess(position_km: np.ndarray, velocity_kms: np.ndarra
         unit_velocity = _unit(velocity)
         if unit_velocity is not None:
             candidates.append(unit_velocity * v_inf_mag)
-    if not candidates:
-        return None
-    return max(candidates, key=lambda candidate: _dot(candidate, velocity_kms))
+    return sorted(candidates, key=lambda candidate: _dot(candidate, velocity_kms), reverse=True)
 
 
-def _candidate_from_state(
+def _candidate_variants_from_state(
     observed_state: tuple,
-) -> Optional[_ObservationOrbitCandidate]:
+) -> list[_ObservationOrbitCandidate]:
     diagnostics = None
     if len(observed_state) == 4:
         position_ecef_km, observed_velocity_kms, when, diagnostics = observed_state
@@ -1734,17 +1562,37 @@ def _candidate_from_state(
         np.array(end_gcrs.cartesian.xyz.to_value(u.km), dtype=float) - position_gcrs_km
     )
 
-    v_inf_kms = _incoming_hyperbolic_excess(position_gcrs_km, observed_velocity_gcrs_kms)
-    if v_inf_kms is None:
-        return None
-
     earth_position_km, earth_velocity_kms = _earth_heliocentric_state(when)
     heliocentric_position_km = _equatorial_to_ecliptic(earth_position_km + position_gcrs_km)
-    heliocentric_velocity_kms = _equatorial_to_ecliptic(earth_velocity_kms + v_inf_kms)
-    return _ObservationOrbitCandidate(
-        payload=_state_to_payload(heliocentric_position_km, heliocentric_velocity_kms, when),
-        diagnostics=diagnostics,
-    )
+    candidates: list[_ObservationOrbitCandidate] = []
+    for v_inf_kms in _incoming_hyperbolic_excess_candidates(position_gcrs_km, observed_velocity_gcrs_kms):
+        heliocentric_velocity_kms = _equatorial_to_ecliptic(earth_velocity_kms + v_inf_kms)
+        candidates.append(
+            _ObservationOrbitCandidate(
+                payload=_state_to_payload(heliocentric_position_km, heliocentric_velocity_kms, when),
+                diagnostics=diagnostics,
+            )
+        )
+    return candidates
+
+
+def _candidate_from_state(
+    observed_state: tuple,
+) -> Optional[_ObservationOrbitCandidate]:
+    candidates = _candidate_variants_from_state(observed_state)
+    return candidates[0] if candidates else None
+
+
+def _iter_state_variants(observed_state: tuple) -> list[tuple]:
+    variants = [observed_state]
+    if len(observed_state) == 4:
+        position_ecef_km, observed_velocity_kms, when, diagnostics = observed_state
+        reversed_state = (position_ecef_km, -observed_velocity_kms, when, diagnostics)
+    else:
+        position_ecef_km, observed_velocity_kms, when = observed_state
+        reversed_state = (position_ecef_km, -observed_velocity_kms, when)
+    variants.append(reversed_state)
+    return variants
 
 
 def _iter_observation_candidates(
@@ -1773,22 +1621,21 @@ def _iter_observation_candidates(
         )
         if observed_state is None:
             continue
-        candidate = _candidate_from_state(observed_state)
-        if candidate is None:
-            continue
-        payload_signature = (
-            candidate.payload.get("perihelion_distance_au"),
-            candidate.payload.get("eccentricity"),
-            candidate.payload.get("inclination_deg"),
-            candidate.payload.get("ascending_node_deg"),
-            candidate.payload.get("argument_of_perihelion_deg"),
-            candidate.payload.get("mean_anomaly_deg"),
-            candidate.payload.get("epoch"),
-        )
-        if payload_signature in seen_payloads:
-            continue
-        seen_payloads.add(payload_signature)
-        candidates.append(candidate)
+        for state_variant in _iter_state_variants(observed_state):
+            for candidate in _candidate_variants_from_state(state_variant):
+                payload_signature = (
+                    candidate.payload.get("perihelion_distance_au"),
+                    candidate.payload.get("eccentricity"),
+                    candidate.payload.get("inclination_deg"),
+                    candidate.payload.get("ascending_node_deg"),
+                    candidate.payload.get("argument_of_perihelion_deg"),
+                    candidate.payload.get("mean_anomaly_deg"),
+                    candidate.payload.get("epoch"),
+                )
+                if payload_signature in seen_payloads:
+                    continue
+                seen_payloads.add(payload_signature)
+                candidates.append(candidate)
     return candidates
 
 
@@ -1798,6 +1645,14 @@ def _solve_observation_candidate(
     path_policy: Optional[str] = _RUNTIME_PATH_POLICY,
 ) -> Optional[_ObservationOrbitCandidate]:
     candidates = _iter_observation_candidates(event, observations, path_policy=path_policy)
+    fallback_payload = _legacy_stat_orbit(event)
+    for candidate in candidates:
+        if _is_reasonable_observed_payload(
+            candidate.payload,
+            fallback_payload,
+            candidate.diagnostics,
+        ):
+            return candidate
     return candidates[0] if candidates else None
 
 

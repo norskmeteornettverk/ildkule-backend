@@ -2,7 +2,7 @@ from datetime import datetime
 
 import numpy as np
 
-from fastapi_app.app.models import Cam, Event, ObservationCamData, Station, User
+from fastapi_app.app.models import Cam, Event, ObservationCamData, ObservationTrailPoint, Station, User
 from fastapi_app.app.security import create_access_token
 from fastapi_app.app.services import user_service
 from fastapi_app.app.utils import orbit_solver
@@ -534,6 +534,223 @@ def test_build_orbit_payload_forwards_explicit_path_policy(monkeypatch):
 
     assert observed_path_policy["value"] == "policy_b"
     assert orbit == fallback
+
+
+def test_iter_state_variants_adds_reversed_velocity():
+    state = (
+        np.array([1.0, 2.0, 3.0]),
+        np.array([4.0, 5.0, 6.0]),
+        datetime(2022, 1, 3, 18, 18, 52),
+        orbit_solver._PathFitDiagnostics(
+            track_count=2,
+            fit_point_count=8,
+            median_residual_km=0.02,
+            max_residual_km=0.05,
+        ),
+    )
+
+    variants = orbit_solver._iter_state_variants(state)
+
+    assert len(variants) == 2
+    assert np.array_equal(variants[0][1], np.array([4.0, 5.0, 6.0]))
+    assert np.array_equal(variants[1][1], np.array([-4.0, -5.0, -6.0]))
+
+
+def test_solve_observation_candidate_prefers_self_reasonable_candidate(monkeypatch):
+    diagnostics = orbit_solver._PathFitDiagnostics(
+        track_count=2,
+        fit_point_count=23,
+        median_residual_km=0.01,
+        max_residual_km=0.04,
+    )
+    wild = orbit_solver._ObservationOrbitCandidate(
+        payload={
+            "perihelion_distance_au": 0.99,
+            "eccentricity": 7.2,
+            "inclination_deg": 7.0,
+            "ascending_node_deg": 196.2,
+            "argument_of_perihelion_deg": 186.2,
+            "mean_anomaly_deg": -2800.0,
+            "epoch": "2023-10-10T02:29:02+00:00",
+        },
+        diagnostics=diagnostics,
+    )
+    good = orbit_solver._ObservationOrbitCandidate(
+        payload={
+            "perihelion_distance_au": 0.84,
+            "eccentricity": 0.28,
+            "inclination_deg": 157.8,
+            "ascending_node_deg": 16.2,
+            "argument_of_perihelion_deg": 231.9,
+            "mean_anomaly_deg": 58.5,
+            "epoch": "2023-10-10T02:29:02+00:00",
+        },
+        diagnostics=diagnostics,
+    )
+    monkeypatch.setattr(orbit_solver, "_iter_observation_candidates", lambda *_args, **_kwargs: [wild, good])
+
+    candidate = orbit_solver._solve_observation_candidate(
+        Event(camera_confirmed=1, date=datetime(2023, 10, 10, 2, 28, 5)),
+        [ObservationCamData(**_observation_kwargs("sign-choice"))],
+        path_policy="policy_a",
+    )
+
+    assert candidate == good
+
+
+def test_candidate_variants_from_state_keeps_both_hyperbolic_branches(monkeypatch):
+    state = (
+        np.array([1.0, 2.0, 3.0]),
+        np.array([4.0, 5.0, 6.0]),
+        datetime(2022, 1, 3, 18, 18, 52),
+        orbit_solver._PathFitDiagnostics(
+            track_count=2,
+            fit_point_count=8,
+            median_residual_km=0.02,
+            max_residual_km=0.05,
+        ),
+    )
+    monkeypatch.setattr(orbit_solver, "_earth_heliocentric_state", lambda _when: (np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])))
+    monkeypatch.setattr(orbit_solver, "_equatorial_to_ecliptic", lambda vector: vector)
+    monkeypatch.setattr(orbit_solver, "_state_to_payload", lambda _pos, vel, when: {"perihelion_distance_au": round(float(vel[0]), 6), "eccentricity": 1.1, "inclination_deg": 10.0, "ascending_node_deg": 20.0, "argument_of_perihelion_deg": 30.0, "mean_anomaly_deg": 40.0, "epoch": when.isoformat() if hasattr(when, "isoformat") else str(when)})
+    monkeypatch.setattr(orbit_solver, "_incoming_hyperbolic_excess_candidates", lambda *_args, **_kwargs: [np.array([1.0, 0.0, 0.0]), np.array([2.0, 0.0, 0.0])])
+
+    candidates = orbit_solver._candidate_variants_from_state(state)
+
+    assert len(candidates) == 2
+    assert candidates[0].payload["perihelion_distance_au"] == 1.0
+    assert candidates[1].payload["perihelion_distance_au"] == 2.0
+
+
+def test_point_direction_prefers_centroid2():
+    point = ObservationTrailPoint(
+        centroid2_coord_long=12.34,
+        centroid2_coord_lat=56.78,
+        ams_coord_long=98.76,
+        ams_coord_lat=54.32,
+        coord_long=11.11,
+        coord_lat=22.22,
+    )
+
+    assert orbit_solver._point_direction(point) == (12.34, 56.78)
+
+
+def test_fit_path_state_uses_track_geometry_directly(monkeypatch):
+    event = Event(
+        camera_confirmed=1,
+        date=datetime(2022, 1, 3, 18, 18, 52),
+    )
+    sentinel = (
+        np.array([1.0, 2.0, 3.0]),
+        np.array([4.0, 5.0, 6.0]),
+        datetime(2022, 1, 3, 18, 18, 52),
+        orbit_solver._PathFitDiagnostics(
+            track_count=2,
+            fit_point_count=8,
+            median_residual_km=0.02,
+            max_residual_km=0.05,
+            policy_name="policy_b",
+        ),
+    )
+    monkeypatch.setattr(orbit_solver, "_fit_track_geometry_state", lambda *_args, **_kwargs: sentinel)
+
+    result_a = orbit_solver._fit_path_state(event, [], preferred_policy_name="policy_a")
+    result_b = orbit_solver._fit_path_state(event, [], preferred_policy_name="policy_b")
+
+    assert result_a == sentinel
+    assert result_b == sentinel
+
+
+def test_allowed_fit_thresholds_relax_for_rich_multi_track_events():
+    diagnostics = orbit_solver._PathFitDiagnostics(
+        track_count=3,
+        fit_point_count=70,
+        median_residual_km=0.78,
+        max_residual_km=1.42,
+        policy_name="policy_a",
+        timing_spread_seconds=1.45,
+        late_point_fraction=0.31,
+    )
+
+    assert orbit_solver._allowed_fit_thresholds(diagnostics) == (1.1, 1.5)
+
+
+def test_allowed_fit_thresholds_relax_more_for_very_rich_multi_track_events():
+    diagnostics = orbit_solver._PathFitDiagnostics(
+        track_count=4,
+        fit_point_count=129,
+        median_residual_km=0.063,
+        max_residual_km=2.236,
+        policy_name="policy_a",
+        timing_spread_seconds=0.693,
+        late_point_fraction=0.279,
+    )
+
+    assert orbit_solver._allowed_fit_thresholds(diagnostics) == (1.1, 2.4)
+
+
+def test_reasonable_observed_payload_accepts_rich_multi_track_candidate():
+    diagnostics = orbit_solver._PathFitDiagnostics(
+        track_count=3,
+        fit_point_count=138,
+        median_residual_km=0.55,
+        max_residual_km=1.42,
+        policy_name="policy_b",
+        timing_spread_seconds=0.81,
+        late_point_fraction=0.12,
+    )
+    fallback = {
+        "perihelion_distance_au": 0.748311,
+        "eccentricity": 0.263675,
+        "inclination_deg": 21.681,
+        "ascending_node_deg": 210.147,
+        "argument_of_perihelion_deg": 280.83,
+        "mean_anomaly_deg": 299.861,
+        "epoch": "2023-10-23T19:44:29+00:00",
+    }
+    observed = {
+        "perihelion_distance_au": 0.744892,
+        "eccentricity": 0.215189,
+        "inclination_deg": 15.719,
+        "ascending_node_deg": 209.823,
+        "argument_of_perihelion_deg": 294.783,
+        "mean_anomaly_deg": 294.467,
+        "epoch": "2023-10-23T19:51:35.842269+00:00",
+    }
+
+    assert orbit_solver._is_reasonable_observed_payload(observed, fallback, diagnostics) is True
+
+
+def test_reasonable_observed_payload_accepts_very_rich_candidate_with_single_large_tail_residual():
+    diagnostics = orbit_solver._PathFitDiagnostics(
+        track_count=4,
+        fit_point_count=129,
+        median_residual_km=0.063,
+        max_residual_km=2.236,
+        policy_name="policy_a",
+        timing_spread_seconds=0.693,
+        late_point_fraction=0.279,
+    )
+    fallback = {
+        "perihelion_distance_au": 0.342724,
+        "eccentricity": 0.935468,
+        "inclination_deg": 26.204,
+        "ascending_node_deg": 39.166,
+        "argument_of_perihelion_deg": 110.765,
+        "mean_anomaly_deg": 358.246,
+        "epoch": "2023-11-01T20:36:17+00:00",
+    }
+    observed = {
+        "perihelion_distance_au": 0.375636,
+        "eccentricity": 0.91678,
+        "inclination_deg": 24.016,
+        "ascending_node_deg": 38.833,
+        "argument_of_perihelion_deg": 107.426,
+        "mean_anomaly_deg": 357.439,
+        "epoch": "2023-11-01T20:37:11.738424+00:00",
+    }
+
+    assert orbit_solver._is_reasonable_observed_payload(observed, fallback, diagnostics) is True
 
 
 def test_select_best_path_model_honors_preferred_policy_name(monkeypatch):
