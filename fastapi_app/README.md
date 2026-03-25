@@ -1,8 +1,8 @@
-# FastAPI version of the ildkule API
+# Ildkule FastAPI API
 
-The PHP API located in `api/` has been ported to Python using FastAPI. The new
-code lives under `fastapi_app/` and exposes the active route structure
-(`/api/auth/login`, `/api/users`, `/api/events`, etc.).
+The active backend code lives under `fastapi_app/` and exposes the API route
+structure used by the project (`/api/auth/login`, `/api/users`, `/api/events`,
+and related endpoints).
 
 ## Getting started
 
@@ -54,12 +54,11 @@ running it with Python 3.14 from the global install.
 
 ## Notes
 
-- `/api/admin/event-imports` now uses the Python port of the legacy file mapper to
-  ingest meteor observations directly from the data directory configured via
-  `DATA_DIRECTORY`.
+- `/api/admin/event-imports` ingests meteor observations directly from the data
+  directory configured via `DATA_DIRECTORY`.
 - `PyMySQL` needs `cryptography` when MySQL uses `caching_sha2_password`, so it
   is included in `requirements.txt`.
-- All other endpoints are available in FastAPI and return the same payloads that
-  the PHP version exposed, including JWT payload structure and pagination data.
+- The API keeps the expected JWT payload structure and pagination data used by
+  the current clients.
 - Automated tests live in `fastapi_app/tests/` (run with `pytest -q` after
   installing `requirements-dev.txt`).

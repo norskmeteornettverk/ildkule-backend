@@ -1,45 +1,38 @@
 # Ildkule Backend
 
-This repository contains the backend code for the Ildkule project.
+This repository contains the active FastAPI backend for the Ildkule project.
 
-It has two parts:
+## Project Structure
 
-- `api/` is the old PHP API
-- `fastapi_app/` is the new FastAPI version
+- `fastapi_app/` - the API application, routers, services, models, schemas, and tests
+- `database/` - SQL setup and schema bootstrap files
+- `scripts/` - local debug and validation tools
+- `docs/` - backend notes and lineage documentation
 
-The goal is to move from the old API to the new one in a safe way.
+Useful docs:
 
-## What This Project Does
+- `docs/glossary.md` - current backend and API terms
+- `docs/api-db-file-lineage.md` - API, database, and file lineage
 
-This backend:
+## What This Backend Does
 
 - stores users, events, cameras, and stations
 - reads meteor data from files
 - saves data to MySQL
-- gives data to frontend clients through an API
+- serves data to frontend clients through the API
 - keeps raw trail data and raw `.res` data for later use
 
-## Project Structure
+## Run The API
 
-- `api/` old PHP code
-- `fastapi_app/` new Python API
-- `database/` SQL setup files
-- `thunder-tests/` old API request examples
-
-## Run The FastAPI App
-
-1. Use Python 3.10 for this repo. Python 3.14 breaks the current FastAPI/Pydantic stack.
-2. Create a virtual environment
-3. Install packages
-4. Copy the example env file
-5. Start the server
-
-Example:
+Use Python 3.10 for this repo. Python 3.14 breaks the current FastAPI/Pydantic stack.
 
 ```bash
+py -3.10 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+py -3.10 -m pip install --upgrade pip
 py -3.10 -m pip install -r fastapi_app/requirements.txt
 py -3.10 -m pip install -r fastapi_app/requirements-dev.txt
-cp fastapi_app/.env.example fastapi_app/.env
+Copy-Item fastapi_app/.env.example fastapi_app/.env
 py -3.10 -m uvicorn fastapi_app.app.main:app --reload
 ```
 
@@ -69,11 +62,7 @@ If your MySQL user uses `caching_sha2_password`, the Python app also needs
 
 ## Database Script
 
-The main SQL setup file is:
-
-```text
-database/build_db.sql
-```
+The main SQL setup file is `database/build_db.sql`.
 
 Use this file when you want to create a fresh database from scratch.
 
@@ -117,70 +106,6 @@ pytest -q fastapi_app/tests
 
 The test suite uses SQLite and does not need your local MySQL database.
 
-## Orbit Validation
-
-To compare the current orbit runtime against published `tables.html` files, run:
-
-```bash
-py -3.10 scripts/validate_orbit_against_tables.py --data-root "D:\\My files\\Coding\\ildkule backup\\prod\\data" --date-from 20220101 --date-to 20220131
-```
-
-The script has two run profiles:
-
-- `--profile dev` for short checks. This is the default. It scans a small sample and prints a short summary.
-- `--profile final` for a full run. It scans the full date range unless you also set `--limit`.
-
-It prints a human-readable report in Norwegian. The report explains:
-
-- what `q`, `e`, `i`, `node`, `argp`, and `M` mean
-- how many folders were skipped, and why
-- how often runtime beats fallback
-- median orbit error for observed, fallback, and runtime payloads
-- the worst remaining cases
-
-Use `--show-worst` to control how many bad cases are shown, and `--limit` to cap the number of folders in a dev run. For the final check, prefer `--profile final` and a large period that gives about 1000 or more comparable events when the data allows it.
-
-The script also supports policy labels for iterative benchmarking:
-
-- `--policy A|B|C` picks the policy used in the detailed report
-- `--compare-policies A,B,C` prints a short side-by-side summary
-- `--label` adds a free text tag for the run, so it is easier to compare iterations later
-- `--workers N` runs the validation in parallel across many events. Use this for large final runs.
-
-In this workflow:
-
-- `A` is the current runtime line with the safer linear path solve
-- `B` is the same base solve with stronger trimming of late trail points
-- `C` adds a weak deceleration model along the same straight path
-
-The script also prints where the time goes:
-
-- reading `tables.html`
-- loading event data
-- building observed solve candidates
-- building fallback solve
-- final runtime selection
-
-This matters because the slow part is still the per-event CPU work and coordinate math. GPU or CUDA is not the first choice here yet. CPU multiprocessing gives a more practical speed-up for the current workload.
-
-The report also makes the main product rule visible: for every cross-station solved event that already exists in the published solution, the new system should still try a cross-station solve. Small differences from `tables.html` are fine. Larger differences are only a problem when the published solution itself looks clearly wrong.
-
-The detailed report now splits observed results into three states:
-
-- no observed candidate built
-- observed candidate built, but rejected by the runtime guard
-- observed accepted in runtime
-
-## Notes
-
-- The new API supports meteor import from file data.
-- The import can create thumbnails from `image.jpg`.
-- Event import is done through `/api/admin/event-imports`.
-- The import upserts existing events and observations when it finds the same
-  data again.
-- Missing events and observations are soft-deleted, not hard-deleted.
-- Deleted items are hidden by default in API list calls.
-
 ## Import Behavior
 
 `/api/admin/event-imports` reads event folders from `DATA_DIRECTORY`.
@@ -202,8 +127,24 @@ This is a soft delete:
 - `is_deleted` becomes `true`
 - the API hides it by default
 
-## Current Status
+## Orbit Validation
 
-The FastAPI port is active and tested.
+To compare the current orbit runtime against published `tables.html` files, run:
 
-The old PHP API is still in the repository for reference during the move.
+```bash
+py -3.10 scripts/validate_orbit_against_tables.py --data-root "D:\\My files\\Coding\\ildkule backup\\prod\\data" --date-from 20220101 --date-to 20220131
+```
+
+The script has two run profiles:
+
+- `--profile dev` for short checks. This is the default.
+- `--profile final` for a full run.
+
+Useful options:
+
+- `--show-worst` controls how many bad cases are shown
+- `--limit` caps the number of folders in a dev run
+- `--policy A|B|C` picks the policy used in the detailed report
+- `--compare-policies A,B,C` prints a short side-by-side summary
+- `--label` adds a free text tag for the run
+- `--workers N` runs the validation in parallel across many events

@@ -1,7 +1,7 @@
 # API <-> database <-> file lineage
 
 ## Purpose
-Dette dokumentet viser lineage mellom API, database og filer for backendene i dette repoet.
+Dette dokumentet viser lineage mellom API, database og filer for backenden i dette repoet.
 
 Maalet er aa kunne svare paa fire spoersmaal paa en standardisert maate:
 
@@ -10,7 +10,7 @@ Maalet er aa kunne svare paa fire spoersmaal paa en standardisert maate:
 3. Hvilke verdier er avledet (`derived`) og ikke direkte lest fra en kolonne?
 4. Hvilke filer og kolonner finnes i systemet uten aa vaere importert til database eller eksponert i API?
 
-FastAPI er aktiv sannhetskilde for API-kontrakt og serialisering. PHP brukes bare som referanse der navn eller payload-form fortsatt forklarer dagens kontrakt.
+FastAPI er aktiv sannhetskilde for API-kontrakt og serialisering.
 
 ## Source basis
 - `database/build_db.sql` definerer tabellene `user`, `station`, `cam`, `event`, `observation_cam_data`, `event_res_entry`, `observation_trail_point`, `log_station`, `user_review`.
@@ -211,7 +211,7 @@ flowchart LR
 | User | `GET /api/users/{user_id}` | `id`, `identifier`, `user_role`, `roles`, `user_level`, `tutorial_completed`, `account_confirmed` | `user.id`, `username`, `role`, `user_level`, `tutorial_completed`, `confirmed` | - | `serialize_user` wrapper med offentlig navn `identifier` og `account_confirmed` | response-lineage for enkel brukerlookup; eget response-skjema er nå lagt på ruten | direct | `fastapi_app/app/routers/users.py:46`, `fastapi_app/app/utils/serialization.py:533` |
 | User | `GET /api/users`, `PATCH /api/users/{id}`, `PUT /api/users/{id}/tutorial-completion`, `PATCH /api/users/{id}/password` | `id`, `identifier`, `user_role`, `roles`, `user_level`, `tutorial_completed`, `account_confirmed` | `user.id`, `username`, `role`, `user_level`, `tutorial_completed`, `confirmed` | - | `serialize_user` wrapper med offentlig navn `identifier` og `account_confirmed` | direct | `fastapi_app/app/utils/serialization.py:533` |
 | User | `GET /api/users/{id}/reviews` | `reviews[].event_id`, `event_path`, `location`, `confirmed`, `review_label` | `user_review.event_id`, `user_review.confirmed`, `event.datetimetag`, `event.location` | event folder | `datetimetag -> event_path` | viser profilens vurderingshistorikk som join mellom `user_review` og `event` | direct | `fastapi_app/app/routers/users.py`, `fastapi_app/app/services/user_service.py` |
-| Tutorial | `GET /api/tutorial` | `version`, `content_owner`, `delivery_surface`, `status_field`, `completion_route`, `minimum_level_after_completion` | - | frontend tutorial files | `frontend-branch/ildkule-frontend/src/components/UserTutorialModal.vue` | backend eier bare metadata og statuslinje; selve tutorialteksten, media og språk eies av frontend | api-only | `fastapi_app/app/routers/users.py`, `frontend-branch/ildkule-frontend/src/components/UserTutorialModal.vue`, `frontend-branch/ildkule-frontend/src/views/Brukerprofil/Brukerprofil.vue` |
+| Tutorial | `GET /api/tutorial` | `version`, `content_owner`, `delivery_surface`, `status_field`, `completion_route`, `minimum_level_after_completion` | - | frontend tutorial files | frontend-owned tutorial content outside this repo | backend eier bare metadata og statuslinje; selve tutorialteksten, media og språk eies av frontend | api-only | `fastapi_app/app/routers/users.py` |
 | User | `/api/users` | `ratings`, `positive_ratings`, `negative_ratings` | `user_review.confirmed`, `user_review.user_id` | - | group by `UserReview` | derived | `fastapi_app/app/services/user_service.py:53` |
 | User | all public user responses | `password`, `confirm_token`, `password_reset_token` | `user.password`, `confirm_token`, `password_reset_token` | - | - | finnes i DB men prunes i `serialize_user` | db-only | `fastapi_app/app/utils/serialization.py:534` |
 | Forms | `POST /api/forms/contact` | `rcToken`, `form.fornavn`, `form.etternavn`, `form.epost`, `form.melding` | - | - | payload only | brukes kun til reCAPTCHA + SMTP | api-only | `fastapi_app/app/schemas/contact.py:7`, `fastapi_app/app/services/contact_service.py:10` |
@@ -344,6 +344,3 @@ flowchart LR
 | `_sync_import_columns` | ved reimport overskrives alle kildeavledede `event`- og `observation_cam_data`-felter; verdier som ikke lenger finnes i filene settes til `NULL` i stedet for å bli hengende igjen | `fastapi_app/app/services/event_service.py:938` |
 | `_mark_missing_events_deleted`, `_mark_missing_observations_deleted` | markerer rader som ikke finnes i siste importvindu som `is_deleted = true` og `deletion_reason = missing_from_import` | `fastapi_app/app/services/event_service.py:830`, `854` |
 
-## Appendix C: PHP parity notes
-- `api/src/models/Meteor.php` og `api/src/controllers/resourcecontrollers/MeteorController.php` viser den eldre event/meteor-kontrakten som FastAPI naa speiler med rikere serialisering.
-- `api/src/controllers/resourcecontrollers/UserLoginController.php` viser den eldre login-shapen med `username` og `confirmed`. FastAPI-ruta er naa oppdatert til offentlig naming-linje med `identifier` og `account_confirmed`.
