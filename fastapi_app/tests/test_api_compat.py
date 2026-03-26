@@ -248,7 +248,7 @@ def test_eventboard_returns_admin_fields_and_public_card_fields(client, db_sessi
     assert item["classification"]["user_confirmed"] == 1
 
 
-def test_coordinates_report_supports_filters_and_legacy_aliases(client, db_session):
+def test_coordinates_report_supports_filters_on_canonical_route(client, db_session):
     station_a = Station(station_name="alta")
     station_b = Station(station_name="larvik")
     cam_a = Cam(station=station_a, cam_name="cam9")
@@ -321,27 +321,11 @@ def test_coordinates_report_supports_filters_and_legacy_aliases(client, db_sessi
     payload = filtered.json()
     assert [row["id"] for row in payload] == [matching.id]
 
-    legacy = client.post(
-        "/api/insight/coordinates",
-        json={
-            "from_date": "2024-01-01",
-            "to_date": "2024-01-31",
-            "stations": ["alta"],
-            "cross_station_confirmed": True,
-            "candidate": True,
-        },
-    )
-    assert legacy.status_code == 200
-    legacy_row = legacy.json()[0]
-    assert legacy_row["StationCam"] == "cam9@alta"
-    assert legacy_row["NumberOfStations"] == 1
-    assert legacy_row["ProperTriangulation"] == "1"
-    assert legacy_row["SourceBadDetection"] == "0"
-    assert round(legacy_row["MeteorScoreHighest"], 3) == 0.732
-
-    report_alias = client.get("/api/report/coordinates")
-    assert report_alias.status_code == 200
-    assert "StationCam" in report_alias.json()[0]
+    filtered_row = payload[0]
+    assert filtered_row["station_cam"] == "cam9@alta"
+    assert filtered_row["number_of_stations"] == 1
+    assert filtered_row["proper_triangulation"] is True
+    assert round(filtered_row["ai_score"], 1) == 73.2
 
 
 def test_forms_recaptcha_failure_has_legacy_message_shape(client, monkeypatch):

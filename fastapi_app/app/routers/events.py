@@ -1,6 +1,6 @@
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
@@ -13,9 +13,7 @@ from ..schemas.event import (
     EventClassificationUpdate,
     EventFilterOptionsResponse,
     ExploreResponse,
-    InsightFilterRequest,
     InsightCoordinateRow,
-    InsightReportName,
     InsightStationRow,
     InsightTotalRow,
     EventReviewRequest,
@@ -46,30 +44,6 @@ def _parse_optional_bool(value: Optional[str]) -> Optional[bool]:
     if lowered in {"0", "false", "no"}:
         return False
     raise HTTPException(status_code=400, detail=f"Invalid boolean value: {value}")
-
-
-def _legacy_probability(score: Optional[float]) -> Optional[float]:
-    if score is None:
-        return None
-    return score / 100 if score > 1 else score
-
-
-def _legacy_coordinate_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    legacy_rows: List[Dict[str, Any]] = []
-    for row in rows:
-        legacy_rows.append(
-            {
-                **row,
-                "StationCam": row.get("station_cam"),
-                "NumberOfStations": row.get("number_of_stations"),
-                "ProperTriangulation": (
-                    "1" if row.get("proper_triangulation") else "0"
-                ),
-                "SourceBadDetection": "0",
-                "MeteorScoreHighest": _legacy_probability(row.get("ai_score")),
-            }
-        )
-    return legacy_rows
 
 
 @router.get(
@@ -337,56 +311,6 @@ def report_insight_total(
     session: Session = Depends(get_session),
 ):
     return event_service.get_insight(session, "total")
-
-
-@router.get(
-    "/insights/{report_name}",
-    response_model=List[Dict[str, Any]],
-    summary="Get aggregate report",
-    description="Returns one named aggregate report. Current supported values are `cam`, `station`, `total`, and `coordinates`. The `coordinates` variant is a solved-event coordinate report with start and end geometry, radiant values, and basic quality flags rather than a generic free-form map feed.",
-    include_in_schema=False,
-)
-def insight(
-    report_name: InsightReportName = Path(
-        ...,
-        description="Report selector. Supported values today are `cam`, `station`, `total`, and `coordinates`.",
-    ),
-    session: Session = Depends(get_session),
-):
-    return event_service.get_insight(session, report_name.value)
-
-
-@router.get("/insight/{report_name}", include_in_schema=False)
-def legacy_insight(
-    report_name: InsightReportName,
-    session: Session = Depends(get_session),
-):
-    if report_name == InsightReportName.coordinates:
-        return _legacy_coordinate_rows(event_service.get_coordinate_insight(session))
-    return event_service.get_insight(session, report_name.value)
-
-
-@router.get("/report/coordinates", include_in_schema=False)
-def legacy_report_coordinates_get(session: Session = Depends(get_session)):
-    return _legacy_coordinate_rows(event_service.get_coordinate_insight(session))
-
-
-@router.post("/insight/coordinates", include_in_schema=False)
-def legacy_report_coordinates_post(
-    payload: Optional[InsightFilterRequest] = Body(default=None),
-    session: Session = Depends(get_session),
-):
-    filters = payload or InsightFilterRequest()
-    rows = event_service.get_coordinate_insight(
-        session,
-        from_date=filters.from_date,
-        to_date=filters.to_date,
-        stations=filters.stations or None,
-        cross_station_confirmed=filters.cross_station_confirmed,
-        candidate_only=filters.candidate,
-        include_deleted=filters.includeDeleted,
-    )
-    return _legacy_coordinate_rows(rows)
 
 
 @router.get(
