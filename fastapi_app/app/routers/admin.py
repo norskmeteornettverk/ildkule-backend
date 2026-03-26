@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..db import get_session
+from ..schemas.common import MessageResponse
 from ..schemas.file_loader import FileLoadRequest
 from ..services.event_service import EventService
 
@@ -15,6 +16,7 @@ service = EventService()
 
 @router.post(
     "/event-imports",
+    response_model=MessageResponse,
     summary="Import events from files",
     description=(
         "Administrative ingestion endpoint that reads `YYYYMMDD/HHMMSS` event folders from `DATA_DIRECTORY` for the requested date window. "

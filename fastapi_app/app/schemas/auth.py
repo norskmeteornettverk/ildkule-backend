@@ -7,7 +7,7 @@ from pydantic import BaseModel, EmailStr, Field, root_validator
 class LoginRequest(BaseModel):
     identifier: str = Field(
         ...,
-        description="Account identifier used for login. This field is intended to support username or e-mail.",
+        description="Account identifier used for login. The current runtime authenticates against the stored account identifier in `User.username` and still accepts legacy input field name `username` as an alias.",
     )
     password: str
 

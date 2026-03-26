@@ -291,3 +291,29 @@ def test_openapi_exposes_verification_tutorial_reviews_and_station_network(clien
 
     classification = schemas["MeteorEventClassification"]["properties"]
     assert "user_confirmed" in classification
+
+
+def test_openapi_exposes_mutation_response_models_and_tightened_login_identifier_text(client):
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+
+    payload = response.json()
+    schemas = payload["components"]["schemas"]
+
+    assert schemas["LoginRequest"]["properties"]["identifier"]["description"] == (
+        "Account identifier used for login. The current runtime authenticates against "
+        "the stored account identifier in `User.username` and still accepts legacy "
+        "input field name `username` as an alias."
+    )
+
+    assert _response_schema(payload, "/api/auth/password-reset/request", method="post")["$ref"].endswith("/MessageResponse")
+    assert _response_schema(payload, "/api/auth/password-reset/confirm", method="post")["$ref"].endswith("/MessageResponse")
+    assert _response_schema(payload, "/api/users", method="post", status="201")["$ref"].endswith("/UserLookupResponse")
+    assert _response_schema(payload, "/api/users/{user_id}", method="patch")["$ref"].endswith("/UserLookupResponse")
+    assert _response_schema(payload, "/api/users/{user_id}/tutorial-completion", method="put")["$ref"].endswith("/UserLookupResponse")
+    assert _response_schema(payload, "/api/users/{user_id}/password", method="patch")["$ref"].endswith("/MessageResponse")
+    assert _response_schema(payload, "/api/events/{event_id}/review", method="post")["$ref"].endswith("/MsgResponse")
+    assert _response_schema(payload, "/api/events/{event_id}/classification", method="put")["$ref"].endswith("/MsgResponse")
+    assert _response_schema(payload, "/api/forms/contact", method="post")["$ref"].endswith("/MessageResponse")
+    assert _response_schema(payload, "/api/forms/meteor-report", method="post")["$ref"].endswith("/MessageResponse")
+    assert _response_schema(payload, "/api/admin/event-imports", method="post")["$ref"].endswith("/MessageResponse")

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_session
 from ..models import User
+from ..schemas.common import MsgResponse
 from ..schemas.event import (
     AdminMeteorEventListResponse,
     InsightCamRow,
@@ -209,6 +210,7 @@ def get_observation_trail_points(
 
 @router.post(
     "/events/{event_id}/review",
+    response_model=MsgResponse,
     summary="Review event",
     description="Stores one authenticated review for an event. Optional payload fields `eventID` and `userID` must match the URL id and authenticated token user when they are sent.",
 )
@@ -241,6 +243,7 @@ def review_event(
 
 @router.put(
     "/events/{event_id}/classification",
+    response_model=MsgResponse,
     summary="Update event classification",
     description="Admin-only event classification update. Current compatibility input values Positive and 1 map to confirmed meteor, while Negative and 0 map to not meteor.",
 )

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..db import get_session
+from ..schemas.common import MessageResponse
 from ..schemas.auth import (
     LoginRequest,
     PasswordResetConfirmation,
@@ -62,6 +63,7 @@ def login(payload: LoginRequest, session: Session = Depends(get_session)):
 
 @router.post(
     "/password-reset/request",
+    response_model=MessageResponse,
     summary="Request password reset",
     description="Starts the password-reset flow for the supplied e-mail address.",
 )
@@ -74,6 +76,7 @@ def request_reset(
 
 @router.post(
     "/password-reset/confirm",
+    response_model=MessageResponse,
     summary="Confirm password reset",
     description="Completes the password-reset flow with token, e-mail, and new password.",
 )

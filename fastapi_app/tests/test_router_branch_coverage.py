@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime
 
 from fastapi_app.app.models import User
 from fastapi_app.app.routers import admin as admin_router
@@ -135,6 +136,7 @@ def test_users_create_and_self_service_edges(client, db_session, monkeypatch):
         user_level="1",
         confirmed=False,
         tutorial_completed=False,
+        create_time=datetime.utcnow(),
     ))
     created = client.post(
         "/api/users",

@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from ..schemas.common import MessageResponse
 from ..schemas.contact import ContactRequest, ReportEventRequest
 from ..services.contact_service import ContactService
 
@@ -13,6 +14,7 @@ service = ContactService()
 
 @router.post(
     "/contact",
+    response_model=MessageResponse,
     summary="Send public contact form",
     description="Receives the public contact form and forwards it by e-mail after reCAPTCHA validation.",
     response_description="Contact form accepted.",
@@ -90,6 +92,7 @@ async def _parse_report_payload(request: Request) -> tuple[ReportEventRequest, l
 
 @router.post(
     "/meteor-report",
+    response_model=MessageResponse,
     summary="Send public observation report",
     description=(
         "Receives a public meteor observation report. "

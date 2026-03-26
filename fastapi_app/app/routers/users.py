@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_session
 from ..models import User
+from ..schemas.common import MessageResponse
 from ..schemas.user import (
     PasswordChangeRequest,
     TutorialMetadataResponse,
@@ -33,6 +34,7 @@ TUTORIAL_METADATA = TutorialMetadataResponse(
 @router.post(
     "/users",
     status_code=201,
+    response_model=UserLookupResponse,
     summary="Create user",
     description="Creates a new user account.",
 )
@@ -60,6 +62,7 @@ def get_user(
 
 @router.patch(
     "/users/{user_id}",
+    response_model=UserLookupResponse,
     summary="Patch user",
     description=(
         "Admin-only partial update for account fields. "
@@ -140,6 +143,7 @@ def get_tutorial_content(_: User = Depends(get_current_user)):
 
 @router.put(
     "/users/{user_id}/tutorial-completion",
+    response_model=UserLookupResponse,
     summary="Mark tutorial completion",
     description="Marks the user tutorial as completed or not completed. This remains a separate action because it can also lift the user's level from 0 to 1.",
 )
@@ -157,6 +161,7 @@ def update_tutorial(
 
 @router.patch(
     "/users/{user_id}/password",
+    response_model=MessageResponse,
     summary="Change user password",
     description="Partially updates the authenticated user's password.",
 )
