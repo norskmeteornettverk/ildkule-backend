@@ -17,6 +17,22 @@ def _resolved_array_items(payload, schema):
     return _resolve_schema(payload, schema["items"])
 
 
+def _assert_nullable_type(schema, expected_type):
+    if schema.get("nullable") is True:
+        assert schema["type"] == expected_type
+        return
+    if isinstance(schema.get("type"), list):
+        assert expected_type in schema["type"]
+        assert "null" in schema["type"]
+        return
+    if "anyOf" in schema:
+        types = {item.get("type") for item in schema["anyOf"]}
+        assert expected_type in types
+        assert "null" in types
+        return
+    raise AssertionError(f"Schema is not nullable: {schema}")
+
+
 def test_openapi_exposes_identifier_account_and_explore_shapes(client):
     response = client.get("/openapi.json")
     assert response.status_code == 200
@@ -345,3 +361,25 @@ def test_openapi_exposes_documented_runtime_400_and_401_responses(client):
     station_logs_401 = paths["/api/station-logs"]["post"]["responses"]["401"]
     assert station_logs_401["description"] == "Missing or invalid bearer token."
     assert station_logs_401["content"]["application/json"]["schema"]["$ref"].endswith("/ErrorDetailResponse")
+
+
+def test_openapi_exposes_nullable_event_fields_as_nullable(client):
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+
+    payload = response.json()
+    schemas = payload["components"]["schemas"]
+
+    _assert_nullable_type(schemas["MeteorEvent"]["properties"]["location"], "string")
+    _assert_nullable_type(schemas["MeteorEvent"]["properties"]["public_url"], "string")
+    _assert_nullable_type(schemas["MeteorEvent"]["properties"]["ai_score"], "number")
+
+    _assert_nullable_type(schemas["AdminMeteorEvent"]["properties"]["location"], "string")
+    _assert_nullable_type(schemas["AdminMeteorEvent"]["properties"]["public_url"], "string")
+    _assert_nullable_type(schemas["AdminMeteorEvent"]["properties"]["ai_score"], "number")
+
+    _assert_nullable_type(schemas["EventTimes"]["properties"]["utc"], "string")
+    _assert_nullable_type(schemas["EventTimes"]["properties"]["local"], "string")
+
+    _assert_nullable_type(schemas["RadiantPayload"]["properties"]["ra"], "number")
+    _assert_nullable_type(schemas["RadiantPayload"]["properties"]["dec"], "number")

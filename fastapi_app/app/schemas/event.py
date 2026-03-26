@@ -109,12 +109,14 @@ class ArtifactPrimaryAction(str, Enum):
 
 
 class EventTimes(MeteorSchema):
-    utc: Optional[str] = Field(
+    utc: str | None = Field(
         default=None,
+        nullable=True,
         description="UTC timestamp used as the main machine-readable event time. Null means the backend could not derive a stable event time from current source data.",
     )
-    local: Optional[str] = Field(
+    local: str | None = Field(
         default=None,
+        nullable=True,
         description="Local public display time serialised by the backend in the configured public timezone, not in the browser timezone. Null means the backend could not derive a stable event time from current source data.",
     )
     timezone: str = Field(
@@ -436,12 +438,14 @@ class AtmosphericPath(MeteorSchema):
 
 
 class RadiantPayload(MeteorSchema):
-    ra: Optional[float] = Field(
+    ra: float | None = Field(
         default=None,
+        nullable=True,
         description="Right ascension. Null means no radiant solution is available.",
     )
-    dec: Optional[float] = Field(
+    dec: float | None = Field(
         default=None,
+        nullable=True,
         description="Declination. Null means no radiant solution is available.",
     )
     shower: Optional[str] = Field(
@@ -497,15 +501,17 @@ class MeteorEventAnalysis(MeteorSchema):
 
 class MeteorEvent(MeteorSchema):
     id: int = Field(..., description="Event database id.")
-    location: Optional[str] = Field(
+    location: str | None = Field(
         default=None,
+        nullable=True,
         description="Public place name when known. Null means no place text is available.",
     )
     event_type: str = Field(..., description="Public list/detail event type.")
     cross_station_confirmed: bool = Field(..., description="Public cross-station status.")
     event_path: str = Field(..., description="Path built from date and time folders.")
-    public_url: Optional[str] = Field(
+    public_url: str | None = Field(
         default=None,
+        nullable=True,
         description="Public frontend URL when FRONT_URL is configured. Null means no public frontend base URL is configured.",
     )
     event_artifacts: List[ArtifactManifestItem]
@@ -525,8 +531,9 @@ class MeteorEvent(MeteorSchema):
         default=None,
         description="Meteor shower when known. Null means no shower is assigned.",
     )
-    ai_score: Optional[float] = Field(
+    ai_score: float | None = Field(
         default=None,
+        nullable=True,
         description="Highest available observation-side meteor probability when the backend has one. Null means no usable probability was available in the current event data.",
     )
     technical_validity: TechnicalValidity
