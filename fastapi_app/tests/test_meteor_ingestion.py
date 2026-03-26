@@ -487,15 +487,26 @@ def test_eventload_endpoint_ingests_data(client, db_session, sample_data_dir):
     assert trail_response.json()["has_ams_coords"] is True
     assert trail_response.json()["has_centroid"] is True
     assert trail_response.json()["has_centroid2"] is True
-    assert trail_response.json()["trailPoints"][0]["frame_index"] == 0
-    assert trail_response.json()["trailPoints"][0]["event_timestamp_us"] == 1715471644000123
-    assert trail_response.json()["trailPoints"][0]["event_timestamp"] == pytest.approx(1715471644.000123)
-    assert trail_response.json()["trailPoints"][0]["ams_coord_long"] == 60.11
-    assert trail_response.json()["trailPoints"][0]["ams_coord_lat"] == 10.21
-    assert trail_response.json()["trailPoints"][0]["centroid_coord_long"] == 60.11
-    assert trail_response.json()["trailPoints"][0]["centroid_coord_lat"] == 10.21
-    assert trail_response.json()["trailPoints"][0]["centroid2_coord_long"] == 60.12
-    assert trail_response.json()["trailPoints"][0]["centroid2_coord_lat"] == 10.22
+    first_point = trail_response.json()["trailPoints"][0]
+    assert first_point["frame_index"] == 0
+    assert first_point["pixel_x"] == 10.0
+    assert first_point["pixel_y"] == 20.0
+    assert first_point["event_timestamp_us"] == 1715471644000123
+    assert first_point["event_timestamp"] == pytest.approx(1715471644.000123)
+    assert first_point["coord_long"] == 60.1
+    assert first_point["coord_lat"] == 10.2
+    assert first_point["ams_coord_long"] == 60.11
+    assert first_point["ams_coord_lat"] == 10.21
+    assert first_point["centroid_coord_long"] == 60.11
+    assert first_point["centroid_coord_lat"] == 10.21
+    assert first_point["centroid2_coord_long"] == 60.12
+    assert first_point["centroid2_coord_lat"] == 10.22
+    assert first_point["gnomonic_x"] == 1.1
+    assert first_point["gnomonic_y"] == 2.1
+    assert first_point["brightness"] == 5.0
+    assert first_point["dct"] == 8.0
+    assert first_point["size"] == 11.0
+    assert first_point["frame_brightness"] == 14.0
 
 
 def test_eventload_ingests_centroid_without_centroid2(client, db_session, tmp_path_factory):

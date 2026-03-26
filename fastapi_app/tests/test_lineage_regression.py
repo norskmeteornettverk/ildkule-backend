@@ -251,7 +251,24 @@ def test_event_detail_and_trail_response_expose_ams_coordinates(client, db_sessi
     assert trail_response.json()["totalItems"] == 2
     assert trail_response.json()["has_ams_coords"] is True
     first_point = trail_response.json()["trailPoints"][0]
+    assert first_point["frame_index"] == 0
+    assert first_point["pixel_x"] == 10.0
+    assert first_point["pixel_y"] == 20.0
     assert first_point["event_timestamp_us"] == 1715558044000000
     assert first_point["event_timestamp"] == pytest.approx(1715558044.0)
+    assert first_point["coord_long"] == 60.1
+    assert first_point["coord_lat"] == 10.2
     assert first_point["ams_coord_long"] == 60.11
     assert first_point["ams_coord_lat"] == 10.21
+    assert "gnomonic_x" in first_point
+    assert "gnomonic_y" in first_point
+    assert "brightness" in first_point
+    assert "dct" in first_point
+    assert "size" in first_point
+    assert "frame_brightness" in first_point
+    assert first_point["gnomonic_x"] is None
+    assert first_point["gnomonic_y"] is None
+    assert first_point["brightness"] is None
+    assert first_point["dct"] is None
+    assert first_point["size"] is None
+    assert first_point["frame_brightness"] is None

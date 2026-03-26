@@ -130,16 +130,28 @@ def test_openapi_exposes_identifier_account_and_explore_shapes(client):
     assert "has_centroid2" in trail_response
     trail_points = _resolve_schema(payload, trail_response["trailPoints"])
     trail_item = _resolve_schema(payload, trail_points["items"])
+    assert "frame_index" in trail_item["properties"]
+    assert trail_item["properties"]["frame_index"]["type"] == "integer"
+    assert "pixel_x" in trail_item["properties"]
+    assert "pixel_y" in trail_item["properties"]
     assert "event_timestamp_us" in trail_item["properties"]
     assert trail_item["properties"]["event_timestamp_us"]["type"] == "integer"
     assert "event_timestamp" in trail_item["properties"]
     assert trail_item["properties"]["event_timestamp"]["type"] == "number"
+    assert "coord_long" in trail_item["properties"]
+    assert "coord_lat" in trail_item["properties"]
     assert "ams_coord_long" in trail_item["properties"]
     assert "ams_coord_lat" in trail_item["properties"]
     assert "centroid_coord_long" in trail_item["properties"]
     assert "centroid_coord_lat" in trail_item["properties"]
     assert "centroid2_coord_long" in trail_item["properties"]
     assert "centroid2_coord_lat" in trail_item["properties"]
+    assert "gnomonic_x" in trail_item["properties"]
+    assert "gnomonic_y" in trail_item["properties"]
+    assert "brightness" in trail_item["properties"]
+    assert "dct" in trail_item["properties"]
+    assert "size" in trail_item["properties"]
+    assert "frame_brightness" in trail_item["properties"]
 
 
 def test_openapi_exposes_filters_station_logs_and_path_lookup(client):
