@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_session
 from ..models import User
-from ..schemas.common import MsgResponse
+from ..schemas.common import ErrorDetailResponse, MsgResponse
 from ..schemas.event import (
     AdminMeteorEventListResponse,
     InsightCamRow,
@@ -185,6 +185,12 @@ def get_observation_trail_points(
 @router.post(
     "/events/{event_id}/review",
     response_model=MsgResponse,
+    responses={
+        400: {
+            "model": ErrorDetailResponse,
+            "description": "Payload event or user id does not match the URL or authenticated token user.",
+        }
+    },
     summary="Review event",
     description="Stores one authenticated review for an event. Optional payload fields `eventID` and `userID` must match the URL id and authenticated token user when they are sent.",
 )
@@ -362,6 +368,16 @@ def explore(
 @router.get(
     "/explore/export",
     response_class=PlainTextResponse,
+    responses={
+        400: {
+            "description": "Unsupported export format.",
+            "content": {
+                "application/json": {
+                    "schema": ErrorDetailResponse.schema(ref_template="#/components/schemas/{model}")
+                }
+            },
+        }
+    },
     summary="Export Utforsk CSV",
     description="Exports the same filtered Utforsk data set as CSV. Use `format=csv`. Other format values are rejected with HTTP 400.",
     response_description="CSV export built from the filtered Utforsk data set.",

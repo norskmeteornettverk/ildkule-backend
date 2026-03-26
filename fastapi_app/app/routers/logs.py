@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..db import get_session
+from ..schemas.common import ErrorDetailResponse
 from ..schemas.log import (
     StationLogEntry,
     StationLogPayload,
@@ -41,6 +42,12 @@ def station_network(session: Session = Depends(get_session)):
 @router.post(
     "/station-logs",
     response_model=StationLogWriteResponse,
+    responses={
+        401: {
+            "model": ErrorDetailResponse,
+            "description": "Missing or invalid bearer token.",
+        }
+    },
     summary="Store a station log row",
     description="Stores one pushed station log entry after bearer-token validation. Requests without a valid `Authorization: Bearer <token>` header are rejected with 401.",
 )

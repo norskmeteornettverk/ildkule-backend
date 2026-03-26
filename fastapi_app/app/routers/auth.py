@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..db import get_session
-from ..schemas.common import MessageResponse
+from ..schemas.common import ErrorDetailResponse, MessageResponse
 from ..schemas.auth import (
     LoginRequest,
     PasswordResetConfirmation,
@@ -97,6 +97,12 @@ def confirm_reset(
 @router.get(
     "/verification/confirm",
     response_model=VerificationConfirmationResponse,
+    responses={
+        401: {
+            "model": ErrorDetailResponse,
+            "description": "Invalid or stale verification token.",
+        }
+    },
     summary="Confirm account verification",
     description="Confirms one user account from the verification token sent by e-mail. Invalid or stale tokens return 401.",
 )

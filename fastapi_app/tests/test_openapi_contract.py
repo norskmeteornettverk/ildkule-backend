@@ -317,3 +317,31 @@ def test_openapi_exposes_mutation_response_models_and_tightened_login_identifier
     assert _response_schema(payload, "/api/forms/contact", method="post")["$ref"].endswith("/MessageResponse")
     assert _response_schema(payload, "/api/forms/meteor-report", method="post")["$ref"].endswith("/MessageResponse")
     assert _response_schema(payload, "/api/admin/event-imports", method="post")["$ref"].endswith("/MessageResponse")
+
+
+def test_openapi_exposes_documented_runtime_400_and_401_responses(client):
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+
+    payload = response.json()
+    paths = payload["paths"]
+
+    verification_401 = paths["/api/auth/verification/confirm"]["get"]["responses"]["401"]
+    assert verification_401["description"] == "Invalid or stale verification token."
+    assert verification_401["content"]["application/json"]["schema"]["$ref"].endswith("/ErrorDetailResponse")
+
+    review_400 = paths["/api/events/{event_id}/review"]["post"]["responses"]["400"]
+    assert review_400["description"] == (
+        "Payload event or user id does not match the URL or authenticated token user."
+    )
+    assert review_400["content"]["application/json"]["schema"]["$ref"].endswith("/ErrorDetailResponse")
+
+    export_400 = paths["/api/explore/export"]["get"]["responses"]["400"]
+    assert export_400["description"] == "Unsupported export format."
+    export_400_schema = export_400["content"]["application/json"]["schema"]
+    assert export_400_schema["type"] == "object"
+    assert export_400_schema["properties"]["detail"]["type"] == "string"
+
+    station_logs_401 = paths["/api/station-logs"]["post"]["responses"]["401"]
+    assert station_logs_401["description"] == "Missing or invalid bearer token."
+    assert station_logs_401["content"]["application/json"]["schema"]["$ref"].endswith("/ErrorDetailResponse")
