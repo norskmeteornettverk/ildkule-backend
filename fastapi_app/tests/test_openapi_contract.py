@@ -179,6 +179,11 @@ def test_openapi_exposes_filters_station_logs_and_path_lookup(client):
         paths["/api/station-logs"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]
     )
     assert station_log_post["$ref"].endswith("/StationLogWriteResponse")
+    assert paths["/api/station-logs"]["post"]["security"] == [{"HTTPBearer": []}]
+    assert "authorization" not in [
+        parameter["name"]
+        for parameter in paths["/api/station-logs"]["post"].get("parameters", [])
+    ]
 
     assert "/api/events/by-path/{date_tag}/{time_tag}" in paths
     parameters = paths["/api/events/by-path/{date_tag}/{time_tag}"]["get"]["parameters"]

@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..db import get_session
+from ..security import bearer_scheme
 from ..schemas.common import ErrorDetailResponse
 from ..schemas.log import (
     StationLogEntry,
@@ -53,10 +55,7 @@ def station_network(session: Session = Depends(get_session)):
 )
 def insert_station_log(
     payload: StationLogPayload,
-    authorization: str = Header(
-        None,
-        description="Bearer token for station-log ingestion, formatted as `Bearer <token>`.",
-    ),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     session: Session = Depends(get_session),
 ):
     if not settings.station_log_token:
@@ -64,11 +63,11 @@ def insert_station_log(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Station log token not configured",
         )
-    if not authorization or not authorization.startswith("Bearer "):
+    if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization failed"
         )
-    token = authorization.split(" ", 1)[1]
+    token = credentials.credentials
     if token != settings.station_log_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization failed"
