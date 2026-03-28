@@ -52,8 +52,10 @@ def create_user(payload: UserCreate, session: Session = Depends(get_session)):
 def get_user(
     user_id: int,
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
+    if current_user.id != user_id and current_user.role != "ROLE_ADMIN":
+        raise HTTPException(status_code=403, detail="Not authorized")
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
