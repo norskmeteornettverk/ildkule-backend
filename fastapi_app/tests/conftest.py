@@ -19,6 +19,9 @@ if TEST_DB_PATH.exists():
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{TEST_DB_PATH}")
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret")
 os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
+os.environ.setdefault("SMTP_SENDER", "noreply@example.com")
+os.environ.setdefault("CONTACT_RECIPIENT", "contact-test@example.com")
+os.environ.setdefault("METEOR_REPORT_RECIPIENT", "meteor-test@example.com")
 
 from fastapi_app.app.config import get_settings
 from fastapi_app.app.db import Base, SessionLocal, engine, get_session

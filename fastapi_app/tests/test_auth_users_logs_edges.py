@@ -60,6 +60,29 @@ def test_login_rejects_wrong_password(client, db_session, monkeypatch):
     assert response.json()["detail"] == "Feil brukernavn eller passord"
 
 
+def test_login_rejects_unconfirmed_account(client, db_session, monkeypatch):
+    monkeypatch.setattr(
+        user_service_module, "verify_password", lambda plain, stored: plain == stored
+    )
+    user = User(
+        username="unconfirmed@example.com",
+        password="correct-password",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=False,
+    )
+    db_session.add(user)
+    db_session.commit()
+
+    response = client.post(
+        "/api/auth/login",
+        json={"identifier": "unconfirmed@example.com", "password": "correct-password"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Feil brukernavn eller passord"
+
+
 def test_password_reset_confirm_rejects_unknown_token(client, db_session):
     user = User(
         username="reset-confirm@example.com",
@@ -239,6 +262,71 @@ def test_user_route_requires_auth_and_rejects_invalid_or_stale_token(client):
     stale = client.get("/api/users/1", headers={"Authorization": f"Bearer {stale_token}"})
     assert stale.status_code == 401
     assert stale.json()["detail"] == "User no longer exists"
+
+
+def test_user_route_forbids_regular_user_from_reading_other_user(client, db_session):
+    own_user = User(
+        username="own-user@example.com",
+        password="pw",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=True,
+    )
+    other_user = User(
+        username="other-user@example.com",
+        password="pw",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=True,
+    )
+    db_session.add_all([own_user, other_user])
+    db_session.commit()
+
+    response = client.get(f"/api/users/{other_user.id}", headers=_auth_header(own_user))
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Not authorized"
+
+
+def test_user_route_allows_admin_to_read_other_user(client, db_session):
+    admin_user = User(
+        username="admin-user@example.com",
+        password="pw",
+        role="ROLE_ADMIN",
+        user_level="1",
+        confirmed=True,
+    )
+    other_user = User(
+        username="other-user-2@example.com",
+        password="pw",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=True,
+    )
+    db_session.add_all([admin_user, other_user])
+    db_session.commit()
+
+    response = client.get(f"/api/users/{other_user.id}", headers=_auth_header(admin_user))
+
+    assert response.status_code == 200
+    assert response.json()["id"] == other_user.id
+
+
+def test_user_route_allows_regular_user_to_read_own_user(client, db_session):
+    own_user = User(
+        username="own-user-2@example.com",
+        password="pw",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=True,
+    )
+    db_session.add(own_user)
+    db_session.commit()
+
+    response = client.get(f"/api/users/{own_user.id}", headers=_auth_header(own_user))
+
+    assert response.status_code == 200
+    assert response.json()["id"] == own_user.id
 
 
 def test_admin_eventboard_rejects_non_admin_user(client, db_session):

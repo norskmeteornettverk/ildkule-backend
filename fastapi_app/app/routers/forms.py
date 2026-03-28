@@ -183,7 +183,7 @@ async def report_meteor(request: Request):
     except HTTPException as exc:
         if exc.status_code == 401 and exc.detail == "reCAPTCHA validation failed":
             message = (
-                "Kontaktskjema mottatt, men foresporsel ble ikke autentisert som en "
+                "Observasjon mottatt, men foresporsel ble ikke autentisert som en "
                 "vanlig bruker med reCAPTCHA"
             )
             return JSONResponse(
