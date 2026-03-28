@@ -258,6 +258,55 @@ class EventService:
             )
         return rows
 
+    def export_coordinate_insight_csv(
+        self,
+        session: Session,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        stations: Optional[List[str]] = None,
+        cross_station_confirmed: Optional[bool] = None,
+        candidate_only: bool = False,
+        include_deleted: bool = False,
+    ) -> str:
+        rows = self.get_coordinate_insight(
+            session,
+            from_date=from_date,
+            to_date=to_date,
+            stations=stations,
+            cross_station_confirmed=cross_station_confirmed,
+            candidate_only=candidate_only,
+            include_deleted=include_deleted,
+        )
+        buffer = io.StringIO()
+        writer = csv.DictWriter(
+            buffer,
+            fieldnames=[
+                "id",
+                "datetimetag",
+                "date",
+                "station_cam",
+                "number_of_stations",
+                "lat",
+                "lng",
+                "slat",
+                "slng",
+                "radiant_ra",
+                "radiant_dec",
+                "radiant_ecl_lat",
+                "radiant_ecl_long",
+                "track_speed",
+                "track_endheight",
+                "radiant_shower",
+                "triangulation",
+                "proper_triangulation",
+                "ai_score",
+            ],
+        )
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({field: row.get(field) for field in writer.fieldnames})
+        return buffer.getvalue()
+
     def _admin_event_payload(
         self,
         event: Event,

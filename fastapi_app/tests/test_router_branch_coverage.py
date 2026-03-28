@@ -265,6 +265,12 @@ def test_events_list_search_filter_and_coordinates_bool_parsing(client, monkeypa
     assert invalid.json()["detail"] == "Invalid boolean value: maybe"
 
 
+def test_coordinates_export_rejects_unsupported_format(client):
+    response = client.get("/api/insights/coordinates/export", params={"format": "json"})
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Only csv export is supported"
+
+
 def test_event_review_messages_and_alias_routes(client, db_session, monkeypatch):
     user = User(
         username="reviewer@example.com",

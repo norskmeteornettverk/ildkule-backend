@@ -241,7 +241,7 @@ def admin_event_classification(
     "/insights/coordinates",
     response_model=List[InsightCoordinateRow],
     summary="Get coordinate report",
-    description="Convenience route for the solved-event coordinate report. The current runtime returns end coordinates, start coordinates, radiant values, speed, end height, triangulation flags, station count, and the highest available observation-side probability when the source data has it. The same date, station, candidate, and cross-station filters used by Utforsk can also be applied here.",
+    description="Convenience route for the solved-event coordinate report. The current runtime returns end coordinates, start coordinates, radiant values, speed, end height, triangulation flags, station count, and the highest available observation-side probability when the source data has it. The same date, station, candidate, and cross-station filters are also available here.",
 )
 def report_coordinates(
     from_date: Optional[str] = Query(
@@ -268,6 +268,64 @@ def report_coordinates(
     session: Session = Depends(get_session),
 ):
     return event_service.get_coordinate_insight(
+        session,
+        from_date=from_date,
+        to_date=to_date,
+        stations=_parse_csv(stations),
+        cross_station_confirmed=_parse_optional_bool(cross_station_confirmed),
+        candidate_only=candidate,
+        include_deleted=includeDeleted,
+    )
+
+
+@router.get(
+    "/insights/coordinates/export",
+    response_class=PlainTextResponse,
+    responses={
+        400: {
+            "description": "Unsupported export format.",
+            "content": {
+                "application/json": {
+                    "schema": ErrorDetailResponse.schema(ref_template="#/components/schemas/{model}")
+                }
+            },
+        }
+    },
+    summary="Export coordinate report CSV",
+    description="Exports the coordinate insight report as CSV. Use `format=csv`. Other format values are rejected with HTTP 400.",
+    response_description="CSV export of the filtered coordinate insight report.",
+)
+def export_coordinates_csv(
+    from_date: Optional[str] = Query(
+        None,
+        description="Inclusive start date in `YYYY-MM-DD` form.",
+    ),
+    to_date: Optional[str] = Query(
+        None,
+        description="Inclusive end date in `YYYY-MM-DD` form.",
+    ),
+    stations: Optional[str] = Query(
+        None,
+        description="Comma-separated station names, for example `alta,ski`.",
+    ),
+    cross_station_confirmed: Optional[str] = Query(
+        None,
+        description="Optional boolean filter accepted as `true`, `false`, `1`, `0`, `yes`, or `no`.",
+    ),
+    candidate: bool = Query(
+        False,
+        description="Set true to keep only candidate events.",
+    ),
+    format: str = Query(
+        "csv",
+        description="Export format. Only `csv` is supported today. Other values return HTTP 400.",
+    ),
+    includeDeleted: bool = Query(False),
+    session: Session = Depends(get_session),
+):
+    if format.lower() != "csv":
+        raise HTTPException(status_code=400, detail="Only csv export is supported")
+    return event_service.export_coordinate_insight_csv(
         session,
         from_date=from_date,
         to_date=to_date,

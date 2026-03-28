@@ -38,10 +38,10 @@ def create_app() -> FastAPI:
         description=(
             "Public and administrative API for Ildkule. "
             "The current OpenAPI document prioritises the new meteor-event contract, "
-            "Utforsk data, ingestion, users, and public forms."
+            "event filters, insight reports, ingestion, users, and public forms."
         ),
         openapi_tags=[
-            {"name": "events", "description": "Meteor-event list, meteor-event detail, raw event supplements, and Utforsk endpoints."},
+            {"name": "events", "description": "Meteor-event list, meteor-event detail, raw event supplements, and event filter endpoints."},
             {"name": "forms", "description": "Public contact and observation-reporting endpoints."},
             {"name": "auth", "description": "Authentication, verification, and password reset endpoints."},
             {"name": "users", "description": "Account creation, account reads, tutorial metadata and status, review history, and administrative user management."},

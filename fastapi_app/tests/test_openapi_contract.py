@@ -254,6 +254,7 @@ def test_openapi_exposes_filters_station_logs_and_path_lookup(client):
         "candidate",
         "includeDeleted",
     }.issubset(coordinates_parameters)
+    assert "/api/insights/coordinates/export" in paths
 
     user_response = _resolve_schema(
         payload,
@@ -367,6 +368,12 @@ def test_openapi_exposes_documented_runtime_400_and_401_responses(client):
         "Payload event or user id does not match the URL or authenticated token user."
     )
     assert review_400["content"]["application/json"]["schema"]["$ref"].endswith("/ErrorDetailResponse")
+
+    export_400 = paths["/api/insights/coordinates/export"]["get"]["responses"]["400"]
+    assert export_400["description"] == "Unsupported export format."
+    export_400_schema = export_400["content"]["application/json"]["schema"]
+    assert export_400_schema["type"] == "object"
+    assert export_400_schema["properties"]["detail"]["type"] == "string"
 
     station_logs_401 = paths["/api/station-logs"]["post"]["responses"]["401"]
     assert station_logs_401["description"] == "Missing or invalid bearer token."

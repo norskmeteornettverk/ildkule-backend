@@ -38,7 +38,7 @@ The public FastAPI name for an event solved from more than one station or otherw
 The public event class shown by the API. Common values are `Krysspeilet`, `Upeilet`, and `Meteorittkandidat`.
 
 `candidate`
-The candidate summary object used in event payloads and explore responses. It includes `is_candidate`, `max_end_height_km`, and `max_speed_kms`.
+The candidate summary object used in event payloads and insight-filtered reports. It includes `is_candidate`, `max_end_height_km`, and `max_speed_kms`.
 
 `res entries`
 Parsed rows from a `.res` file. These rows hold solved geometry and station-level line data for an event.

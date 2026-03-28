@@ -1062,3 +1062,10 @@ def test_event_filters_and_coordinate_insights(client, db_session):
     assert coordinates_payload[0]["slat"] == 70.4
     assert coordinates_payload[0]["slng"] == 24.2
     assert coordinates_payload[0]["ai_score"] == 73.2
+
+    csv_response = client.get(
+        "/api/insights/coordinates/export?format=csv&from_date=2026-02-01&to_date=2026-02-05&stations=alta&cross_station_confirmed=true&candidate=true"
+    )
+    assert csv_response.status_code == 200
+    assert "id,datetimetag,date,station_cam,number_of_stations,lat,lng" in csv_response.text
+    assert "20260203040506" in csv_response.text
