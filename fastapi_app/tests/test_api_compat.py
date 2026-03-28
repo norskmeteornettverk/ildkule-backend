@@ -357,6 +357,7 @@ def test_forms_recaptcha_failure_has_legacy_message_shape(client, monkeypatch):
     assert report.status_code == 401
     assert "message" in report.json()
     assert "error" in report.json()
+    assert "Observasjon mottatt" in report.json()["message"]
 
 
 def test_reportmeteor_accepts_multipart_attachments(client, monkeypatch):
