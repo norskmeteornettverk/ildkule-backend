@@ -185,7 +185,7 @@ def test_users_create_and_self_service_edges(client, db_session, monkeypatch):
     assert denied_password.json()["detail"] == "Not authorized"
 
 
-def test_events_list_search_filter_and_explore_bool_parsing(client, monkeypatch):
+def test_events_list_search_filter_and_coordinates_bool_parsing(client, monkeypatch):
     monkeypatch.setattr(
         events_router.event_service,
         "search",
@@ -218,24 +218,19 @@ def test_events_list_search_filter_and_explore_bool_parsing(client, monkeypatch)
     )
     monkeypatch.setattr(
         events_router.event_service,
-        "explore",
-        lambda session, **kwargs: {
-            "filters": {
-                "from_date": kwargs.get("from_date"),
-                "to_date": kwargs.get("to_date"),
-                "stations": kwargs.get("stations") or [],
+        "get_coordinate_insight",
+        lambda session, **kwargs: [
+            {
+                "id": 1,
+                "datetimetag": "20260101010203",
+                "station_cam": "cam1@ski",
+                "number_of_stations": 1,
+                "lat": 60.1,
+                "lng": 10.2,
+                "triangulation": True,
                 "cross_station_confirmed": kwargs.get("cross_station_confirmed"),
-                "candidate": kwargs.get("candidate_only", False),
-            },
-            "candidate_settings": {"max_end_height_km": 25.0, "max_speed_kms": 25.0},
-            "kpi": {
-                "total_events": 1,
-                "cross_station_confirmed": 1,
-                "candidates": 0,
-                "stations": ["ski"],
-            },
-            "events": [],
-        },
+            }
+        ],
     )
 
     searched = client.get("/api/events", params={"searchTerm": "fireball", "includeDeleted": True})
@@ -253,15 +248,19 @@ def test_events_list_search_filter_and_explore_bool_parsing(client, monkeypatch)
     assert listed.status_code == 200
     assert listed.json()["currentPage"] == 3
 
-    explore_true = client.get("/api/explore", params={"cross_station_confirmed": "yes"})
-    assert explore_true.status_code == 200
-    assert explore_true.json()["filters"]["cross_station_confirmed"] is True
+    coordinates_true = client.get(
+        "/api/insights/coordinates", params={"cross_station_confirmed": "yes"}
+    )
+    assert coordinates_true.status_code == 200
+    assert coordinates_true.json()[0]["cross_station_confirmed"] is True
 
-    explore_false = client.get("/api/explore", params={"cross_station_confirmed": "0"})
-    assert explore_false.status_code == 200
-    assert explore_false.json()["filters"]["cross_station_confirmed"] is False
+    coordinates_false = client.get(
+        "/api/insights/coordinates", params={"cross_station_confirmed": "0"}
+    )
+    assert coordinates_false.status_code == 200
+    assert coordinates_false.json()[0]["cross_station_confirmed"] is False
 
-    invalid = client.get("/api/explore", params={"cross_station_confirmed": "maybe"})
+    invalid = client.get("/api/insights/coordinates", params={"cross_station_confirmed": "maybe"})
     assert invalid.status_code == 400
     assert invalid.json()["detail"] == "Invalid boolean value: maybe"
 
@@ -496,9 +495,3 @@ def test_admin_eventboard_uses_admin_response_shape(client, db_session, monkeypa
     assert payload["events"][0]["ratings"] == 5
     assert payload["events"][0]["positive_ratings"] == 3
     assert payload["events"][0]["negative_ratings"] == 2
-
-
-def test_explore_export_rejects_unsupported_format(client):
-    response = client.get("/api/explore/export", params={"format": "json"})
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Only csv export is supported"

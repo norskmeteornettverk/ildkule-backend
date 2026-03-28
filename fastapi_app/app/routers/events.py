@@ -1,7 +1,6 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from ..db import get_session
@@ -12,7 +11,6 @@ from ..schemas.event import (
     InsightCamRow,
     EventClassificationUpdate,
     EventFilterOptionsResponse,
-    ExploreResponse,
     InsightCoordinateRow,
     InsightStationRow,
     InsightTotalRow,
@@ -317,110 +315,6 @@ def report_insight_total(
     session: Session = Depends(get_session),
 ):
     return event_service.get_insight(session, "total")
-
-
-@router.get(
-    "/explore",
-    response_model=ExploreResponse,
-    summary="Get Utforsk data",
-    description=(
-        "Returns the filtered Utforsk contract. "
-        "The response combines filter echo, active candidate settings, KPI values, "
-        "and event cards from one shared filtered data set."
-    ),
-    response_description="Utforsk response with filters, KPI values, and event cards.",
-)
-def explore(
-    from_date: Optional[str] = Query(
-        None,
-        description="Inclusive start date in `YYYY-MM-DD` form.",
-    ),
-    to_date: Optional[str] = Query(
-        None,
-        description="Inclusive end date in `YYYY-MM-DD` form.",
-    ),
-    stations: Optional[str] = Query(
-        None,
-        description="Comma-separated station names, for example `alta,ski`.",
-    ),
-    cross_station_confirmed: Optional[str] = Query(
-        None,
-        description="Optional boolean filter accepted as `true`, `false`, `1`, `0`, `yes`, or `no`.",
-    ),
-    candidate: bool = Query(
-        False,
-        description="Set true to keep only candidate events.",
-    ),
-    includeDeleted: bool = Query(False),
-    session: Session = Depends(get_session),
-):
-    return event_service.explore(
-        session,
-        from_date=from_date,
-        to_date=to_date,
-        stations=_parse_csv(stations),
-        cross_station_confirmed=_parse_optional_bool(cross_station_confirmed),
-        candidate_only=candidate,
-        include_deleted=includeDeleted,
-    )
-
-
-@router.get(
-    "/explore/export",
-    response_class=PlainTextResponse,
-    responses={
-        400: {
-            "description": "Unsupported export format.",
-            "content": {
-                "application/json": {
-                    "schema": ErrorDetailResponse.schema(ref_template="#/components/schemas/{model}")
-                }
-            },
-        }
-    },
-    summary="Export Utforsk CSV",
-    description="Exports the same filtered Utforsk data set as CSV. Use `format=csv`. Other format values are rejected with HTTP 400.",
-    response_description="CSV export built from the filtered Utforsk data set.",
-)
-def explore_export_csv(
-    from_date: Optional[str] = Query(
-        None,
-        description="Inclusive start date in `YYYY-MM-DD` form.",
-    ),
-    to_date: Optional[str] = Query(
-        None,
-        description="Inclusive end date in `YYYY-MM-DD` form.",
-    ),
-    stations: Optional[str] = Query(
-        None,
-        description="Comma-separated station names, for example `alta,ski`.",
-    ),
-    cross_station_confirmed: Optional[str] = Query(
-        None,
-        description="Optional boolean filter accepted as `true`, `false`, `1`, `0`, `yes`, or `no`.",
-    ),
-    candidate: bool = Query(
-        False,
-        description="Set true to keep only candidate events.",
-    ),
-    format: str = Query(
-        "csv",
-        description="Export format. Only `csv` is supported today. Other values return HTTP 400.",
-    ),
-    includeDeleted: bool = Query(False),
-    session: Session = Depends(get_session),
-):
-    if format.lower() != "csv":
-        raise HTTPException(status_code=400, detail="Only csv export is supported")
-    return event_service.explore_csv(
-        session,
-        from_date=from_date,
-        to_date=to_date,
-        stations=_parse_csv(stations),
-        cross_station_confirmed=_parse_optional_bool(cross_station_confirmed),
-        candidate_only=candidate,
-        include_deleted=includeDeleted,
-    )
 
 
 @router.get(

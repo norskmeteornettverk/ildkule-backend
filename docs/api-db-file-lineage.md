@@ -57,8 +57,6 @@ flowchart LR
         A3["/api/events/by-path/{date}/{time}"]
         A4["/api/events/{id}/res"]
         A5["/api/observations/{id}/trail"]
-        A6["/api/explore"]
-        A7["/api/explore/export?format=csv"]
         A8["/api/events/filters"]
         A9["/api/insights/*"]
     end
@@ -88,14 +86,6 @@ flowchart LR
     D5 -- "raw .res rows" --> A4
     D6 -- "trailPoints with normalised coord, AMS, centroid, centroid2, timestamps" --> A5
     D4 -- "observation-level booleans: has_ams_coords, has_centroid, has_centroid2" --> A5
-    D1 -- "event card basis" --> A6
-    D2 -- "station labels and counts" --> A6
-    D3 -- "camera labels" --> A6
-    D4 -- "station summary and observation-derived values" --> A6
-    D1 -- "CSV event basis" --> A7
-    D2 -- "CSV station-derived values" --> A7
-    D3 -- "CSV camera-derived values" --> A7
-    D4 -- "CSV observation-derived values" --> A7
     D1 -- "years and event types" --> A8
     D2 -- "station list" --> A8
     D3 -- "station list via cams" --> A8
@@ -107,8 +97,6 @@ flowchart LR
     F7 -. "direct file-backed artifacts" .-> A1
     F7 -. "direct file-backed artifacts" .-> A2
     F7 -. "direct file-backed artifacts" .-> A3
-    F7 -. "direct file-backed artifacts" .-> A6
-    F7 -. "direct file-backed artifacts" .-> A7
     F8 -. "direct file-backed artifacts" .-> A2
 ```
 
@@ -178,13 +166,7 @@ flowchart LR
 | Res entries | `/api/events/{id}/res` | `resEntries[].long1`, `lat1`, `long2`, `lat2`, `height` | `event_res_entry.*` | `*.res` | samme rad: token 0-4 | begge koordinatpar leses fra samme `.res`-rad; dagens port bruker bare `long1/lat1` paa event-nivaa, mens `long2/lat2` foreloepig ser redundant eller avrundet ut | direct | `fastapi_app/app/services/file_mapper.py:350`, `fastapi_app/app/utils/serialization.py:583`, `fastapi_app/app/schemas/event.py:6` |
 | Trail points | `/api/observations/{id}/trail` | `has_ams_coords`, `has_centroid`, `has_centroid2`, `trailPoints[].frame_index`, `pixel_x`, `pixel_y`, `event_timestamp_us`, `event_timestamp`, `coord_long`, `coord_lat`, `ams_coord_long`, `ams_coord_lat`, `centroid_coord_long`, `centroid_coord_lat`, `centroid2_coord_long`, `centroid2_coord_lat` | `observation_trail_point.*`, `observation_cam_data.trail_ams_coords`, `observation_cam_data.trail_centroid`, `observation_cam_data.trail_centroid2` | `event.txt`, `centroid.txt`, `centroid2.txt` | `[trail]` arrays fra `event.txt`; `centroid.txt` -> `centroid_coord_*`; `centroid2.txt` -> `centroid2_coord_*` | normaliserer standardkoordinater fra `event.txt`, AMS-koordinater fra `event.txt`, og egne centroid-serier fra `centroid.txt` og `centroid2.txt` per frame. `event_timestamp_us` er den eksakte DB-verdien i mikrosekunder, mens `event_timestamp` bare er en avledet sekundverdi for bekvemmelighet i API-et. Centroid-rader matches foerst paa UTC-timestamp, ellers paa radrekkefolge hvis lengdene er like. Raa centroid-tekster blir liggende i `observation_cam_data`, men bare booleans og normaliserte punkt vises i dette API-et. | direct/derived | `fastapi_app/app/services/file_mapper.py`, `fastapi_app/app/models/observation_trail_point.py`, `fastapi_app/app/services/event_service.py`, `fastapi_app/app/schemas/event.py` |
 | Trail points | `/api/observations/{id}/trail` | `trailPoints[].gnomonic_x`, `gnomonic_y`, `brightness`, `dct`, `size`, `frame_brightness` | `observation_trail_point.*` | `event.txt` | `[trail]` arrays normalisert per frame | serialiseres direkte fra modellen | direct | `fastapi_app/app/models/observation_trail_point.py:33`, `fastapi_app/app/utils/serialization.py:921`, `fastapi_app/app/schemas/event.py:651` |
-| Explore | `/api/explore` | `filters.from_date`, `to_date`, `stations`, `cross_station_confirmed`, `candidate` | - | - | query params | echo av request-filter | api-only | `fastapi_app/app/routers/events.py:252`, `fastapi_app/app/services/event_service.py:530` |
-| Explore | `/api/explore` | `candidate_settings.max_end_height_km`, `max_speed_kms` | - | - | settings | hentes fra config, ikke DB | api-only | `fastapi_app/app/services/event_service.py:543` |
-| Explore | `/api/explore` | `kpi.total_events`, `cross_station_confirmed`, `candidates`, `stations` | `event.*`, `observation_cam_data.*`, `station.station_name` | `location.txt`, `*.stat`, `*.res`, `event.txt`, folders | aggregerer serialiserte event payloads | derived | `fastapi_app/app/services/event_service.py:520` |
-| Explore | `/api/explore` | `events[].id`, `event_path`, `title`, `times`, `location`, `cross_station_confirmed`, `candidate`, `shower`, `technical_validity`, `station_summary`, `preview`, `final_classification` | miks av `event`, `observation_cam_data`, `station`, `cam` | miks | bygger kortversjon av event payload | derived | `fastapi_app/app/services/event_service.py:549` |
-| Explore | `/api/explore` | `events[].ai_score` | `observation_cam_data.summary_meteor_probability` | `event.txt` | `[summary] meteor_probability` | høyeste tilgjengelige observasjons-score per event | derived | `fastapi_app/app/utils/serialization.py:488`, `fastapi_app/app/services/event_service.py:560` |
-| Explore | `/api/explore` | `events[].ground.slat`, `events[].ground.slng` | `event.track_startlat`, `event.track_startlong` | `*.res` | linje 1, token 0-1 | bygger Utforsk-kortets startkoordinater fra løst banegrunnlag når det finnes | derived | `fastapi_app/app/services/file_mapper.py:317`, `fastapi_app/app/services/event_service.py:582` |
-| Explore CSV | `/api/explore/export?format=csv` | `id`, `event_path`, `title`, `utc_time`, `local_time`, `location`, `cross_station_confirmed`, `is_candidate`, `max_end_height_km`, `max_speed_kms`, `station_count`, `observation_count`, `shower`, `ra`, `dec`, `lat`, `lng`, `final_classification` | samme som `/api/explore` | samme som `/api/explore` | skriver ut utvalgte felter fra explore-payload | derived | `fastapi_app/app/services/event_service.py:578` |
+| Explore cleanup | removed `/api/explore` | event cards moved to `/api/events`; request filter metadata belongs to request query or `/api/events/filters`; KPI/reporting data belongs to `/api/insights/*`; `candidate_settings` removed from public API | - | - | direct cleanup | ingen alias/deprecation-lag; felt flyttet til domenekorrekte ruter eller fjernet | api-only | `fastapi_app/app/routers/events.py`, `fastapi_app/app/services/event_service.py`, `fastapi_app/app/schemas/event.py` |
 | Filters | `/api/events/filters` | `years` | `event.date` | event folder | `datetimetag -> year` | `extract(year from Event.date)` | derived | `fastapi_app/app/services/event_service.py:447` |
 | Filters | `/api/events/filters` | `stations` | `station.station_name` | station folder | distinct join via `cam` og `observation_cam_data` | derived | `fastapi_app/app/services/event_service.py:454` |
 | Filters | `/api/events/filters` | `eventTypes` | `event.camera_confirmed`, `event.track_endheight` | `location.txt`, `*.stat`, `*.res` | samme regel som `event_type` | distinct case-uttrykk i SQL | derived | `fastapi_app/app/services/event_service.py:462` |
@@ -343,4 +325,3 @@ flowchart LR
 | `_build_trail_points` | lager radvis trail-data med `common_length = min(len(seq))` for tilgjengelige sekvenser | `fastapi_app/app/services/file_mapper.py:487` |
 | `_sync_import_columns` | ved reimport overskrives alle kildeavledede `event`- og `observation_cam_data`-felter; verdier som ikke lenger finnes i filene settes til `NULL` i stedet for å bli hengende igjen | `fastapi_app/app/services/event_service.py:938` |
 | `_mark_missing_events_deleted`, `_mark_missing_observations_deleted` | markerer rader som ikke finnes i siste importvindu som `is_deleted = true` og `deletion_reason = missing_from_import` | `fastapi_app/app/services/event_service.py:830`, `854` |
-
