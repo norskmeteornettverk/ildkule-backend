@@ -1,7 +1,6 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from ..db import get_session
