@@ -60,6 +60,29 @@ def test_login_rejects_wrong_password(client, db_session, monkeypatch):
     assert response.json()["detail"] == "Feil brukernavn eller passord"
 
 
+def test_login_rejects_unconfirmed_account(client, db_session, monkeypatch):
+    monkeypatch.setattr(
+        user_service_module, "verify_password", lambda plain, stored: plain == stored
+    )
+    user = User(
+        username="unconfirmed@example.com",
+        password="correct-password",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=False,
+    )
+    db_session.add(user)
+    db_session.commit()
+
+    response = client.post(
+        "/api/auth/login",
+        json={"identifier": "unconfirmed@example.com", "password": "correct-password"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Feil brukernavn eller passord"
+
+
 def test_password_reset_confirm_rejects_unknown_token(client, db_session):
     user = User(
         username="reset-confirm@example.com",

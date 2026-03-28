@@ -34,7 +34,7 @@ user_service = UserService()
 )
 def login(payload: LoginRequest, session: Session = Depends(get_session)):
     user = user_service.authenticate(session, payload.identifier, payload.password)
-    if not user:
+    if not user or not user.confirmed:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Feil brukernavn eller passord",
