@@ -241,6 +241,71 @@ def test_user_route_requires_auth_and_rejects_invalid_or_stale_token(client):
     assert stale.json()["detail"] == "User no longer exists"
 
 
+def test_user_route_forbids_regular_user_from_reading_other_user(client, db_session):
+    own_user = User(
+        username="own-user@example.com",
+        password="pw",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=True,
+    )
+    other_user = User(
+        username="other-user@example.com",
+        password="pw",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=True,
+    )
+    db_session.add_all([own_user, other_user])
+    db_session.commit()
+
+    response = client.get(f"/api/users/{other_user.id}", headers=_auth_header(own_user))
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Not authorized"
+
+
+def test_user_route_allows_admin_to_read_other_user(client, db_session):
+    admin_user = User(
+        username="admin-user@example.com",
+        password="pw",
+        role="ROLE_ADMIN",
+        user_level="1",
+        confirmed=True,
+    )
+    other_user = User(
+        username="other-user-2@example.com",
+        password="pw",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=True,
+    )
+    db_session.add_all([admin_user, other_user])
+    db_session.commit()
+
+    response = client.get(f"/api/users/{other_user.id}", headers=_auth_header(admin_user))
+
+    assert response.status_code == 200
+    assert response.json()["id"] == other_user.id
+
+
+def test_user_route_allows_regular_user_to_read_own_user(client, db_session):
+    own_user = User(
+        username="own-user-2@example.com",
+        password="pw",
+        role="ROLE_USER",
+        user_level="1",
+        confirmed=True,
+    )
+    db_session.add(own_user)
+    db_session.commit()
+
+    response = client.get(f"/api/users/{own_user.id}", headers=_auth_header(own_user))
+
+    assert response.status_code == 200
+    assert response.json()["id"] == own_user.id
+
+
 def test_admin_eventboard_rejects_non_admin_user(client, db_session):
     user = User(
         username="plain-user@example.com",

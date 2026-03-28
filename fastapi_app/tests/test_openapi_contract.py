@@ -266,6 +266,12 @@ def test_openapi_exposes_filters_station_logs_and_path_lookup(client):
         payload,
         _response_schema(payload, "/api/users/{user_id}"),
     )
+    user_path_get = paths["/api/users/{user_id}"]["get"]
+    assert (
+        user_path_get["description"]
+        == "Returns account fields for one authenticated user. This is not a public profile endpoint."
+    )
+    assert user_path_get["security"] == [{"HTTPBearer": []}]
     assert "properties" in user_response
     assert {
         "id",
