@@ -1011,7 +1011,7 @@ def test_insight_cam_and_station(client, db_session):
     }
 
 
-def test_explore_and_csv_export(client, db_session):
+def test_event_filters_and_coordinate_insights(client, db_session):
     station = Station(station_name="alta")
     cam = Cam(station=station, cam_name="cam9")
     event = Event(
@@ -1045,19 +1045,27 @@ def test_explore_and_csv_export(client, db_session):
     )
     db_session.commit()
 
-    response = client.get(
-        "/api/explore?from_date=2026-02-01&to_date=2026-02-05&stations=alta&cross_station_confirmed=true&candidate=true"
-    )
+    response = client.get("/api/events/filters")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["kpi"]["total_events"] == 1
-    assert payload["events"][0]["candidate"]["is_candidate"] is True
-    assert payload["events"][0]["ground"]["lat"] == 69.9
-    assert payload["events"][0]["ground"]["slat"] == 70.4
-    assert payload["events"][0]["ground"]["slng"] == 24.2
-    assert payload["events"][0]["ai_score"] == 73.2
+    assert "2026" in payload["years"]
+    assert "alta" in payload["stations"]
+    assert "Meteorittkandidat" in payload["eventTypes"]
 
-    csv_response = client.get("/api/explore/export?format=csv&candidate=true")
+    coordinates = client.get(
+        "/api/insights/coordinates?from_date=2026-02-01&to_date=2026-02-05&stations=alta&cross_station_confirmed=true&candidate=true"
+    )
+    assert coordinates.status_code == 200
+    coordinates_payload = coordinates.json()
+    assert len(coordinates_payload) == 1
+    assert coordinates_payload[0]["lat"] == 69.9
+    assert coordinates_payload[0]["slat"] == 70.4
+    assert coordinates_payload[0]["slng"] == 24.2
+    assert coordinates_payload[0]["ai_score"] == 73.2
+
+    csv_response = client.get(
+        "/api/insights/coordinates/export?format=csv&from_date=2026-02-01&to_date=2026-02-05&stations=alta&cross_station_confirmed=true&candidate=true"
+    )
     assert csv_response.status_code == 200
-    assert "event_path,title,utc_time,local_time" in csv_response.text
-    assert "20260203/040506" in csv_response.text
+    assert "id,datetimetag,date,station_cam,number_of_stations,lat,lng" in csv_response.text
+    assert "20260203040506" in csv_response.text
