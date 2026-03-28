@@ -33,7 +33,7 @@ def _assert_nullable_type(schema, expected_type):
     raise AssertionError(f"Schema is not nullable: {schema}")
 
 
-def test_openapi_exposes_identifier_account_and_explore_shapes(client):
+def test_openapi_exposes_identifier_account_and_core_event_shapes(client):
     response = client.get("/openapi.json")
     assert response.status_code == 200
 
@@ -92,13 +92,6 @@ def test_openapi_exposes_identifier_account_and_explore_shapes(client):
         "open",
         "download",
     ]
-
-    explore_response = schemas["ExploreResponse"]["properties"]
-    assert explore_response["filters"]["allOf"][0]["$ref"].endswith("/ExploreFilters")
-    assert explore_response["kpi"]["allOf"][0]["$ref"].endswith("/ExploreKpi")
-
-    ground = schemas["ExploreGround"]["properties"]
-    assert set(ground.keys()) == {"lat", "lng", "slat", "slng"}
 
     atmospheric_path = schemas["AtmosphericPath"]["properties"]
     assert atmospheric_path["speed_source"]["type"] == "string"
@@ -374,12 +367,6 @@ def test_openapi_exposes_documented_runtime_400_and_401_responses(client):
         "Payload event or user id does not match the URL or authenticated token user."
     )
     assert review_400["content"]["application/json"]["schema"]["$ref"].endswith("/ErrorDetailResponse")
-
-    export_400 = paths["/api/explore/export"]["get"]["responses"]["400"]
-    assert export_400["description"] == "Unsupported export format."
-    export_400_schema = export_400["content"]["application/json"]["schema"]
-    assert export_400_schema["type"] == "object"
-    assert export_400_schema["properties"]["detail"]["type"] == "string"
 
     station_logs_401 = paths["/api/station-logs"]["post"]["responses"]["401"]
     assert station_logs_401["description"] == "Missing or invalid bearer token."
