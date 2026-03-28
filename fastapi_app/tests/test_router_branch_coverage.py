@@ -165,8 +165,8 @@ def test_users_create_and_self_service_edges(client, db_session, monkeypatch):
     db_session.commit()
 
     missing = client.get("/api/users/9999", headers=_auth_header(owner))
-    assert missing.status_code == 404
-    assert missing.json()["detail"] == "User not found"
+    assert missing.status_code == 403
+    assert missing.json()["detail"] == "Not authorized"
 
     denied_tutorial = client.put(
         f"/api/users/{other.id}/tutorial-completion",
