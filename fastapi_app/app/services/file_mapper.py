@@ -272,7 +272,9 @@ class FileToObjectMapper:
     def _get_folder_content(self, path: Path) -> List[str]:
         if not path.is_dir():
             return []
-        return [entry.name for entry in path.iterdir()]
+        # Always return deterministic ordering so downstream mapping and
+        # observation ordering are stable across filesystems/platforms.
+        return sorted(entry.name for entry in path.iterdir())
 
     def _find_files(self, entries: Iterable[str], suffix: str) -> List[str]:
         suffix_lower = suffix.lower()
