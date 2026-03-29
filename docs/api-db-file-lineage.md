@@ -13,14 +13,16 @@ Maalet er aa kunne svare paa fire spoersmaal paa en standardisert maate:
 FastAPI er aktiv sannhetskilde for API-kontrakt og serialisering.
 
 ## Source basis
-- `database/build_db.sql` definerer tabellene `user`, `station`, `cam`, `event`, `observation_cam_data`, `event_res_entry`, `observation_trail_point`, `log_station`, `user_review`.
+- `database/build_db.sql` definerer tabellene `user`, `manual_input_observation`, `station`, `cam`, `event`, `observation_cam_data`, `event_res_entry`, `observation_trail_point`, `log_station`, `user_review`.
 - `fastapi_app/app/services/file_mapper.py` leser event-mappene og mapper filer til `EventRecord`, `ObservationRecord`, `ResEntryRecord`, `TrailPointRecord`.
 - `fastapi_app/app/services/event_service.py` coerces filverdier til kolonnetyper, upserter database og bygger soft-delete lifecycle.
 - `fastapi_app/app/utils/serialization.py` bygger API-payloads og derived felt som `title`, `event_type`, `candidate`, `preview`, `analysis`, `event_artifacts`.
 - `fastapi_app/app/routers/*.py` definerer hvilke payloads som eksponeres i API-et.
 - `fastapi_app/tests/test_meteor_ingestion.py` viser representative filvarianter og ingest-regler.
 
-## Flow diagram
+## Flow diagrams
+
+### Diagram 1: files and folders -> database tables
 
 ```mermaid
 flowchart LR
@@ -43,23 +45,16 @@ flowchart LR
     end
 
     subgraph D["Database tables"]
+        D0[(user)]
         D1[(event)]
         D2[(station)]
         D3[(cam)]
         D4[(observation_cam_data)]
         D5[(event_res_entry)]
         D6[(observation_trail_point)]
-    end
-
-    subgraph A["API surfaces"]
-        A1["/api/events"]
-        A2["/api/events/{id}"]
-        A3["/api/events/by-path/{date}/{time}"]
-        A4["/api/events/{id}/res"]
-        A5["/api/observations/{id}/trail"]
-        A8["/api/events/filters"]
-        A9["/api/insights/*"]
-        A10["/api/insights/coordinates/export?format=csv"]
+        D7[(log_station)]
+        D8[(user_review)]
+        D9[(manual_input_observation)]
     end
 
     F0 -- "datetimetag, date" --> D1
@@ -78,18 +73,58 @@ flowchart LR
     D2 -- "station_id" --> D3
     D3 -- "cam_id" --> D4
     D1 -- "event_id" --> D4
+    D0 -- "user_id / ownership" --> D8
+    D0 -. "manual observation ownership; currently no active FastAPI route" .-> D9
+```
+
+### Diagram 2: database tables -> API surfaces
+
+Merk: DB -> API er splittet i flere smaadiagrammer med overlappende tabellnoder med vilje. Det gir bedre lesbarhet enn ett stort mange-til-mange-diagram, og lar hvert domene vise sine egne koblinger tydeligere.
+
+#### Diagram 2a: event list, detail, and filter surfaces
+
+```mermaid
+flowchart LR
+    subgraph D["Database tables"]
+        D1[(event)]
+        D2[(station)]
+        D3[(cam)]
+        D4[(observation_cam_data)]
+    end
+
+    subgraph A["API surfaces"]
+        A1["/api/events"]
+        A8["/api/events/filters"]
+        subgraph ADetail["Event detail lookup variants"]
+            A2["/api/events/{id}"]
+            A3["/api/events/by-path/{date}/{time}"]
+        end
+    end
 
     D1 -- "event list rows" --> A1
-    D1 -- "event header/detail basis" --> A2
-    D1 -- "event header/detail basis" --> A3
-    D4 -- "observations" --> A2
-    D4 -- "observations" --> A3
-    D5 -- "raw .res rows" --> A4
-    D6 -- "trailPoints with normalised coord, AMS, centroid, centroid2, timestamps" --> A5
-    D4 -- "observation-level booleans: has_ams_coords, has_centroid, has_centroid2" --> A5
     D1 -- "years and event types" --> A8
     D2 -- "station list" --> A8
-    D3 -- "station list via cams" --> A8
+    D3 -- "station list via cameras" --> A8
+    D1 -- "event header/detail basis" --> ADetail
+    D4 -- "observations" --> ADetail
+```
+
+#### Diagram 2b: insight surfaces and CSV export
+
+```mermaid
+flowchart LR
+    subgraph D["Database tables"]
+        D1[(event)]
+        D2[(station)]
+        D3[(cam)]
+        D4[(observation_cam_data)]
+    end
+
+    subgraph A["API surfaces"]
+        A9["/api/insights/*"]
+        A10["/api/insights/coordinates/export?format=csv"]
+    end
+
     D1 -- "event aggregates" --> A9
     D2 -- "station aggregates" --> A9
     D3 -- "camera aggregates" --> A9
@@ -98,12 +133,75 @@ flowchart LR
     D2 -- "station names for coordinate insight CSV" --> A10
     D3 -- "camera names for coordinate insight CSV" --> A10
     D4 -- "observation probability for coordinate insight CSV" --> A10
-
-    F7 -. "direct file-backed artifacts" .-> A1
-    F7 -. "direct file-backed artifacts" .-> A2
-    F7 -. "direct file-backed artifacts" .-> A3
-    F8 -. "direct file-backed artifacts" .-> A2
 ```
+
+#### Diagram 2c: trail and res detail surfaces
+
+```mermaid
+flowchart LR
+    subgraph D["Database tables"]
+        D1[(event)]
+        D4[(observation_cam_data)]
+        D5[(event_res_entry)]
+        D6[(observation_trail_point)]
+    end
+
+    subgraph A["API surfaces"]
+        A4["/api/events/{id}/res"]
+        A5["/api/observations/{id}/trail"]
+    end
+
+    D5 -- "raw .res rows" --> A4
+    D6 -- "trailPoints with normalised coord, AMS, centroid, centroid2, timestamps" --> A5
+    D4 -- "observation-level booleans: has_ams_coords, has_centroid, has_centroid2" --> A5
+    D1 -. "parent event context for detail lookups" .-> A4
+```
+
+#### Diagram 2d: auth, user, review, and moderation surfaces
+
+```mermaid
+flowchart LR
+    subgraph D["Database tables"]
+        D0[(user)]
+        D1[(event)]
+        D8[(user_review)]
+    end
+
+    subgraph A["API surfaces"]
+        A0["/api/auth/*, /api/users, /api/tutorial"]
+        A12["/api/admin/events, /api/events/{id}/review, /api/events/{id}/classification, /api/users/{id}/reviews"]
+    end
+
+    D0 -- "user identity, auth, tutorial state" --> A0
+    D8 -- "review rows and counts" --> A12
+    D1 -- "event review and moderation basis" --> A12
+    D0 -- "review ownership and user history" --> A12
+```
+
+#### Diagram 2e: station log and network status surfaces
+
+```mermaid
+flowchart LR
+    subgraph D["Database tables"]
+        D2[(station)]
+        D3[(cam)]
+        D4[(observation_cam_data)]
+        D7[(log_station)]
+    end
+
+    subgraph A["API surfaces"]
+        A13["/api/station-logs"]
+        A11["/api/station-network"]
+    end
+
+    D7 -- "stored pushed log rows" --> A13
+    D7 -- "latest station last-seen input" --> A11
+    D2 -- "station identity and names" --> A11
+    D3 -- "camera identity and names" --> A11
+    D4 -- "latest observation-derived camera and station state" --> A11
+```
+
+Merk: noen preview- og artifact-URL-er er fortsatt direkte filbacked i runtime, men de er holdt utenfor diagrammene her for aa holde splitten ren mellom fil->DB og DB->API.
 
 ## Read guide
 - `API field`: feltsti i request eller response. `-` betyr at raden ikke har en API-side.
@@ -246,7 +344,8 @@ flowchart LR
 | `observation_cam_data` | `trail_centroid`, `trail_centroid2` | rå centroid-tekster lagres i DB og brukes i trail-endepunktet / orbit-solve, men prunes bort fra den brede observasjonspayloaden | `fastapi_app/app/models/observation_cam_data.py:54`, `55`, `fastapi_app/app/utils/serialization.py:839`, `840` |
 | `event_res_entry` | - | ingen bekreftede DB-only-kolonner akkurat naa; numeriske felter ser ut til aa slippe gjennom runtime selv om schemaet ikke deklarerer dem eksplisitt | `fastapi_app/app/utils/serialization.py:583`, `fastapi_app/app/schemas/event.py:6` |
 | `observation_trail_point` | - | ingen bekreftede DB-only-kolonner akkurat naa; ekstra felt ser ut til aa slippe gjennom runtime selv om schemaet ikke deklarerer dem eksplisitt | `fastapi_app/app/utils/serialization.py:587`, `fastapi_app/app/schemas/event.py:6` |
-| `user` | `password`, `confirm_token`, `password_reset_token`, `password_reset_request_time`, `update_time` | sensitivt eller internt | `fastapi_app/app/models/user.py:14`, `19`, `23`, `fastapi_app/app/utils/serialization.py:534` |
+| `user` | `password`, `confirm_token`, `password_reset_token`, `password_reset_request_time`, `create_time`, `update_time` | sensitivt eller internt; `create_time` brukes som lifecycle- og sorteringsmetadata, men er ikke offentlig kontrakt | `fastapi_app/app/models/user.py:14`, `19`, `22`, `23`, `fastapi_app/app/services/user_service.py:110`, `fastapi_app/app/utils/serialization.py:534` |
+| `manual_input_observation` | `latitude`, `longitude`, `date_time`, `first_recorded_direction`, `first_recorded_altitude`, `last_recorded_direction`, `last_recorded_altitude`, `duration`, `color`, `brightness`, `description`, `image_file`, `users_id` | manuell observasjonsinnlegging med tid/sted, himmelretning, beskrivende metadata, valgfritt bilde og kobling til `user`; ingen bekreftet aktiv FastAPI-rute eller ORM-modell i denne branchen, saa tabellen ser forelopig ubrukt ut | `database/build_db.sql:36`, `database/build_db.sql:50` |
 | `station` | `id`, `created` | `station_name` eksponeres via `observation_ref` og `station_summary`; `id` og `created` er fortsatt interne | `fastapi_app/app/models/station.py:13`, `fastapi_app/app/utils/serialization.py:371`, `407` |
 | `cam` | `id`, `station_id`, `created` | `cam_name` eksponeres via `observation_ref` og `station_summary`; resten er interne koblingsfelter | `fastapi_app/app/models/cam.py:13`, `fastapi_app/app/utils/serialization.py:371`, `407` |
 | `user_review` | hele tabellen | brukes til ratinger og review-oppdatering, men har ingen egen offentlig list/detail response | `database/build_db.sql:324`, `fastapi_app/app/services/event_service.py:334` |
