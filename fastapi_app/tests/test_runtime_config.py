@@ -25,6 +25,25 @@ def test_remote_media_mode_requires_base_url():
         )
 
 
+@pytest.mark.parametrize(
+    ("raw_url", "expected_url"),
+    [
+        (
+            "postgresql://user:pass@host:5432/dbname?sslmode=require",
+            "postgresql+psycopg://user:pass@host:5432/dbname?sslmode=require",
+        ),
+        (
+            "postgres://user:pass@host:5432/dbname",
+            "postgresql+psycopg://user:pass@host:5432/dbname",
+        ),
+    ],
+)
+def test_database_url_is_normalized_for_neon_postgres(raw_url, expected_url):
+    settings = Settings(database_url=raw_url, jwt_secret_key="secret")
+
+    assert settings.database_url == expected_url
+
+
 def test_create_app_skips_data_mount_in_remote_media_mode(monkeypatch):
     WORK_TMP_DIR.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(main_module, "check_database_connection", lambda: None)

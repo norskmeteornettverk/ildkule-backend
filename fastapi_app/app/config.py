@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import BaseSettings, Field, root_validator
+from pydantic import BaseSettings, Field, root_validator, validator
 
 
 ENV_FILE_PATH = Path(__file__).resolve().parents[1] / ".env"
@@ -96,6 +96,17 @@ class Settings(BaseSettings):
         default=25.0,
         description="Maximum speed used when flagging meteorite candidates",
     )
+
+    @validator("database_url", pre=True)
+    def normalize_database_url(cls, value: str) -> str:
+        if not isinstance(value, str):
+            return value
+        lowered = value.lower()
+        if lowered.startswith("postgresql://"):
+            return "postgresql+psycopg://" + value[len("postgresql://") :]
+        if lowered.startswith("postgres://"):
+            return "postgresql+psycopg://" + value[len("postgres://") :]
+        return value
 
     @root_validator
     def validate_media_settings(cls, values):
