@@ -16,5 +16,6 @@ dependencies = [
     "Pillow==10.4.0",
     "python-multipart==0.0.20",
     "tzdata==2025.2",
+    "numpy==1.26.4",
     "astropy==6.1.7",
 ]
