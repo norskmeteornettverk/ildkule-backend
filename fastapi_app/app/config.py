@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import BaseSettings, Field
+from pydantic import BaseSettings, Field, root_validator
 
 
 ENV_FILE_PATH = Path(__file__).resolve().parents[1] / ".env"
@@ -15,7 +15,8 @@ class Settings(BaseSettings):
         ...,
         description=(
             "SQLAlchemy compatible database URL, "
-            "e.g. mysql+pymysql://user:pass@host:3306/dbname"
+            "e.g. mysql+pymysql://user:pass@host:3306/dbname "
+            "or postgresql+psycopg://user:pass@host:5432/dbname"
         ),
     )
     jwt_secret_key: str = Field(..., description="Secret key used to sign JWT tokens")
@@ -41,6 +42,14 @@ class Settings(BaseSettings):
     data_directory: Optional[str] = Field(
         default=None,
         description="Root folder where event data files are stored",
+    )
+    event_media_source_mode: str = Field(
+        default="local",
+        description="How event and media URLs are built: local or remote.",
+    )
+    event_media_base_url: Optional[str] = Field(
+        default=None,
+        description="Optional base URL used when building public event/media file links.",
     )
     station_log_token: Optional[str] = Field(
         default=None,
@@ -71,6 +80,10 @@ class Settings(BaseSettings):
         default=str(Path(__file__).resolve().parents[1] / "logs" / "fastapi.log"),
         description="File path where FastAPI runtime logs are written.",
     )
+    disable_file_logging: bool = Field(
+        default=False,
+        description="Disable file-based logging and only log to stdout/stderr.",
+    )
     public_timezone: str = Field(
         default="Europe/Oslo",
         description="IANA timezone used for public local-time serialisation",
@@ -83,6 +96,18 @@ class Settings(BaseSettings):
         default=25.0,
         description="Maximum speed used when flagging meteorite candidates",
     )
+
+    @root_validator
+    def validate_media_settings(cls, values):
+        mode = (values.get("event_media_source_mode") or "local").strip().lower()
+        values["event_media_source_mode"] = mode
+        if mode not in {"local", "remote"}:
+            raise ValueError("EVENT_MEDIA_SOURCE_MODE must be 'local' or 'remote'")
+        if mode == "remote" and not values.get("event_media_base_url"):
+            raise ValueError(
+                "EVENT_MEDIA_BASE_URL is required when EVENT_MEDIA_SOURCE_MODE=remote"
+            )
+        return values
 
     class Config:
         env_file = str(ENV_FILE_PATH)

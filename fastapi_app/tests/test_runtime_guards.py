@@ -1,8 +1,9 @@
 import logging
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy.dialects import mysql
+from sqlalchemy.dialects import mysql, postgresql
 
 from fastapi_app.app import main as main_module
 from fastapi_app.app.models import Event
@@ -55,3 +56,83 @@ def test_coordinate_query_compiles_without_nulls_last_for_mysql():
     )
     assert "NULLS LAST" not in compiled.upper()
     assert "CASE WHEN" in compiled.upper()
+
+
+@pytest.mark.parametrize(
+    ("dialect", "expected_station_name_expr", "expected_days_since_expr"),
+    [
+        (
+            "sqlite",
+            "upper(substr(s.station_name, 1, 1)) || substr(s.station_name, 2)",
+            "CAST(julianday('now') - julianday(max(m.date)) AS INTEGER)",
+        ),
+        (
+            "mysql",
+            "CONCAT(UPPER(LEFT(s.station_name, 1)), SUBSTRING(s.station_name, 2))",
+            "DATEDIFF(CURRENT_DATE, DATE(max(m.date)))",
+        ),
+        (
+            "postgresql",
+            "upper(left(s.station_name, 1)) || substring(s.station_name from 2)",
+            "(CURRENT_DATE - CAST(max(m.date) AS DATE))",
+        ),
+    ],
+)
+def test_insight_sql_parts_are_dialect_safe(
+    dialect, expected_station_name_expr, expected_days_since_expr
+):
+    parts = EventService()._insight_sql_parts(dialect)
+
+    assert parts["station_name_expr"] == expected_station_name_expr
+    assert parts["days_since_expr"] == expected_days_since_expr
+
+
+def test_insight_sql_parts_supports_mariadb_alias():
+    mysql_parts = EventService()._insight_sql_parts("mysql")
+    mariadb_parts = EventService()._insight_sql_parts("mariadb")
+
+    assert mariadb_parts == mysql_parts
+
+
+def test_insight_sql_parts_rejects_unsupported_dialect():
+    with pytest.raises(HTTPException) as exc_info:
+        EventService()._insight_sql_parts("oracle")
+
+    assert exc_info.value.status_code == 500
+    assert "Unsupported database dialect" in exc_info.value.detail
+
+
+def test_coordinate_query_compiles_for_postgresql():
+    stmt = (
+        EventService()
+        ._filtered_events_stmt(require_coordinates=True)
+        .order_by(*desc_nulls_last(Event.date), Event.id.desc())
+    )
+    compiled = str(
+        stmt.compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+
+    assert "CASE WHEN" in compiled.upper()
+    assert "ORDER BY" in compiled.upper()
+
+
+def test_postgresql_insight_sql_uses_postgresql_safe_functions():
+    parts = EventService()._insight_sql_parts("postgresql")
+    sql = f"""
+    select {parts["station_name_expr"]} as Stasjonsnavn,
+    {parts["days_since_expr"]} as DagerSidenSisteObservasjon
+    from station as s
+    left outer join cam as c on s.id = c.station_id
+    left outer join observation_cam_data as d on c.id = d.cam_id
+    left outer join event as m on d.event_id = m.id
+    group by {parts["station_name_expr"]}
+    order by {parts["station_name_expr"]}
+    """
+
+    assert "substring(s.station_name from 2)" in sql
+    assert "CURRENT_DATE - CAST(max(m.date) AS DATE)" in sql
+    assert "DATEDIFF" not in sql
+    assert "julianday" not in sql

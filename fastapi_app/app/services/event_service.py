@@ -70,6 +70,32 @@ class EventService:
         "deletion_reason",
     }
 
+    def _insight_sql_parts(self, dialect: str) -> dict[str, str]:
+        normalized = (dialect or "").lower()
+
+        if normalized == "sqlite":
+            return {
+                "station_name_expr": "upper(substr(s.station_name, 1, 1)) || substr(s.station_name, 2)",
+                "days_since_expr": "CAST(julianday('now') - julianday(max(m.date)) AS INTEGER)",
+            }
+
+        if normalized in {"mysql", "mariadb"}:
+            return {
+                "station_name_expr": "CONCAT(UPPER(LEFT(s.station_name, 1)), SUBSTRING(s.station_name, 2))",
+                "days_since_expr": "DATEDIFF(CURRENT_DATE, DATE(max(m.date)))",
+            }
+
+        if normalized == "postgresql":
+            return {
+                "station_name_expr": "upper(left(s.station_name, 1)) || substring(s.station_name from 2)",
+                "days_since_expr": "(CURRENT_DATE - CAST(max(m.date) AS DATE))",
+            }
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unsupported database dialect for insight queries: {dialect}",
+        )
+
     def _visibility_filter(self, include_deleted: bool):
         if include_deleted:
             return None
@@ -611,12 +637,9 @@ class EventService:
 
     def get_insight(self, session: Session, report_name: str) -> list[dict]:
         dialect = session.bind.dialect.name if session.bind else ""
-        if dialect == "sqlite":
-            station_name_expr = "upper(substr(s.station_name, 1, 1)) || substr(s.station_name, 2)"
-            days_since_expr = "CAST(julianday('now') - julianday(max(m.date)) AS INTEGER)"
-        else:
-            station_name_expr = "CONCAT(UCASE(LEFT( s.station_name, 1)), SUBSTRING( s.station_name, 2))"
-            days_since_expr = "DATEDIFF(now(),max(m.date))"
+        sql_parts = self._insight_sql_parts(dialect)
+        station_name_expr = sql_parts["station_name_expr"]
+        days_since_expr = sql_parts["days_since_expr"]
 
         if report_name == "cam":
             sql = f"""

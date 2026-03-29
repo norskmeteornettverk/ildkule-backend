@@ -1,0 +1,3 @@
+-- Generated seed file for Ildkule.
+-- Regenerate with: python scripts/export_seed_from_db.py
+-- This file intentionally starts empty until the export script is run.

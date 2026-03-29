@@ -1,14 +1,25 @@
+import os
 from contextlib import contextmanager
 from typing import Generator
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from .config import get_settings
 
 settings = get_settings()
 
-engine = create_engine(settings.database_url, pool_pre_ping=True, pool_recycle=3600)
+engine_kwargs = {
+    "future": True,
+    "pool_pre_ping": True,
+}
+if os.getenv("VERCEL"):
+    engine_kwargs["poolclass"] = NullPool
+else:
+    engine_kwargs["pool_recycle"] = 3600
+
+engine = create_engine(settings.database_url, **engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, future=True)
 
 Base = declarative_base()

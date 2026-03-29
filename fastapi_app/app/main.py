@@ -14,7 +14,11 @@ from .routers import admin, auth, events, forms, logs, users
 from .utils.logging_utils import configure_logging
 
 settings = get_settings()
-logger = configure_logging(settings.app_log_level, settings.app_log_file)
+logger = configure_logging(
+    settings.app_log_level,
+    settings.app_log_file,
+    disable_file_logging=settings.disable_file_logging,
+)
 
 
 @asynccontextmanager
@@ -30,7 +34,11 @@ async def lifespan(_: FastAPI):
 
 
 def create_app() -> FastAPI:
-    configure_logging(settings.app_log_level, settings.app_log_file)
+    configure_logging(
+        settings.app_log_level,
+        settings.app_log_file,
+        disable_file_logging=settings.disable_file_logging,
+    )
 
     app = FastAPI(
         title="Ildkule API",
@@ -106,7 +114,7 @@ def create_app() -> FastAPI:
         )
 
     data_directory = settings.data_directory
-    if data_directory:
+    if settings.event_media_source_mode == "local" and data_directory:
         data_path = Path(data_directory)
         if data_path.exists() and data_path.is_dir():
             app.mount("/data", StaticFiles(directory=str(data_path)), name="data")

@@ -1,4 +1,5 @@
 import logging
+import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -6,7 +7,11 @@ from pathlib import Path
 _CONFIGURED = False
 
 
-def configure_logging(log_level: str = "INFO", log_file: str | None = None) -> logging.Logger:
+def configure_logging(
+    log_level: str = "INFO",
+    log_file: str | None = None,
+    disable_file_logging: bool = False,
+) -> logging.Logger:
     """Configure process-wide logging once and return the app logger."""
 
     global _CONFIGURED
@@ -31,7 +36,10 @@ def configure_logging(log_level: str = "INFO", log_file: str | None = None) -> l
             stream_handler.setFormatter(formatter)
             root_logger.addHandler(stream_handler)
 
-        if log_file:
+        should_use_file_logging = (
+            bool(log_file) and not disable_file_logging and not os.getenv("VERCEL")
+        )
+        if should_use_file_logging:
             log_path = Path(log_file).expanduser()
             log_path.parent.mkdir(parents=True, exist_ok=True)
             resolved_log_path = str(log_path.resolve())

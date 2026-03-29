@@ -40,9 +40,16 @@ break FastAPI/Pydantic imports.
 
 The application reads configuration from `fastapi_app/.env` regardless of the
 current working directory. At a minimum set
-`DATABASE_URL` (MySQL DSN) and `JWT_SECRET_KEY`.  SMTP and reCAPTCHA settings
+`DATABASE_URL` and `JWT_SECRET_KEY`. SMTP and reCAPTCHA settings
 are optional but required if you want to send contact/report forms.  The station
 log endpoint validates a bearer token configured via `STATION_LOG_TOKEN`.
+
+Supported DB URL formats:
+
+```text
+mysql+pymysql://user:pass@host:3306/dbname
+postgresql+psycopg://user:pass@host:5432/dbname
+```
 
 If startup fails with import or dependency errors, first check that the virtual
 environment is active and that the packages were installed inside that
@@ -58,7 +65,73 @@ running it with Python 3.14 from the global install.
   directory configured via `DATA_DIRECTORY`.
 - `PyMySQL` needs `cryptography` when MySQL uses `caching_sha2_password`, so it
   is included in `requirements.txt`.
+- PostgreSQL support also depends on the PostgreSQL driver being added to
+  `requirements.txt` by the DB/runtime slice.
 - The API keeps the expected JWT payload structure and pagination data used by
   the current clients.
 - Automated tests live in `fastapi_app/tests/` (run with `pytest -q` after
   installing `requirements-dev.txt`).
+
+## Fresh Database Bootstrap
+
+The dual-database rollout is intended to use:
+
+- `database/build_db.sql` for MySQL schema bootstrap
+- `database/build_db_postgres.sql` for PostgreSQL schema bootstrap
+- `database/seed_mysql.sql` for optional large exported MySQL seed data
+- `database/seed_postgres.sql` for optional large exported PostgreSQL seed data
+- `scripts/bootstrap_db.py` for schema-only or schema+seed setup
+- `scripts/export_seed_from_db.py` for regenerating the exported seed data from
+  the current loaded DB
+
+These files and commands depend on the schema/bootstrap slice being merged.
+
+## Media Source Modes
+
+The deployment target is intended to support two media source modes through
+config only:
+
+- `local` mode: serve event/media files from a mounted local data directory
+- `remote` mode: point event/media links at a published web resource
+
+Planned config values:
+
+```text
+EVENT_MEDIA_SOURCE_MODE=local|remote
+EVENT_MEDIA_BASE_URL=/data
+```
+
+Example remote setup:
+
+```text
+EVENT_MEDIA_SOURCE_MODE=remote
+EVENT_MEDIA_BASE_URL=https://norskmeteornettverk.no/meteor
+```
+
+The serializer/runtime slice must implement the actual URL switching behavior.
+
+## Vercel Deployment
+
+This repo now includes repo-root deploy glue for Vercel:
+
+- root `app.py` re-exports `fastapi_app.app.main:app`
+- root `requirements.txt` delegates to `fastapi_app/requirements.txt`
+
+Recommended Vercel setup:
+
+1. Use the repo root as the project root.
+2. Use a free Neon Postgres database.
+3. Set these Vercel environment variables:
+   - `DATABASE_URL`
+   - `JWT_SECRET_KEY`
+   - `FRONT_URL`
+   - `EVENT_MEDIA_SOURCE_MODE=remote`
+   - `EVENT_MEDIA_BASE_URL=https://norskmeteornettverk.no/meteor`
+4. Leave `DATA_DIRECTORY` unset on Vercel.
+
+Important:
+
+- Vercel should host the API only.
+- File-backed import and local file hosting belong on another environment.
+- Full PostgreSQL runtime support and remote media URL support depend on the
+  runtime/config slices being merged.

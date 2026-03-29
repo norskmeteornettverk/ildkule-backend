@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Iterable, List, Optional
 from zoneinfo import ZoneInfo
 
@@ -34,11 +35,82 @@ def _event_path(datetimetag: str) -> str:
     return f"{datetimetag[:8]}/{datetimetag[8:]}"
 
 
+def _event_media_source_mode() -> str:
+    raw_value = getattr(settings, "event_media_source_mode", "local")
+    if not isinstance(raw_value, str):
+        return "local"
+    normalized = raw_value.strip().lower()
+    return normalized if normalized in {"local", "remote"} else "local"
+
+
+def _event_media_base_url() -> Optional[str]:
+    raw_value = getattr(settings, "event_media_base_url", None)
+    if isinstance(raw_value, str) and raw_value.strip():
+        return raw_value.rstrip("/")
+    return None
+
+
+def _is_remote_media_mode() -> bool:
+    return _event_media_source_mode() == "remote"
+
+
+def _is_local_media_mode() -> bool:
+    return not _is_remote_media_mode()
+
+
+def _join_url(base_url: str, relative_path: str) -> str:
+    return f"{base_url.rstrip('/')}/{relative_path.lstrip('/')}"
+
+
+def _remote_event_asset_name(file_name: str) -> str:
+    remote_names = {
+        "map.jpg": "en_map.jpg",
+        "map.svg": "en_map.svg",
+        "posvstime.jpg": "en_posvstime.jpg",
+        "posvstime.svg": "en_posvstime.svg",
+        "spd_acc.jpg": "en_spd_acc.jpg",
+        "spd_acc.svg": "en_spd_acc.svg",
+        "orbit.jpg": "en_orbit.jpg",
+        "orbit.svg": "en_orbit.svg",
+        "height.jpg": "en_height.jpg",
+        "height.svg": "en_height.svg",
+    }
+    if file_name.startswith("obs_"):
+        stem, dot, suffix = file_name.rpartition(".")
+        if stem.count("_") >= 3:
+            prefix, hour, minute, second = stem.rsplit("_", 3)
+            return f"{prefix}_{hour}:{minute}:{second}{dot}{suffix}"
+    return remote_names.get(file_name, file_name)
+
+
+def _remote_relative_path(path: str) -> str:
+    parts = PurePosixPath(path).parts
+    if len(parts) < 3:
+        return path
+    event_root = "/".join(parts[:2])
+    remainder = list(parts[2:])
+    if len(remainder) == 1:
+        return f"{event_root}/{_remote_event_asset_name(remainder[0])}"
+    return path
+
+
+def _public_media_base_url() -> str:
+    configured_base_url = _event_media_base_url()
+    if configured_base_url:
+        return configured_base_url
+    if _is_remote_media_mode() and settings.front_url:
+        return f"{settings.front_url.rstrip('/')}/meteor"
+    return "/data"
+
+
 def _data_url(path: str) -> str:
-    return f"/data/{path}"
+    relative_path = _remote_relative_path(path) if _is_remote_media_mode() else path
+    return _join_url(_public_media_base_url(), relative_path)
 
 
 def _frontend_event_url(datetimetag: str) -> Optional[str]:
+    if _is_remote_media_mode():
+        return f"{_join_url(_public_media_base_url(), _event_path(datetimetag))}/"
     settings = get_settings()
     if not settings.front_url:
         return None
@@ -384,7 +456,12 @@ def _artifact(
     require_existing: bool = False,
 ) -> Optional[dict]:
     full_path = _data_file_path(path)
-    if require_existing and full_path is not None and not full_path.exists():
+    if (
+        require_existing
+        and _is_local_media_mode()
+        and full_path is not None
+        and not full_path.exists()
+    ):
         return None
     return {
         "id": artifact_id,

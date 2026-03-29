@@ -348,8 +348,3 @@ CREATE TABLE IF NOT EXISTS user_review (
     REFERENCES event (id)
     ON DELETE NO ACTION
     ON UPDATE NO ACTION);
-    
--- -----------------------------------------------------
--- Table test data
--- -----------------------------------------------------
-insert into user (username, password, role) values ('test', 'test', 'ROLE_ADMIN')
