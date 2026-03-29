@@ -6,7 +6,7 @@ dependencies = [
     "fastapi==0.111.0",
     "uvicorn==0.30.1",
     "sqlalchemy==2.0.31",
-    "pydantic==1.10.15",
+    "pydantic==1.10.26",
     "passlib[bcrypt]==1.7.4",
     "PyJWT==2.8.0",
     "pymysql==1.1.1",
