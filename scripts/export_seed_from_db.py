@@ -32,6 +32,11 @@ OUTPUT_FILES = {
     "postgresql": REPO_ROOT / "database" / "seed_postgres.sql",
 }
 
+INSERT_BATCH_SIZE = {
+    "mysql": 250,
+    "postgresql": 500,
+}
+
 POSTGRES_BOOLEAN_COLUMNS = {
     ("user", "tutorial_completed"),
     ("user", "confirmed"),
@@ -124,6 +129,12 @@ def sort_key_for_row(row: dict[str, object], primary_keys: list[str], columns: l
     return tuple(row.get(column) for column in key_columns)
 
 
+def batched_rows(rows: list[dict[str, object]], batch_size: int) -> list[list[dict[str, object]]]:
+    if batch_size <= 0:
+        return [rows]
+    return [rows[index : index + batch_size] for index in range(0, len(rows), batch_size)]
+
+
 def load_rows(engine, dialect: str) -> dict[str, list[dict[str, object]]]:
     metadata = MetaData()
     inspector = inspect(engine)
@@ -150,6 +161,7 @@ def render_seed(rows_by_table: dict[str, list[dict[str, object]]], dialect: str)
         "-- Generated seed file for Ildkule.",
         "-- Source: current DATABASE_URL contents at export time.",
         "-- Regenerate with: python scripts/export_seed_from_db.py",
+        f"-- Insert batch size for {dialect}: {INSERT_BATCH_SIZE[dialect]} rows.",
         "",
     ]
     for table_name in TABLE_ORDER:
@@ -160,17 +172,24 @@ def render_seed(rows_by_table: dict[str, list[dict[str, object]]], dialect: str)
         columns = list(rows[0].keys())
         quoted_columns = ", ".join(quote_identifier(column, dialect) for column in columns)
         table_ref = quote_table(table_name, dialect)
-        for row in rows:
-            values = ", ".join(
-                render_value(
-                    coerce_value_for_target(table_name, column, row[column], dialect),
-                    dialect,
+        for batch in batched_rows(rows, INSERT_BATCH_SIZE[dialect]):
+            value_groups: list[str] = []
+            for row in batch:
+                values = ", ".join(
+                    render_value(
+                        coerce_value_for_target(table_name, column, row[column], dialect),
+                        dialect,
+                    )
+                    for column in columns
                 )
-                for column in columns
+                value_groups.append(f"({values})")
+            lines.append(
+                f"INSERT INTO {table_ref} ({quoted_columns}) VALUES\n  "
+                + ",\n  ".join(value_groups)
+                + ";"
             )
-            lines.append(f"INSERT INTO {table_ref} ({quoted_columns}) VALUES ({values});")
         lines.append("")
-    if len(lines) == 4:
+    if len(lines) == 5:
         lines.append("-- No rows exported.")
     lines.append("")
     return "\n".join(lines)
@@ -178,6 +197,10 @@ def render_seed(rows_by_table: dict[str, list[dict[str, object]]], dialect: str)
 
 def total_row_count(rows_by_table: dict[str, list[dict[str, object]]]) -> int:
     return sum(len(rows) for rows in rows_by_table.values())
+
+
+def log(message: str) -> None:
+    print(message, flush=True)
 
 
 def main() -> int:
@@ -193,6 +216,7 @@ def main() -> int:
     source_url = normalize_database_url(args.source_url or load_database_url())
     engine = create_engine(source_url, future=True)
     source_dialect = detect_dialect(source_url)
+    log(f"Connecting to {source_dialect} source database...")
     rows_by_table = load_rows(engine, source_dialect)
     row_count = total_row_count(rows_by_table)
 
@@ -202,10 +226,14 @@ def main() -> int:
             "Check DATABASE_URL/--source-url, or pass --allow-empty if this is intentional."
         )
 
+    for table_name in TABLE_ORDER:
+        log(f"Loaded {len(rows_by_table.get(table_name, []))} rows from {table_name}.")
+
     for target_dialect, output_path in OUTPUT_FILES.items():
+        log(f"Writing {output_path.name} for {target_dialect}...")
         output_path.write_text(render_seed(rows_by_table, target_dialect), encoding="utf-8")
-        print(f"Wrote {output_path.name}")
-    print(f"Exported {row_count} rows from {source_dialect}.")
+        log(f"Wrote {output_path.name}")
+    log(f"Exported {row_count} rows from {source_dialect}.")
     return 0
 
 

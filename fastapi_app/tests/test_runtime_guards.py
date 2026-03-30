@@ -136,3 +136,28 @@ def test_postgresql_insight_sql_uses_postgresql_safe_functions():
     assert "CURRENT_DATE - CAST(max(m.date) AS DATE)" in sql
     assert "DATEDIFF" not in sql
     assert "julianday" not in sql
+
+
+def test_normalize_insight_row_restores_expected_postgresql_alias_casing():
+    service = EventService()
+    lowered_row = {
+        "forsteobservasjonstidspunkt": "2026-03-30T00:00:00",
+        "sisteobervasjonstidspunkt": "2026-03-30T01:00:00",
+        "dagermedobservasjoner": 1,
+        "dagersidensisteobservasjon": 0,
+        "kameraopptak": 2,
+        "hendelser": 3,
+        "krysspeilede": 1,
+        "meteorittkandidater": 1,
+    }
+
+    normalized = service._normalize_insight_row("total", lowered_row)
+
+    assert normalized["ForsteObservasjonsTidspunkt"] == "2026-03-30T00:00:00"
+    assert normalized["SisteObervasjonsTidspunkt"] == "2026-03-30T01:00:00"
+    assert normalized["DagerMedObservasjoner"] == 1
+    assert normalized["DagerSidenSisteObservasjon"] == 0
+    assert normalized["Kameraopptak"] == 2
+    assert normalized["Hendelser"] == 3
+    assert normalized["Krysspeilede"] == 1
+    assert normalized["Meteorittkandidater"] == 1

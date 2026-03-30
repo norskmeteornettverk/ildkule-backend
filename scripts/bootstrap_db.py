@@ -113,15 +113,47 @@ def script_paths_for_dialect(dialect: str, include_seed: bool) -> list[Path]:
     return paths
 
 
-def apply_sql_scripts(database_url: str, script_paths: Iterable[Path]) -> None:
+def log(message: str) -> None:
+    print(message, flush=True)
+
+
+def progress_markers(total_statements: int, progress_step: int) -> set[int]:
+    if total_statements <= 0:
+        return set()
+    markers = {1, total_statements}
+    if progress_step <= 0:
+        return markers
+    percentage = progress_step
+    while percentage < 100:
+        marker = max(1, (total_statements * percentage) // 100)
+        markers.add(marker)
+        percentage += progress_step
+    return markers
+
+
+def apply_sql_scripts(database_url: str, script_paths: Iterable[Path], progress_step: int) -> None:
     engine = create_engine(database_url, future=True)
     with engine.begin() as connection:
         for script_path in script_paths:
+            log(f"Reading {script_path.name}...")
             sql_text = script_path.read_text(encoding="utf-8")
-            for statement in split_sql_statements(sql_text):
+            statements = [
+                statement
+                for statement in split_sql_statements(sql_text)
+                if statement and not statement.startswith("--")
+            ]
+            total = len(statements)
+            log(f"Executing {total} SQL statements from {script_path.name}...")
+            markers = progress_markers(total, progress_step)
+            for index, statement in enumerate(statements, start=1):
                 if not statement or statement.startswith("--"):
                     continue
                 connection.execute(text(statement))
+                if index in markers:
+                    percent = int(round((index / total) * 100)) if total else 100
+                    log(
+                        f"{script_path.name}: executed {index}/{total} statements ({percent}%)."
+                    )
 
 
 def has_existing_schema(database_url: str) -> bool:
@@ -136,6 +168,12 @@ def main() -> int:
     parser.add_argument("--schema-only", action="store_true", help="Apply only the schema bootstrap.")
     parser.add_argument("--seed", metavar="NAME", help="Also apply the generated seed file. The value is informational only.")
     parser.add_argument("--rebuild", action="store_true", help="Acknowledge that the bootstrap may drop and recreate tables.")
+    parser.add_argument(
+        "--progress-step",
+        type=int,
+        default=25,
+        help="Print progress every N percent while applying SQL statements. Default: 25.",
+    )
     args = parser.parse_args()
 
     database_url = normalize_database_url(load_database_url())
@@ -148,8 +186,8 @@ def main() -> int:
         )
 
     paths = script_paths_for_dialect(dialect, include_seed=include_seed)
-    apply_sql_scripts(database_url, paths)
-    print(f"Applied {' + '.join(path.name for path in paths)} for {dialect}.")
+    apply_sql_scripts(database_url, paths, progress_step=args.progress_step)
+    log(f"Applied {' + '.join(path.name for path in paths)} for {dialect}.")
     return 0
 
 

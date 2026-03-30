@@ -69,6 +69,60 @@ class EventService:
         "is_deleted",
         "deletion_reason",
     }
+    INSIGHT_REPORT_KEYS = {
+        "cam": (
+            "Stasjonsnavn",
+            "Kameranavn",
+            "ForsteObservasjonsTidspunkt",
+            "SisteObervasjonsTidspunkt",
+            "DagerMedObservasjoner",
+            "DagerSidenSisteObservasjon",
+            "Kameraopptak",
+            "Hendelser",
+            "Krysspeilede",
+            "Meteorittkandidater",
+        ),
+        "station": (
+            "Stasjonsnavn",
+            "ForsteObservasjonsTidspunkt",
+            "SisteObervasjonsTidspunkt",
+            "DagerMedObservasjoner",
+            "DagerSidenSisteObservasjon",
+            "Kameraopptak",
+            "Hendelser",
+            "Krysspeilede",
+            "Meteorittkandidater",
+        ),
+        "total": (
+            "ForsteObservasjonsTidspunkt",
+            "SisteObervasjonsTidspunkt",
+            "DagerMedObservasjoner",
+            "DagerSidenSisteObservasjon",
+            "Kameraopptak",
+            "Hendelser",
+            "Krysspeilede",
+            "Meteorittkandidater",
+        ),
+    }
+
+    def _normalize_insight_row(self, report_name: str, row: dict) -> dict:
+        expected_keys = self.INSIGHT_REPORT_KEYS.get(report_name)
+        if not expected_keys:
+            return dict(row)
+
+        casefolded = {str(key).casefold(): value for key, value in row.items()}
+        normalized: dict = {}
+        for key in expected_keys:
+            folded_key = key.casefold()
+            if key in row:
+                normalized[key] = row[key]
+                continue
+            if folded_key in casefolded:
+                normalized[key] = casefolded[folded_key]
+        for key, value in row.items():
+            if key not in normalized:
+                normalized[key] = value
+        return normalized
 
     def _insight_sql_parts(self, dialect: str) -> dict[str, str]:
         normalized = (dialect or "").lower()
@@ -700,8 +754,8 @@ class EventService:
 
         records = session.execute(text(sql)).mappings().all()
         if report_name == "total" and records:
-            return [dict(records[0])]
-        return [dict(row) for row in records]
+            return [self._normalize_insight_row(report_name, dict(records[0]))]
+        return [self._normalize_insight_row(report_name, dict(row)) for row in records]
 
     def get_filter_options(
         self, session: Session, include_deleted: bool = False
