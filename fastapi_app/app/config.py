@@ -70,6 +70,10 @@ class Settings(BaseSettings):
         default_factory=lambda: ["*"],
         description="Origins FastAPI should allow in CORS responses",
     )
+    cors_allow_credentials: bool = Field(
+        default=False,
+        description="Whether CORS responses should allow credentials such as cookies.",
+    )
     contact_recipient: Optional[str] = None
     meteor_report_recipient: Optional[str] = None
     app_log_level: str = Field(

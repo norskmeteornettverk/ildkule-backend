@@ -67,6 +67,38 @@ def test_create_app_mounts_data_directory_in_local_media_mode(monkeypatch):
     assert _has_data_mount(app)
 
 
+def test_create_app_disables_cors_credentials_for_wildcard_origin(monkeypatch):
+    monkeypatch.setattr(main_module, "check_database_connection", lambda: None)
+    monkeypatch.setattr(main_module.settings, "cors_allow_origins", ["*"])
+    monkeypatch.setattr(main_module.settings, "cors_allow_credentials", True)
+
+    app = main_module.create_app()
+    cors = next(
+        middleware
+        for middleware in app.user_middleware
+        if middleware.cls.__name__ == "CORSMiddleware"
+    )
+
+    assert cors.kwargs["allow_origins"] == ["*"]
+    assert cors.kwargs["allow_credentials"] is False
+
+
+def test_create_app_keeps_cors_credentials_for_explicit_origins(monkeypatch):
+    monkeypatch.setattr(main_module, "check_database_connection", lambda: None)
+    monkeypatch.setattr(main_module.settings, "cors_allow_origins", ["https://claude.ai"])
+    monkeypatch.setattr(main_module.settings, "cors_allow_credentials", True)
+
+    app = main_module.create_app()
+    cors = next(
+        middleware
+        for middleware in app.user_middleware
+        if middleware.cls.__name__ == "CORSMiddleware"
+    )
+
+    assert cors.kwargs["allow_origins"] == ["https://claude.ai"]
+    assert cors.kwargs["allow_credentials"] is True
+
+
 def test_configure_logging_can_disable_file_logging(monkeypatch):
     WORK_TMP_DIR.mkdir(parents=True, exist_ok=True)
     root_logger = logging.getLogger()
