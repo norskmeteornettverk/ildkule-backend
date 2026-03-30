@@ -129,7 +129,9 @@ CREATE TABLE IF NOT EXISTS event (
   is_deleted BOOLEAN NOT NULL DEFAULT false,
   deletion_reason VARCHAR(50) NULL DEFAULT NULL,
   PRIMARY KEY (id),
-  CONSTRAINT unique_event_datetimetag UNIQUE(datetimetag)
+  CONSTRAINT unique_event_datetimetag UNIQUE(datetimetag),
+  INDEX event_date_idx (date ASC, id ASC),
+  INDEX event_public_list_idx (is_deleted ASC, date DESC, id DESC)
   );
 
 

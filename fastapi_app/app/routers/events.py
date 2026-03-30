@@ -60,6 +60,14 @@ def get_events(
     searchTerm: Optional[str] = Query(None),
     stationName: Optional[str] = Query(None),
     year: Optional[str] = Query(None),
+    from_date: Optional[str] = Query(
+        None,
+        description="Inclusive start date in `YYYY-MM-DD` form.",
+    ),
+    to_date: Optional[str] = Query(
+        None,
+        description="Inclusive end date in `YYYY-MM-DD` form.",
+    ),
     eventType: Optional[str] = Query(
         None,
         description="Comma-separated event-type filter. Current public values are Meteorittkandidat, Krysspeilet, and Upeilet.",
@@ -71,19 +79,6 @@ def get_events(
     order: str = Query("desc"),
     session: Session = Depends(get_session),
 ):
-    if searchTerm:
-        return event_service.search(session, searchTerm, include_deleted=includeDeleted)
-    if stationName or year or eventType:
-        years = [int(y) for y in _parse_csv(year) or []]
-        classes = _parse_csv(eventType)
-        stations = _parse_csv(stationName)
-        return event_service.filter(
-            session,
-            stations,
-            years,
-            classes,
-            include_deleted=includeDeleted,
-        )
     return event_service.list_events(
         session,
         page,
@@ -91,6 +86,12 @@ def get_events(
         orderby,
         order,
         include_deleted=includeDeleted,
+        search_term=searchTerm,
+        station_names=_parse_csv(stationName),
+        years=[int(y) for y in _parse_csv(year) or []],
+        classes=_parse_csv(eventType),
+        from_date=from_date,
+        to_date=to_date,
     )
 
 

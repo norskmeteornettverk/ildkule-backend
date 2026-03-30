@@ -252,6 +252,41 @@ class EventService:
             )
         return stmt
 
+    def _public_events_stmt(
+        self,
+        *,
+        include_deleted: bool = False,
+        search_term: Optional[str] = None,
+        station_names: Optional[List[str]] = None,
+        years: Optional[List[int]] = None,
+        classes: Optional[List[str]] = None,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+    ):
+        stmt = self._filtered_events_stmt(
+            include_deleted=include_deleted,
+            from_date=from_date,
+            to_date=to_date,
+            stations=station_names,
+        )
+
+        if search_term:
+            stmt = stmt.where(
+                or_(
+                    Event.location.ilike(f"%{search_term}%"),
+                    Event.datetimetag.ilike(f"%{search_term}%"),
+                )
+            )
+
+        if years:
+            stmt = stmt.where(func.extract("year", Event.date).in_(years))
+
+        if classes:
+            event_class_case = self._event_type_case()
+            stmt = stmt.where(event_class_case.in_(classes))
+
+        return stmt
+
     def _proper_triangulation(self, event: Event) -> Optional[bool]:
         if (
             event.track_speed is None
@@ -422,6 +457,12 @@ class EventService:
         order: str,
         include_deleted: bool = False,
         include_ratings: bool = False,
+        search_term: Optional[str] = None,
+        station_names: Optional[List[str]] = None,
+        years: Optional[List[int]] = None,
+        classes: Optional[List[str]] = None,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
     ) -> dict:
         ratings_subquery = self._ratings_subquery()
         rating_sort_column = func.coalesce(ratings_subquery.c.ratings, 0)
@@ -434,21 +475,51 @@ class EventService:
         order_clauses = self._ordering_clauses(column, order)
 
         offset = max(page - 1, 0) * limit
-        stmt = (
-            select(
-                Event,
-                ratings_subquery.c.ratings,
-                ratings_subquery.c.positive_ratings,
-                ratings_subquery.c.negative_ratings,
+        if include_ratings:
+            stmt = (
+                select(
+                    Event,
+                    ratings_subquery.c.ratings,
+                    ratings_subquery.c.positive_ratings,
+                    ratings_subquery.c.negative_ratings,
+                )
+                .options(self._event_list_load_options())
+                .outerjoin(ratings_subquery, Event.id == ratings_subquery.c.event_id)
+                .where(self._base_filter(include_deleted))
+                .order_by(*order_clauses)
+                .limit(limit)
+                .offset(offset)
             )
-            .options(self._event_list_load_options())
-            .outerjoin(ratings_subquery, Event.id == ratings_subquery.c.event_id)
-            .where(self._base_filter(include_deleted))
-            .order_by(*order_clauses)
-            .limit(limit)
-            .offset(offset)
-        )
-        results = session.execute(stmt).all()
+            results = session.execute(stmt).all()
+            total_items = session.scalar(
+                select(func.count()).select_from(Event).where(self._base_filter(include_deleted))
+            )
+        else:
+            filtered_stmt = self._public_events_stmt(
+                include_deleted=include_deleted,
+                search_term=search_term,
+                station_names=station_names,
+                years=years,
+                classes=classes,
+                from_date=from_date,
+                to_date=to_date,
+            )
+            if order_by == "ratings":
+                filtered_stmt = filtered_stmt.outerjoin(
+                    ratings_subquery,
+                    Event.id == ratings_subquery.c.event_id,
+                )
+            stmt = filtered_stmt.order_by(*order_clauses).limit(limit).offset(offset)
+            results = [(event, None, None, None) for event in session.scalars(stmt).unique().all()]
+            total_items_stmt = (
+                filtered_stmt.with_only_columns(Event.id)
+                .order_by(None)
+                .distinct()
+                .subquery()
+            )
+            total_items = session.scalar(
+                select(func.count()).select_from(total_items_stmt)
+            )
 
         events = []
         for event, ratings, positive_ratings, negative_ratings in results:
@@ -462,10 +533,6 @@ class EventService:
             else:
                 payload = serialize_event(event, include_relationships=True)
             events.append(payload)
-
-        total_items = session.scalar(
-            select(func.count()).select_from(Event).where(self._base_filter(include_deleted))
-        )
         total_pages = ceil(total_items / limit) if limit else 1
         current_page = page if page > 0 else 1
         return {
@@ -482,26 +549,15 @@ class EventService:
         limit: int = 100,
         include_deleted: bool = False,
     ) -> dict:
-        stmt = (
-            select(Event)
-            .options(self._event_list_load_options())
-            .where(
-                self._base_filter(include_deleted),
-                or_(
-                    Event.location.ilike(f"%{search_term}%"),
-                    Event.datetimetag.ilike(f"%{search_term}%"),
-                ),
-            )
-            .order_by(*self._ordering_clauses(Event.date, "desc"))
-            .limit(limit)
+        return self.list_events(
+            session,
+            page=1,
+            limit=limit,
+            order_by="date",
+            order="desc",
+            include_deleted=include_deleted,
+            search_term=search_term,
         )
-        events = session.scalars(stmt).all()
-        return {
-            "totalItems": len(events),
-            "events": serialize_event_list(events, include_relationships=True),
-            "totalPages": 1,
-            "currentPage": 1,
-        }
 
     def filter(
         self,
@@ -512,34 +568,17 @@ class EventService:
         include_deleted: bool = False,
         limit: int = 100,
     ) -> dict:
-        stmt = select(Event).options(self._event_list_load_options()).where(self._base_filter(include_deleted))
-
-        if station_names:
-            stmt = (
-                stmt.join(
-                    ObservationCamData,
-                    Event.id == ObservationCamData.event_id,
-                )
-                .join(Cam, ObservationCamData.cam_id == Cam.id)
-                .join(Station, Cam.station_id == Station.id)
-                .where(Station.station_name.in_(station_names))
-            )
-
-        if years:
-            stmt = stmt.where(func.extract("year", Event.date).in_(years))
-
-        if classes:
-            event_class_case = self._event_type_case()
-            stmt = stmt.where(event_class_case.in_(classes))
-
-        stmt = stmt.order_by(Event.datetimetag.desc()).limit(limit)
-        events = session.scalars(stmt).unique().all()
-        return {
-            "totalItems": len(events),
-            "events": serialize_event_list(events, include_relationships=True),
-            "totalPages": 1,
-            "currentPage": 1,
-        }
+        return self.list_events(
+            session,
+            page=1,
+            limit=limit,
+            order_by="date",
+            order="desc",
+            include_deleted=include_deleted,
+            station_names=station_names,
+            years=years,
+            classes=classes,
+        )
 
     def get_event(
         self, session: Session, event_id: int, include_deleted: bool = False

@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
@@ -173,6 +174,24 @@ def test_search_desc_order_uses_null_safe_date_sort_for_postgresql():
 
     assert "CASE WHEN" in compiled.upper()
     assert "EVENT.DATE DESC" in compiled.upper()
+
+
+def test_event_model_declares_date_indexes_for_list_queries():
+    index_names = {index.name for index in Event.__table__.indexes}
+
+    assert "ix_event_date" in index_names
+    assert "ix_event_public_list" in index_names
+
+
+def test_bootstrap_schemas_define_event_date_indexes():
+    root = Path(__file__).resolve().parents[2]
+    mysql_sql = (root / "database" / "build_db.sql").read_text(encoding="utf-8")
+    postgres_sql = (root / "database" / "build_db_postgres.sql").read_text(encoding="utf-8")
+
+    assert "INDEX event_date_idx (date ASC, id ASC)" in mysql_sql
+    assert "INDEX event_public_list_idx (is_deleted ASC, date DESC, id DESC)" in mysql_sql
+    assert "CREATE INDEX IF NOT EXISTS event_date_idx ON event (date DESC, id DESC);" in postgres_sql
+    assert "CREATE INDEX IF NOT EXISTS event_public_date_idx" in postgres_sql
 
 
 def test_normalize_insight_row_restores_expected_postgresql_alias_casing():

@@ -156,6 +156,21 @@ def test_openapi_exposes_filters_station_logs_and_path_lookup(client):
     paths = payload["paths"]
 
     assert "/api/events/filters" in paths
+    event_parameters = {item["name"] for item in paths["/api/events"]["get"]["parameters"]}
+    assert {
+        "searchTerm",
+        "stationName",
+        "year",
+        "from_date",
+        "to_date",
+        "eventType",
+        "includeDeleted",
+        "page",
+        "limit",
+        "orderby",
+        "order",
+    }.issubset(event_parameters)
+
     filter_response = (
         paths["/api/events/filters"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
     )

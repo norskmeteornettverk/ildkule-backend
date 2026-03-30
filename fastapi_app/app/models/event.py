@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Float, SmallInteger, String
+from sqlalchemy import Boolean, Column, DateTime, Float, Index, SmallInteger, String
 from sqlalchemy.orm import relationship
 
 from ..db import Base
@@ -11,6 +11,10 @@ class Event(Base):
     """Represents one event event and its import lifecycle state."""
 
     __tablename__ = "event"
+    __table_args__ = (
+        Index("ix_event_date", "date"),
+        Index("ix_event_public_list", "is_deleted", "date", "id"),
+    )
 
     id = Column(unsigned_int(), primary_key=True, autoincrement=True)
     datetimetag = Column(String(32), unique=True, nullable=False)

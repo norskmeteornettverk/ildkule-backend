@@ -148,16 +148,40 @@ def test_event_list_search_filter_and_get(client, db_session):
         user_confirmed=1,
         track_endheight=15.0,
     )
-    db_session.add_all([station, cam, event_a, event_b])
+    event_c = Event(
+        datetimetag="20240115010101",
+        location="Larvik January",
+        date=datetime(2024, 1, 15, 1, 1, 1),
+        user_confirmed=1,
+        camera_confirmed=1,
+        track_endheight=45.0,
+    )
+    event_d = Event(
+        datetimetag="20240201010101",
+        location="Larvik February",
+        date=datetime(2024, 2, 1, 1, 1, 1),
+        user_confirmed=1,
+        camera_confirmed=1,
+        track_endheight=45.0,
+    )
+    db_session.add_all([station, cam, event_a, event_b, event_c, event_d])
     db_session.commit()
 
-    db_session.add(
-        ObservationCamData(
-            event_id=event_a.id,
-            cam_id=cam.id,
-            trail_frames=12,
-            **_observation_kwargs("larvik:cam1:2021-11-01T01:01:01.000"),
-        )
+    db_session.add_all(
+        [
+            ObservationCamData(
+                event_id=event_a.id,
+                cam_id=cam.id,
+                trail_frames=12,
+                **_observation_kwargs("larvik:cam1:2021-11-01T01:01:01.000"),
+            ),
+            ObservationCamData(
+                event_id=event_c.id,
+                cam_id=cam.id,
+                trail_frames=24,
+                **_observation_kwargs("larvik:cam1:2024-01-15T01:01:01.000"),
+            ),
+        ]
     )
     db_session.commit()
 
@@ -187,6 +211,27 @@ def test_event_list_search_filter_and_get(client, db_session):
     assert filtered.status_code == 200
     assert isinstance(filtered.json(), dict)
     assert len(filtered.json()["events"]) >= 1
+
+    january = client.get("/api/events?from_date=2024-01-01&to_date=2024-01-31")
+    assert january.status_code == 200
+    january_ids = [event["id"] for event in january.json()["events"]]
+    assert january_ids == [event_c.id]
+
+    january_filtered = client.get(
+        "/api/events?stationName=larvik&eventType=Krysspeilet&from_date=2024-01-01&to_date=2024-01-31"
+    )
+    assert january_filtered.status_code == 200
+    assert [event["id"] for event in january_filtered.json()["events"]] == [event_c.id]
+
+    january_search = client.get(
+        "/api/events?searchTerm=Larvik&from_date=2024-01-01&to_date=2024-01-31&page=1&limit=10"
+    )
+    assert january_search.status_code == 200
+    assert [event["id"] for event in january_search.json()["events"]] == [event_c.id]
+
+    invalid_date = client.get("/api/events?from_date=2024-13-01")
+    assert invalid_date.status_code == 400
+    assert invalid_date.json()["detail"] == "Invalid date: 2024-13-01"
 
     get_one = client.get(f"/api/events/{event_a.id}")
     assert get_one.status_code == 200
