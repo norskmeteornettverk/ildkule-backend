@@ -3,6 +3,7 @@ import logging
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 from sqlalchemy.dialects import mysql, postgresql
 
 from fastapi_app.app import main as main_module
@@ -136,6 +137,42 @@ def test_postgresql_insight_sql_uses_postgresql_safe_functions():
     assert "CURRENT_DATE - CAST(max(m.date) AS DATE)" in sql
     assert "DATEDIFF" not in sql
     assert "julianday" not in sql
+
+
+def test_list_events_ratings_sort_coalesces_nulls_for_postgresql():
+    service = EventService()
+    ratings_subquery = service._ratings_subquery()
+    stmt = (
+        select(Event)
+        .outerjoin(ratings_subquery, Event.id == ratings_subquery.c.event_id)
+        .order_by(*service._ordering_clauses(func.coalesce(ratings_subquery.c.ratings, 0), "desc"))
+    )
+    compiled = str(
+        stmt.compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+
+    assert "COALESCE" in compiled.upper()
+    assert "CASE WHEN" in compiled.upper()
+
+
+def test_search_desc_order_uses_null_safe_date_sort_for_postgresql():
+    stmt = (
+        select(Event)
+        .where(Event.location.ilike("%abc%"))
+        .order_by(*EventService()._ordering_clauses(Event.date, "desc"))
+    )
+    compiled = str(
+        stmt.compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+
+    assert "CASE WHEN" in compiled.upper()
+    assert "EVENT.DATE DESC" in compiled.upper()
 
 
 def test_normalize_insight_row_restores_expected_postgresql_alias_casing():

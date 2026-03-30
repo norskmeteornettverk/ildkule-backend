@@ -199,6 +199,11 @@ class EventService:
             ObservationCamData.cam
         ).selectinload(Cam.station)
 
+    def _ordering_clauses(self, column, order: str):
+        if order.lower() == "desc":
+            return (*desc_nulls_last(column), Event.id.desc())
+        return (column.asc(), Event.id.desc())
+
     def _filtered_events_stmt(
         self,
         include_deleted: bool = False,
@@ -419,13 +424,14 @@ class EventService:
         include_ratings: bool = False,
     ) -> dict:
         ratings_subquery = self._ratings_subquery()
+        rating_sort_column = func.coalesce(ratings_subquery.c.ratings, 0)
         sortable_columns = {
             "date": Event.date,
             "crossbearing": Event.camera_confirmed,
-            "ratings": ratings_subquery.c.ratings,
+            "ratings": rating_sort_column,
         }
         column = sortable_columns.get(order_by, Event.date)
-        direction = column.desc() if order.lower() == "desc" else column.asc()
+        order_clauses = self._ordering_clauses(column, order)
 
         offset = max(page - 1, 0) * limit
         stmt = (
@@ -438,7 +444,7 @@ class EventService:
             .options(self._event_list_load_options())
             .outerjoin(ratings_subquery, Event.id == ratings_subquery.c.event_id)
             .where(self._base_filter(include_deleted))
-            .order_by(direction)
+            .order_by(*order_clauses)
             .limit(limit)
             .offset(offset)
         )
@@ -486,7 +492,7 @@ class EventService:
                     Event.datetimetag.ilike(f"%{search_term}%"),
                 ),
             )
-            .order_by(Event.date.desc())
+            .order_by(*self._ordering_clauses(Event.date, "desc"))
             .limit(limit)
         )
         events = session.scalars(stmt).all()
