@@ -33,6 +33,15 @@ OUTPUT_FILES = {
 }
 
 
+def normalize_database_url(database_url: str) -> str:
+    lowered = database_url.lower()
+    if lowered.startswith("postgresql://"):
+        return "postgresql+psycopg://" + database_url[len("postgresql://") :]
+    if lowered.startswith("postgres://"):
+        return "postgresql+psycopg://" + database_url[len("postgres://") :]
+    return database_url
+
+
 def detect_dialect(database_url: str) -> str:
     scheme = urlsplit(database_url).scheme.split("+", 1)[0].lower()
     if scheme in {"mysql", "mariadb"}:
@@ -144,19 +153,36 @@ def render_seed(rows_by_table: dict[str, list[dict[str, object]]], dialect: str)
     return "\n".join(lines)
 
 
+def total_row_count(rows_by_table: dict[str, list[dict[str, object]]]) -> int:
+    return sum(len(rows) for rows in rows_by_table.values())
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Export deterministic seed SQL from the configured database.")
     parser.add_argument("--source-url", help="Optional SQLAlchemy database URL. Defaults to DATABASE_URL.")
+    parser.add_argument(
+        "--allow-empty",
+        action="store_true",
+        help="Allow writing seed files even when the source database has zero rows.",
+    )
     args = parser.parse_args()
 
-    source_url = args.source_url or load_database_url()
+    source_url = normalize_database_url(args.source_url or load_database_url())
     engine = create_engine(source_url, future=True)
     source_dialect = detect_dialect(source_url)
     rows_by_table = load_rows(engine, source_dialect)
+    row_count = total_row_count(rows_by_table)
+
+    if row_count == 0 and not args.allow_empty:
+        raise SystemExit(
+            "Refusing to write empty seed files because the source database returned zero rows. "
+            "Check DATABASE_URL/--source-url, or pass --allow-empty if this is intentional."
+        )
 
     for target_dialect, output_path in OUTPUT_FILES.items():
         output_path.write_text(render_seed(rows_by_table, target_dialect), encoding="utf-8")
         print(f"Wrote {output_path.name}")
+    print(f"Exported {row_count} rows from {source_dialect}.")
     return 0
 
 

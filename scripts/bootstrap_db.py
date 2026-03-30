@@ -27,6 +27,15 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 
+def normalize_database_url(database_url: str) -> str:
+    lowered = database_url.lower()
+    if lowered.startswith("postgresql://"):
+        return "postgresql+psycopg://" + database_url[len("postgresql://") :]
+    if lowered.startswith("postgres://"):
+        return "postgresql+psycopg://" + database_url[len("postgres://") :]
+    return database_url
+
+
 def detect_dialect(database_url: str) -> str:
     scheme = urlsplit(database_url).scheme.split("+", 1)[0].lower()
     if scheme in {"mysql", "mariadb"}:
@@ -129,7 +138,7 @@ def main() -> int:
     parser.add_argument("--rebuild", action="store_true", help="Acknowledge that the bootstrap may drop and recreate tables.")
     args = parser.parse_args()
 
-    database_url = load_database_url()
+    database_url = normalize_database_url(load_database_url())
     dialect = detect_dialect(database_url)
     include_seed = bool(args.seed) and not args.schema_only
 
