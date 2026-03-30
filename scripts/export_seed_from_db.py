@@ -32,6 +32,13 @@ OUTPUT_FILES = {
     "postgresql": REPO_ROOT / "database" / "seed_postgres.sql",
 }
 
+POSTGRES_BOOLEAN_COLUMNS = {
+    ("user", "tutorial_completed"),
+    ("user", "confirmed"),
+    ("event", "is_deleted"),
+    ("observation_cam_data", "is_deleted"),
+}
+
 
 def normalize_database_url(database_url: str) -> str:
     lowered = database_url.lower()
@@ -77,6 +84,16 @@ def quote_identifier(identifier: str, dialect: str) -> str:
 
 def quote_table(table_name: str, dialect: str) -> str:
     return quote_identifier(table_name, dialect)
+
+
+def coerce_value_for_target(table_name: str, column_name: str, value: object, dialect: str) -> object:
+    if (
+        dialect == "postgresql"
+        and (table_name, column_name) in POSTGRES_BOOLEAN_COLUMNS
+        and isinstance(value, (int, float))
+    ):
+        return bool(value)
+    return value
 
 
 def render_value(value: object, dialect: str) -> str:
@@ -144,7 +161,13 @@ def render_seed(rows_by_table: dict[str, list[dict[str, object]]], dialect: str)
         quoted_columns = ", ".join(quote_identifier(column, dialect) for column in columns)
         table_ref = quote_table(table_name, dialect)
         for row in rows:
-            values = ", ".join(render_value(row[column], dialect) for column in columns)
+            values = ", ".join(
+                render_value(
+                    coerce_value_for_target(table_name, column, row[column], dialect),
+                    dialect,
+                )
+                for column in columns
+            )
             lines.append(f"INSERT INTO {table_ref} ({quoted_columns}) VALUES ({values});")
         lines.append("")
     if len(lines) == 4:
